@@ -54,6 +54,8 @@ export interface LayerState {
   /** One coloured overlay at a time. */
   overlay: Overlay;
   /** Light the map as at midday whatever the hour, so the ground is always readable. */
+  /** Walking range rings from the mission's start. */
+  rings: boolean;
   /** Light the map by the real Sun at Jezero. Off: lit as at mid-morning, so it always reads. */
   followSun: boolean;
 }
@@ -184,7 +186,7 @@ export const useApp = create<AppState>()(
       clockPaused: false,
 
       dock: null,
-      layers: { names: true, rover: true, traverse: true, overlay: 'none', followSun: false },
+      layers: { names: true, rover: true, traverse: true, overlay: 'none', rings: true, followSun: false },
       placeId: null,
       sections: {},
 
