@@ -287,7 +287,9 @@ export function Planner() {
           <StopList />
           <div className={cn('flex flex-wrap items-center gap-2', stops.length > 0 && 'mt-2')}>
             <PickButton target="stop">Add a stop</PickButton>
-            {stops.length === 0 ? <span className="text-xs text-muted-foreground">or search for a place and choose Add stop.</span> : null}
+            <span className="text-xs text-muted-foreground">
+              {stops.length === 0 ? 'or search for a place and choose Add stop.' : 'or click the route to add one along the way. Drag a pin to move it.'}
+            </span>
           </div>
           <label className="mt-3 flex cursor-pointer items-center justify-between gap-3 rounded-md py-1 text-[13px]">
             <span>

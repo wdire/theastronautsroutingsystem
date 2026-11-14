@@ -102,3 +102,43 @@ test('the camera flies the route, names the next stop, and gives the view back',
   await expect.poll(() => page.evaluate(() => window.__areoMap?.getPitch() ?? 99), { timeout: 20_000 }).toBeLessThan(before.pitch + 1);
   await expect.poll(() => page.evaluate(() => window.__areoMap?.getZoom() ?? 0)).toBeCloseTo(before.zoom, 1);
 });
+
+test('a click on the route adds a stop along the way, and a pin can be dragged', async ({ page }) => {
+  await page.goto(`/${PLAN}`);
+  await page.waitForFunction(() => window.__areo?.getState().route.status === 'ready', undefined, { timeout: 60_000 });
+  // The middle of the second leg, between stop 1 and stop 2, as a point on the screen.
+  const target = await page.evaluate(() => {
+    const r = window.__areo?.getState().route;
+    const map = window.__areoMap;
+    if (r?.status !== 'ready' || !map) return null;
+    const alt = r.alternatives.find((a) => a.id === r.selected) ?? r.alternatives[0];
+    if (!alt) return null;
+    const mid = Math.round(((alt.stopIndices[1] ?? 0) + (alt.stopIndices[2] ?? 0)) / 2);
+    const p = alt.path[mid];
+    if (!p) return null;
+    const px = map.project([p[0], p[1]]);
+    const box = map.getCanvas().getBoundingClientRect();
+    return { x: box.left + px.x, y: box.top + px.y, lon: p[0], lat: p[1] };
+  });
+  if (!target) throw new Error('no route');
+  await page.mouse.click(target.x, target.y);
+  await expect.poll(() => page.evaluate(() => window.__areo?.getState().plan.stops.length)).toBe(3);
+  // It went in between the two stops it lies between, on the route.
+  const added = await page.evaluate(() => window.__areo?.getState().plan.stops[1]);
+  expect(added?.lon).toBeCloseTo(target.lon, 3);
+  expect(added?.lat).toBeCloseTo(target.lat, 3);
+  await expect(page.getByRole('region', { name: 'Mission plan' }).getByText('3 stops, 2 tasks')).toBeVisible();
+
+  // Drag the first stop's pin a little north-east: the stop moves and the route is worked out again.
+  await page.waitForFunction(() => window.__areo?.getState().route.status === 'ready', undefined, { timeout: 60_000 });
+  const before = await page.evaluate(() => window.__areo?.getState().plan.stops[0]);
+  const pin = page.locator('.route-pin-stop').first();
+  const box = await pin.boundingBox();
+  if (!box) throw new Error('no pin');
+  await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2);
+  await page.mouse.down();
+  await page.mouse.move(box.x + 50, box.y - 40, { steps: 6 });
+  await page.mouse.up();
+  await expect.poll(() => page.evaluate(() => window.__areo?.getState().plan.stops[0]?.lat ?? 0)).toBeGreaterThan((before?.lat ?? 0) + 0.0005);
+  expect(await page.evaluate(() => window.__areo?.getState().plan.stops.length)).toBe(3);
+});

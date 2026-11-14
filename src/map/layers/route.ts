@@ -1,4 +1,4 @@
-import { Marker, type ExpressionSpecification, type GeoJSONSource, type Map as MapLibreMap } from 'maplibre-gl';
+import { Marker, type ExpressionSpecification, type GeoJSONSource, type Map as MapLibreMap, type MapLayerMouseEvent } from 'maplibre-gl';
 import type { PathPoint, RouteAlternative } from '@/engines/types';
 import { VEHICLES } from '@/engines/vehicles';
 import { gradesAlong, pathStats } from '@/planner/geometry';
@@ -92,17 +92,61 @@ export function addRouteLayers(map: MapLibreMap): () => void {
   });
 
   let markers: Marker[] = [];
+  /** A pin the visitor can drag: letting go moves the start or the stop there and the route follows. */
+  const pin = (label: string, kind: 'start' | 'stop', lon: number, lat: number, moved: (lon: number, lat: number) => void): Marker => {
+    const marker = new Marker({ element: pinElement(label, kind), anchor: 'center', draggable: true }).setLngLat([lon, lat]).addTo(map);
+    marker.on('dragend', () => {
+      const at = marker.getLngLat();
+      moved(at.lng, at.lat);
+    });
+    return marker;
+  };
   const drawPins = () => {
     for (const m of markers) m.remove();
     markers = [];
     const { plan } = useApp.getState();
     if (plan.start) {
-      markers.push(new Marker({ element: pinElement('', 'start'), anchor: 'center' }).setLngLat([plan.start.lon, plan.start.lat]).addTo(map));
+      // A dragged pin is a point on the ground, no longer the named place it was put on.
+      markers.push(pin('', 'start', plan.start.lon, plan.start.lat, (lon, lat) => useApp.getState().setStart({ lon, lat })));
     }
     plan.stops.forEach((stop, i) => {
-      markers.push(new Marker({ element: pinElement(String(i + 1), 'stop'), anchor: 'center' }).setLngLat([stop.lon, stop.lat]).addTo(map));
+      markers.push(pin(String(i + 1), 'stop', stop.lon, stop.lat, (lon, lat) => useApp.getState().updateStop(stop.id, { lon, lat, name: undefined, placeId: undefined })));
     });
   };
+
+  // A click on the route adds a stop there, between the stops it lies between: work along the way needs no detour.
+  const onRouteClick = (e: MapLayerMouseEvent) => {
+    const s = useApp.getState();
+    if (s.route.status !== 'ready' || s.picking || s.flyover) return;
+    const chosen = s.route.alternatives.find((a) => a.id === (s.route.status === 'ready' ? s.route.selected : ''));
+    if (!chosen) return;
+    // The route's own point nearest the click, so the stop sits on the route and not beside it.
+    let nearest = 0;
+    let best = Infinity;
+    chosen.path.forEach((p, i) => {
+      const d = (p[0] - e.lngLat.lng) ** 2 * Math.cos((p[1] * Math.PI) / 180) ** 2 + (p[1] - e.lngLat.lat) ** 2;
+      if (d < best) {
+        best = d;
+        nearest = i;
+      }
+    });
+    const at = chosen.path[nearest];
+    if (!at) return;
+    // The leg is the one whose end is the first waypoint past the click; the new stop goes in before that waypoint.
+    const leg = Math.max(0, chosen.stopIndices.findIndex((index, i) => i > 0 && index >= nearest) - 1);
+    e.preventDefault();
+    s.addStop({ lon: at[0], lat: at[1] }, Math.min(leg, s.plan.stops.length));
+    s.openPlanner(true);
+  };
+  const pointer = () => {
+    map.getCanvas().style.cursor = 'copy';
+  };
+  const noPointer = () => {
+    map.getCanvas().style.cursor = '';
+  };
+  map.on('click', 'route-line', onRouteClick);
+  map.on('mouseenter', 'route-line', pointer);
+  map.on('mouseleave', 'route-line', noPointer);
 
   const drawRoutes = () => {
     const s = useApp.getState();
@@ -140,6 +184,9 @@ export function addRouteLayers(map: MapLibreMap): () => void {
   return () => {
     offPlan();
     offRoute();
+    map.off('click', 'route-line', onRouteClick);
+    map.off('mouseenter', 'route-line', pointer);
+    map.off('mouseleave', 'route-line', noPointer);
     for (const m of markers) m.remove();
     for (const id of ['route-line', 'route-casing', 'route-alt', 'route-alt-casing']) if (map.getLayer(id)) map.removeLayer(id);
     for (const id of [SRC_ROUTE, SRC_ALT]) if (map.getSource(id)) map.removeSource(id);
