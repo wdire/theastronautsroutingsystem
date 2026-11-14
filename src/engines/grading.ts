@@ -17,7 +17,7 @@ export function gradeColour(r: number, g: number, b: number): [number, number, n
   const lum = 0.2126 * r + 0.7152 * g + 0.0722 * b;
   const k = gradeGain(lum);
   // The original hue, brought to the brightness of the graded colour, keeps real colour differences.
-  // Each channel's share of the brightness is limited: in dark pixels a small tint would otherwise
+  // Each channel’s share of the brightness is limited: in dark pixels a small tint would otherwise
   // be multiplied into a saturated red or green.
   const target = k * TINT_LUM;
   const own = lum > 0.02 ? 0.3 : 0;
@@ -38,4 +38,23 @@ export function gradePixels(rgba: Uint8ClampedArray): void {
     rgba[i + 1] = c[1] * 255;
     rgba[i + 2] = c[2] * 255;
   }
+}
+
+/**
+ * A tone curve for the map's base image, as a 256-entry lookup table. Jezero's floor is dark basalt:
+ * shown as the orbiters recorded it, most of the crater is a murk in which neither landforms nor the
+ * route can be read. The curve lifts shadows and midtones (a gamma below 1) and leaves black and
+ * white where they were. `amount` 0 changes nothing, 1 is the full lift.
+ */
+export function mapToneLut(amount: number): Uint8ClampedArray {
+  const a = Math.max(0, Math.min(1, Number.isFinite(amount) ? amount : 0));
+  const gamma = 1 - 0.38 * a;
+  const lut = new Uint8ClampedArray(256);
+  for (let i = 0; i < 256; i += 1) lut[i] = Math.round(255 * (i / 255) ** gamma);
+  return lut;
+}
+
+/** How much of the tone curve a zoom level gets: none on the globe, all of it from the regional view in. */
+export function mapToneAmount(zoom: number): number {
+  return Math.max(0, Math.min(1, (zoom - 4) / 3));
 }

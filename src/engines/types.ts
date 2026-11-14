@@ -81,7 +81,7 @@ export type TaskKind = 'sample' | 'photo' | 'measure' | 'survey' | 'custom';
 export interface Task {
   id: string;
   kind: TaskKind;
-  /** Shown instead of the kind's default name; required for 'custom'. */
+  /** Shown instead of the kind’s default name; required for 'custom'. */
   label?: string;
   minutes: number;
 }
@@ -217,7 +217,7 @@ export interface Grid {
   north: number;
   /** Row-major heights in metres. */
   heights: Float32Array;
-  /** Cell size in metres at the grid's central row. */
+  /** Cell size in metres at the grid’s central row. */
   cellWidthM: number;
   cellM(row: number): number;
   latOf(row: number): number;
@@ -227,7 +227,7 @@ export interface Grid {
   colOf(lon: number): number;
   /** Bilinear height at a point, clamped to the grid. */
   elevation(lat: number, lon: number): number;
-  /** Horn's method. */
+  /** Horn’s method. */
   slopeDeg(row: number, col: number): number;
   /** Terrain ruggedness index: mean absolute height difference to the 8 neighbours, m. */
   ruggedness(row: number, col: number): number;

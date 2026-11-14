@@ -21,7 +21,7 @@ export interface PatchSpec {
   demZoom: number;
   /**
    * How this layer meets the coarser one around it: over `ringM` inside its edge its heights turn into
-   * the coarser layer's (read at `demZoom`), and end `sinkM` under them so the coarser layer draws on top.
+   * the coarser layer’s (read at `demZoom`), and end `sinkM` under them so the coarser layer draws on top.
    * Without this the two surfaces part wherever their data disagree, and the sky shows through the gap.
    */
   blend?: { demZoom: number; fromM: number; toM: number; sinkM: number };
@@ -32,7 +32,7 @@ export const FAR: PatchSpec = { kind: 'far', sizeM: 85_000, samples: 257, imgZoo
 export const MID: PatchSpec = { kind: 'mid', sizeM: 40_000, samples: 401, imgZoom: 12, demZoom: 10, blend: { demZoom: FAR.demZoom, fromM: 4_000, toM: 1_000, sinkM: 10 } };
 export const NEAR: PatchSpec = { kind: 'near', sizeM: 2_000, samples: 335, imgZoom: 14, demZoom: 14, blend: { demZoom: MID.demZoom, fromM: 330, toM: 140, sinkM: 0.8 } };
 
-/** How far inside a layer's edge the coarser layer's hole stops, m. Inside the ring where the two agree. */
+/** How far inside a layer’s edge the coarser layer’s hole stops, m. Inside the ring where the two agree. */
 export const HOLE_INSET_M = { mid: 700, near: 110 } as const;
 
 export interface Patch {
@@ -45,7 +45,7 @@ export interface Patch {
   /** Zoom of the coarsest elevation data that went into it. */
   demSourceZoom: number;
   heightAt(x: number, z: number): number | null;
-  /** Tells this patch's shader where the next finer patch sits, so it leaves that square undrawn. */
+  /** Tells this patch’s shader where the next finer patch sits, so it leaves that square undrawn. */
   setHole(cx: number, cz: number, half: number): void;
   dispose(): void;
 }
@@ -85,7 +85,7 @@ async function imagery(
         (async () => {
           try {
             if (live || !cov || hasTile(cov, 'img', zoom, tx, ty)) {
-              // The map's own tile: the package tile, or its ancestor with live detail.
+              // The map’s own tile: the package tile, or its ancestor with live detail.
               ctx.drawImage(await toBitmap(await imgTile([], zoom, tx, ty, signal)), dx, dy);
               return;
             }
@@ -142,7 +142,7 @@ export async function buildPatch(frame: Frame, cx: number, cz: number, spec: Pat
       const x = cx - half + ix * step;
       const [lon, lat] = toLonLat(frame, x, z);
       const i = iz * n + ix;
-      // Heights are relative to the origin, less the fall of the planet's curve away from it.
+      // Heights are relative to the origin, less the fall of the planet’s curve away from it.
       let elevation = grid.elevation(lat, lon);
       if (blend && coarseGrid) {
         const inside = half - Math.max(Math.abs(x - cx), Math.abs(z - cz));

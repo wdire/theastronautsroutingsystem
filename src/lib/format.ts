@@ -68,7 +68,9 @@ export function joinWords(words: string[]): string {
 
 const UTC_STAMP = new Intl.DateTimeFormat('en-GB', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit', hour12: false, timeZone: 'UTC' });
 
-/** "13 Nov, 12:00 UTC" */
-export function fmtUtc(utcMs: number): string {
-  return `${UTC_STAMP.format(utcMs)} UTC`;
+const UTC_STAMP_YEAR = new Intl.DateTimeFormat('en-GB', { day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit', hour12: false, timeZone: 'UTC' });
+
+/** "13 Nov, 12:00 UTC", or with the year: "13 Nov 2026, 12:00 UTC" */
+export function fmtUtc(utcMs: number, withYear = false): string {
+  return `${(withYear ? UTC_STAMP_YEAR : UTC_STAMP).format(utcMs)} UTC`;
 }

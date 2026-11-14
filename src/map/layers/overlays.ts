@@ -23,7 +23,7 @@ async function overlayTile(rest: string[], z: number, x: number, y: number, sign
   return res.ok ? res.arrayBuffer() : transparentTile();
 }
 
-/** Slope against the chosen vehicle's limits: clear where it is easy, amber where it is hard, red where it cannot go. */
+/** Slope against the chosen vehicle’s limits: clear where it is easy, amber where it is hard, red where it cannot go. */
 async function slopeTile(_rest: string[], z: number, x: number, y: number): Promise<TileData> {
   const { heights } = await tileHeights(z, x, y);
   const v = VEHICLES[useApp.getState().plan.vehicle];
@@ -59,7 +59,7 @@ const RASTER: Record<Exclude<Overlay, 'none' | 'geology'>, { tiles: string; maxz
   slope: { tiles: 'mars://derived/slope/{z}/{x}/{y}', minzoom: 6, maxzoom: 12, opacity: 1 },
 };
 
-/** Overlays chosen in the Layers panel, the geologic map among them, and Perseverance's drive. */
+/** Overlays chosen in the Layers panel, the geologic map among them, and Perseverance’s drive. */
 export function addOverlays(map: MapLibreMap): () => void {
   const before = map.getLayer('route-alt-casing') ? 'route-alt-casing' : undefined;
   map.addSource('geology', { type: 'geojson', data: EMPTY });
@@ -78,10 +78,10 @@ export function addOverlays(map: MapLibreMap): () => void {
 
   map.addSource('traverse', { type: 'geojson', data: EMPTY });
   map.addSource('traverse-stops', { type: 'geojson', data: EMPTY });
-  map.addLayer({ id: 'traverse-casing', type: 'line', source: 'traverse', minzoom: 9, layout: { 'line-join': 'round' }, paint: { 'line-color': '#1b1512', 'line-width': 3.5, 'line-opacity': 0.7 } }, before);
-  map.addLayer({ id: 'traverse-line', type: 'line', source: 'traverse', minzoom: 9, layout: { 'line-join': 'round' }, paint: { 'line-color': '#fbf4ea', 'line-width': 1.6 } }, before);
+  map.addLayer({ id: 'traverse-casing', type: 'line', source: 'traverse', minzoom: 9, layout: { 'line-join': 'round' }, paint: { 'line-color': '#1b1512', 'line-width': 3, 'line-opacity': 0.45 } }, before);
+  map.addLayer({ id: 'traverse-line', type: 'line', source: 'traverse', minzoom: 9, layout: { 'line-join': 'round' }, paint: { 'line-color': '#fbf4ea', 'line-width': 1.4, 'line-opacity': 0.8 } }, before);
   map.addLayer(
-    { id: 'traverse-stops', type: 'circle', source: 'traverse-stops', minzoom: 12, paint: { 'circle-radius': 2.4, 'circle-color': '#fbf4ea', 'circle-stroke-color': '#1b1512', 'circle-stroke-width': 1 } },
+    { id: 'traverse-stops', type: 'circle', source: 'traverse-stops', minzoom: 13.5, paint: { 'circle-radius': ['interpolate', ['linear'], ['zoom'], 13.5, 1.6, 16, 3], 'circle-color': '#fbf4ea', 'circle-stroke-color': '#1b1512', 'circle-stroke-width': 1 } },
     before,
   );
   void loadTraverse()

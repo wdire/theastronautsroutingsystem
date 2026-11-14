@@ -12,7 +12,7 @@ export const SUIT_FLAT_KMH = 3.3;
 /** Default length of each science task, minutes (build spec). */
 export const TASK_MINUTES: Record<TaskKind, number> = { sample: 45, photo: 10, measure: 20, survey: 60, custom: 15 };
 
-/** Rolling resistance of a wheel on loose regolith, as a fraction of weight (assumption; with the drivetrain loss it matches the Apollo lunar rover's use of about 0.2 of its weight per metre). */
+/** Rolling resistance of a wheel on loose regolith, as a fraction of weight (assumption; with the drivetrain loss it matches the Apollo lunar rover’s use of about 0.2 of its weight per metre). */
 export const ROLLING_RESISTANCE = 0.15;
 /** Share of battery energy that reaches the wheels (assumption). */
 export const DRIVE_EFFICIENCY = 0.75;
@@ -22,7 +22,7 @@ export const FLIGHT_W = 350;
 export const ECO_SPEED_FACTOR = 0.8;
 /** Speed used to cost a stretch that is too steep, as a share of flat speed (assumption), so a blocked route can still be drawn. */
 export const CRAWL_FRACTION = 0.1;
-/** Steady electrical power from a radioisotope generator, W. Perseverance's MMRTG gives about 110 W (NASA/DOE). */
+/** Steady electrical power from a radioisotope generator, W. Perseverance’s MMRTG gives about 110 W (NASA/DOE). */
 export const RTG_W: Record<VehicleId, number> = { foot: 0, openRover: 0, pressRover: 0, robotRover: 110, heli: 0 };
 
 export const VEHICLES: Record<VehicleId, Vehicle> = {
@@ -59,7 +59,7 @@ export const VEHICLES: Record<VehicleId, Vehicle> = {
     flatSpeedMs: 10 / 3.6, // Apollo lunar rover: cruised at about 10 km/h
     comfortSlopeDeg: 10, // assumption
     blockSlopeDeg: 20, // Apollo lunar rover: rated for slopes to about 20 to 25 degrees
-    batteryKWh: 16, // assumption: about twice the lunar rover's 8.7 kWh, for Mars gravity
+    batteryKWh: 16, // assumption: about twice the lunar rover’s 8.7 kWh, for Mars gravity
     extenderKWh: 0,
     solarKW: 0.3, // assumption: about 2 m2 of panel at Mars noon
     hotelW: 250, // assumption: avionics, radio, lights
@@ -82,14 +82,14 @@ export const VEHICLES: Record<VehicleId, Vehicle> = {
     crew: 2, // NASA Space Exploration Vehicle concept: two crew
     flatSpeedMs: 10 / 3.6, // NASA Space Exploration Vehicle concept: about 10 km/h
     comfortSlopeDeg: 15, // assumption
-    blockSlopeDeg: 25, // assumption: kept below the concept's claimed limit for loose ground
+    blockSlopeDeg: 25, // assumption: kept below the concept’s claimed limit for loose ground
     batteryKWh: 150, // build spec
     extenderKWh: 400, // build spec: range extender
     solarKW: 2, // assumption: about 13 m2 of roof panel at Mars noon
     hotelW: 1500, // assumption: life support, heating and avionics for two
     ecoHotelW: 1000, // assumption
     massKg: 4000, // approximate: the Space Exploration Vehicle concept with crew and stores
-    o2KgPerPerson: 12, // two weeks at NASA's planning figure of 0.84 kg per person per day
+    o2KgPerPerson: 12, // two weeks at NASA’s planning figure of 0.84 kg per person per day
     scrubberH: 336, // two weeks, matching the oxygen
     cabin: true,
     doseFactor: 0.7, // assumption: cabin walls and stored water stop about a third of the dose
@@ -133,7 +133,7 @@ export const VEHICLES: Record<VehicleId, Vehicle> = {
     blockSlopeDeg: 90,
     batteryKWh: 0.036, // Ingenuity: six lithium-ion cells, about 36 Wh
     extenderKWh: 0,
-    solarKW: 0.01, // approximate: Ingenuity's small panel at Mars noon
+    solarKW: 0.01, // approximate: Ingenuity’s small panel at Mars noon
     hotelW: 1, // approximate: heaters and avionics averaged over a sol
     ecoHotelW: 1,
     massKg: 1.8, // Ingenuity
@@ -148,7 +148,7 @@ export const VEHICLES: Record<VehicleId, Vehicle> = {
   },
 };
 
-/** Tobler's hiking function, km/h: 6 exp(-3.5 |tan(slope) + 0.05|) (Tobler 1993). About 5.04 km/h on the flat. */
+/** Tobler’s hiking function, km/h: 6 exp(-3.5 |tan(slope) + 0.05|) (Tobler 1993). About 5.04 km/h on the flat. */
 function toblerRawKmh(gradeDeg: number): number {
   return 6 * Math.exp(-3.5 * Math.abs(Math.tan(gradeDeg * RAD) + 0.05));
 }
@@ -156,7 +156,7 @@ function toblerRawKmh(gradeDeg: number): number {
 const TOBLER_SCALE = SUIT_FLAT_KMH / toblerRawKmh(0);
 
 /**
- * Walking pace in a suit on a signed grade (degrees, uphill positive), km/h: Tobler's hiking function scaled
+ * Walking pace in a suit on a signed grade (degrees, uphill positive), km/h: Tobler’s hiking function scaled
  * so that flat ground gives 3.3 km/h, and held to 3.3 km/h where Tobler would let a gentle descent go faster,
  * because the suit sets the top pace.
  */
@@ -166,7 +166,7 @@ export function toblerKmh(gradeDeg: number): number {
 }
 
 /**
- * Speed on a signed grade (degrees, uphill positive), m/s. Zero at or beyond the vehicle's blocking slope,
+ * Speed on a signed grade (degrees, uphill positive), m/s. Zero at or beyond the vehicle’s blocking slope,
  * up or down. Walkers follow toblerKmh. Wheeled vehicles keep full speed on the level, fall to half at
  * their comfortable slope and to 15% just short of the blocking slope (assumption). Aircraft ignore the ground.
  */

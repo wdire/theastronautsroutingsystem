@@ -1,5 +1,5 @@
 /**
- * How much the map's relief is exaggerated at each zoom. A 45 km crater that is 500 m deep reads
+ * How much the map’s relief is exaggerated at each zoom. A 45 km crater that is 500 m deep reads
  * as flat at true scale, so mid zooms are stretched; the chip on the map always says by how much.
  */
 const STOPS: readonly (readonly [zoom: number, factor: number])[] = [

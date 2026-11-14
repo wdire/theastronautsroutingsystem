@@ -97,7 +97,7 @@ export interface LoadedGrid {
 
 /**
  * A height grid over a box, at the finest zoom that keeps it under `maxCells`
- * and no finer than the data the package has at the box's centre.
+ * and no finer than the data the package has at the box’s centre.
  */
 export async function loadGrid(box: Box, maxCells = 1_500_000, finest?: number): Promise<LoadedGrid> {
   const cov = getCoverage() ?? (await loadCoverage());

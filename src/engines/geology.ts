@@ -102,8 +102,8 @@ function spansFromCode(code: string): Span[] {
 }
 
 /**
- * A unit's age as one number: the midpoint of its time span in billions of years. A unit that spans
- * periods (HNt, AHi) takes the middle of the whole span. Read from the unit's period, or from its
+ * A unit’s age as one number: the midpoint of its time span in billions of years. A unit that spans
+ * periods (HNt, AHi) takes the middle of the whole span. Read from the unit’s period, or from its
  * code if the period says nothing. NaN if neither does.
  */
 export function ageGa(unit: GeoUnit): number {

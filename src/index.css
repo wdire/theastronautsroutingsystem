@@ -132,6 +132,28 @@
   [role='button'] {
     cursor: pointer;
   }
+  /* No 300 ms wait for a double tap, and the app's own pressed states instead of the grey flash. */
+  a,
+  button,
+  input,
+  label,
+  select,
+  textarea,
+  [role='button'],
+  [role='radio'],
+  [role='tab'],
+  [role='option'] {
+    touch-action: manipulation;
+    -webkit-tap-highlight-color: transparent;
+  }
+  h1,
+  h2,
+  h3 {
+    text-wrap: balance;
+  }
+  p {
+    text-wrap: pretty;
+  }
   :focus-visible {
     outline: 2px solid var(--ring);
     outline-offset: 2px;
@@ -156,6 +178,8 @@
 }
 
 @utility scroll-quiet {
+  /* A panel scrolled to its end does not start scrolling the page or the sheet under it. */
+  overscroll-behavior: contain;
   scrollbar-width: thin;
   scrollbar-color: color-mix(in srgb, var(--foreground) 22%, transparent) transparent;
 }

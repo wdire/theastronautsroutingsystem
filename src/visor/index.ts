@@ -66,7 +66,7 @@ export interface VisorHandle {
   setProps(specs: readonly PropSpec[]): void;
   /** Where each prop stands, in scene metres; for the nearby card and for tests. */
   props(): { id: string; x: number; z: number; y: number; seated: boolean; real: boolean }[];
-  /** The viewer's place in scene metres (x east, z south). */
+  /** The viewer’s place in scene metres (x east, z south). */
   position(): { x: number; y: number; z: number };
   /** What the last frame cost, for the performance checks. */
   stats(): { triangles: number; calls: number; rocks: number };
@@ -138,7 +138,7 @@ export async function mountVisor(canvas: HTMLCanvasElement, options: VisorOption
   let effective: 'high' | 'low' = 'high';
   const state: VisorState = {
     ready: false,
-    loading: 'Building the ground from orbital data',
+    loading: 'Building the ground from orbital data…',
     lon: options.lon,
     lat: options.lat,
     elev: base.elev,
@@ -392,7 +392,7 @@ export async function mountVisor(canvas: HTMLCanvasElement, options: VisorOption
   const onLost = (e: Event) => {
     e.preventDefault();
     cancelAnimationFrame(raf);
-    state.loading = 'The graphics were interrupted. Restoring the view';
+    state.loading = 'The graphics were interrupted. Restoring the view…';
     options.onState?.({ ...state });
   };
   const onRestored = () => {

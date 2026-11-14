@@ -82,7 +82,7 @@ function trekUrl(lon: number, lat: number, zoom: number): string {
 
 /** For a bare point there is no written summary, so one is composed from what the data says. */
 function pointSummary(ctx: Context | null): string {
-  if (!ctx) return 'Reading the ground here.';
+  if (!ctx) return 'Reading the ground here…';
   const parts: string[] = [];
   const where = ctx.inside ? `This spot is in ${ctx.inside.name}, a ${typeWord(ctx.inside.type)}` : 'This spot has no name of its own';
   parts.push(ctx.unit ? `${where}, on ground the USGS geologic map calls the ${ctx.unit.name.toLowerCase()}.` : `${where}.`);
@@ -139,7 +139,7 @@ export function PlaceCard() {
       <section className="panel p-4" aria-live="polite">
         <div className="flex items-start justify-between gap-3">
           <p className="text-sm text-muted-foreground">
-            {resolved.state === 'loading' ? 'Loading this place.' : 'This place could not be found. It may have been removed from the data.'}
+            {resolved.state === 'loading' ? 'Loading this place…' : 'This place could not be found. It may have been removed from the data.'}
           </p>
           <button
             type="button"
@@ -273,7 +273,7 @@ export function PlaceCard() {
               </p>
             </>
           ) : (
-            <p className="text-[13px] text-muted-foreground">{ctx ? 'The geologic map does not cover this spot.' : 'Reading the geologic map.'}</p>
+            <p className="text-[13px] text-muted-foreground">{ctx ? 'The geologic map does not cover this spot.' : 'Reading the geologic map…'}</p>
           )}
         </Section>
 
@@ -294,7 +294,7 @@ export function PlaceCard() {
               <StationReadings />
             </>
           ) : (
-            <p className="text-[13px] text-muted-foreground">Working out the conditions.</p>
+            <p className="text-[13px] text-muted-foreground">Working out the conditions…</p>
           )}
         </Section>
 
@@ -339,7 +339,7 @@ export function PlaceCard() {
               ))}
             </ul>
           ) : (
-            <p className="text-[13px] text-muted-foreground">{ctx ? 'Nothing with a name within 40 km.' : 'Looking around.'}</p>
+            <p className="text-[13px] text-muted-foreground">{ctx ? 'Nothing with a name within 40 km.' : 'Looking around…'}</p>
           )}
         </Section>
       </div>

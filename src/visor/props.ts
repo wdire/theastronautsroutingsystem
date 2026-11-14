@@ -29,7 +29,7 @@ export function seatOnWheels(heights: readonly [number, number, number, number],
   const mean = (fl + fr + rl + rr) / 4;
   const dPitch = (fl + fr) / 2 - (rl + rr) / 2;
   const dRoll = (fr + rr) / 2 - (fl + rl) / 2;
-  // What is left of each wheel's ground after the tilted plane is taken out.
+  // What is left of each wheel’s ground after the tilted plane is taken out.
   const twist = Math.max(fl - (mean + dPitch / 2 - dRoll / 2), fr - (mean + dPitch / 2 + dRoll / 2), rl - (mean - dPitch / 2 - dRoll / 2), rr - (mean - dPitch / 2 + dRoll / 2));
   return { y: mean + Math.max(0, twist), pitch: Math.atan2(dPitch, length), roll: Math.atan2(dRoll, width) };
 }

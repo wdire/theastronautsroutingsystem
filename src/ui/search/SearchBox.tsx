@@ -143,11 +143,12 @@ export function SearchBox({ leading }: { leading: ReactNode }) {
 
   return (
     <div ref={rootRef} className="relative">
-      <div className="panel flex h-12 items-center gap-0.5 pr-1.5 pl-1">
+      <div className="panel flex h-12 items-center gap-0.5 pr-1.5 pl-1 focus-within:border-ring">
         {leading}
         <input
           ref={inputRef}
           type="text"
+          name="search"
           inputMode="search"
           autoComplete="off"
           spellCheck={false}
@@ -157,7 +158,7 @@ export function SearchBox({ leading }: { leading: ReactNode }) {
           aria-controls={listId}
           aria-autocomplete="list"
           aria-activedescendant={showList && results[active] ? `${listId}-${active}` : undefined}
-          placeholder="Search places or coordinates"
+          placeholder="Search places or coordinates…"
           value={text}
           onChange={(e) => {
             setText(e.target.value);

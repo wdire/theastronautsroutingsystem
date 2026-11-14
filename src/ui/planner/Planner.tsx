@@ -135,7 +135,7 @@ function RouteResult() {
   if (route.status === 'routing') {
     return (
       <div aria-live="polite">
-        <p className="text-[13px] text-muted-foreground">Working out the route over the terrain.</p>
+        <p className="text-[13px] text-muted-foreground">Working out the route over the terrain…</p>
         <div className="mt-2 h-1 overflow-hidden rounded-full bg-secondary" role="progressbar" aria-valuemin={0} aria-valuemax={100} aria-valuenow={Math.round(route.progress * 100)}>
           <div className="h-full origin-left rounded-full bg-primary transition-transform duration-200 ease-out" style={{ transform: `scaleX(${Math.max(0.04, route.progress)})` }} />
         </div>

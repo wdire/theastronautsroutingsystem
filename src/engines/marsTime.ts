@@ -1,5 +1,5 @@
 /**
- * Mars time and the sun's place in the Martian sky.
+ * Mars time and the sun’s place in the Martian sky.
  *
  * The Mars24 algorithm: Allison and McEwen (2000), "A post-Pathfinder evaluation of areocentric solar
  * coordinates with improved timing recipes for Mars seasonal/diurnal climate studies", Planetary and Space
@@ -217,7 +217,7 @@ function localNoon(utcMs: number, lonE: number): number {
   return noon;
 }
 
-/** Moves a first guess to the moment the sun's centre crosses the horizon (Newton steps on elevation). */
+/** Moves a first guess to the moment the sun’s centre crosses the horizon (Newton steps on elevation). */
 function refineHorizon(guessMs: number, lat: number, lonE: number): number {
   let t = guessMs;
   for (let i = 0; i < 4; i++) {
@@ -276,10 +276,10 @@ export function lightTimeS(utcMs: number): number {
   const bMars = -(1.8497 - 2.23e-5 * o.dt) * Math.sin((ls - 144.5 + 2.57e-6 * o.dt) * RAD); // D-4
 
   const T = o.dt / 36_525; // Julian centuries since J2000
-  const l0 = 280.46646 + 36_000.76983 * T + 0.0003032 * T * T; // Meeus 25.2: sun's mean longitude
-  const mEarthDeg = 357.52911 + 35_999.05029 * T - 0.0001537 * T * T; // Meeus 25.3: sun's mean anomaly
+  const l0 = 280.46646 + 36_000.76983 * T + 0.0003032 * T * T; // Meeus 25.2: sun’s mean longitude
+  const mEarthDeg = 357.52911 + 35_999.05029 * T - 0.0001537 * T * T; // Meeus 25.3: sun’s mean anomaly
   const mEarth = mEarthDeg * RAD;
-  const e = 0.016708634 - 0.000042037 * T; // Meeus 25.4: eccentricity of Earth's orbit
+  const e = 0.016708634 - 0.000042037 * T; // Meeus 25.4: eccentricity of Earth’s orbit
   const centre =
     (1.914602 - 0.004817 * T - 0.000014 * T * T) * Math.sin(mEarth) +
     (0.019993 - 0.000101 * T) * Math.sin(2 * mEarth) +

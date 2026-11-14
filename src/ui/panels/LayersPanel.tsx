@@ -63,7 +63,7 @@ function Legend({ overlay }: { overlay: Overlay }) {
             ))}
           </ul>
         ) : (
-          <p className="text-xs text-muted-foreground">Loading the map units.</p>
+          <p className="text-xs text-muted-foreground">Loading the map units…</p>
         )}
         <p className="mt-3 text-xs leading-relaxed text-faint">Tanaka and others, 2014 (USGS SIM 3292). Drawn for the whole planet: boundaries are good to a few kilometres.</p>
       </div>
@@ -127,7 +127,7 @@ export function LayersPanel() {
       <h3 className="pt-3 pb-1 text-xs font-medium text-muted-foreground">On the map</h3>
       <Toggle label="Place names" hint="Craters, valleys and plains named by the IAU." checked={layers.names} onChange={(names) => setLayers({ names })} />
       <Toggle label="Rover sites and samples" hint="Places Perseverance studied and where it took its samples." checked={layers.rover} onChange={(rover) => setLayers({ rover })} />
-      <Toggle label="Perseverance's drive" hint="The rover's track since landing in 2021." checked={layers.traverse} onChange={(traverse) => setLayers({ traverse })} />
+      <Toggle label="Perseverance’s drive" hint="The rover’s track since landing in 2021." checked={layers.traverse} onChange={(traverse) => setLayers({ traverse })} />
 
       <h3 className="mt-3 border-t pt-4 pb-2 text-xs font-medium text-muted-foreground">Overlay</h3>
       <div role="radiogroup" aria-label="Overlay" className="flex flex-col gap-1">
@@ -156,10 +156,10 @@ export function LayersPanel() {
 
       <h3 className="mt-3 border-t pt-4 pb-1 text-xs font-medium text-muted-foreground">Light</h3>
       <Toggle
-        label="Full daylight"
-        hint="Light the map as at mid-morning, whatever the hour at Jezero. Off: the map follows the real sun and goes dark at night."
-        checked={layers.daylight}
-        onChange={(daylight) => setLayers({ daylight })}
+        label="Follow the real sun"
+        hint="Light the map by the Sun at Jezero for the time on the Mars clock: long shadows at dawn, dark at night. Off: lit as at mid-morning, so it always reads."
+        checked={!layers.daylight}
+        onChange={(sun) => setLayers({ daylight: !sun })}
       />
     </div>
   );

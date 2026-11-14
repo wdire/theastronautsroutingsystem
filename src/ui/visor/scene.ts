@@ -3,7 +3,7 @@ import type { MissionPlan } from '@/engines/types';
 import { bearingDeg, destination, distanceM } from '@/lib/geo';
 import type { PropSpec } from '@/visor';
 
-/** Ingenuity's last landing, after flight 72 on sol 1036 (Valinor Hills Station). From the flight log in public/data. */
+/** Ingenuity’s last landing, after flight 72 on sol 1036 (Valinor Hills Station). From the flight log in public/data. */
 const INGENUITY_REST = { lon: 77.322534, lat: 18.497269 };
 
 /** Where the viewer stands and which way they look when the view opens. */
@@ -35,7 +35,7 @@ async function perseverance(): Promise<PropSpec | null> {
 
 /**
  * What stands in the 3D scene: Perseverance where it last reported, Ingenuity where it came to rest,
- * and, if a mission has a start, an illustrative base there: a habitat, and the mission's rover.
+ * and, if a mission has a start, an illustrative base there: a habitat, and the mission’s rover.
  */
 export async function sceneProps(plan: MissionPlan): Promise<PropSpec[]> {
   const props: PropSpec[] = [{ id: 'ingenuity', model: 'ingenuity', ...INGENUITY_REST, headingDeg: 20 }];
@@ -77,7 +77,7 @@ export function standpoint(lon: number, lat: number, props: readonly PropSpec[])
 
 /** What a visitor is told when they stand near something in the scene: what it is and how real it is. */
 export function propCaption(id: string): string {
-  if (id === 'perseverance') return "Perseverance, standing where it last reported its position. NASA's 3D model of the rover.";
-  if (id === 'ingenuity') return "Ingenuity, where it came to rest after its last flight in January 2024. NASA's 3D model.";
-  return "An illustrative base at your mission's start, built from NASA's models of a habitat, a pressurised rover and the Z-2 suit. Nothing stands here on Mars.";
+  if (id === 'perseverance') return "Perseverance, standing where it last reported its position. NASA’s 3D model of the rover.";
+  if (id === 'ingenuity') return "Ingenuity, where it came to rest after its last flight in January 2024. NASA’s 3D model.";
+  return "An illustrative base at your mission’s start, built from NASA’s models of a habitat, a pressurised rover and the Z-2 suit. Nothing stands here on Mars.";
 }

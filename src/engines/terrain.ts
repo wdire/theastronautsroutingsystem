@@ -129,7 +129,7 @@ export function makeGrid(spec: GridSpec): Grid {
 
 type HeightAt = (r: number, c: number) => number;
 
-/** Horn's weighted east-minus-west height difference; divide by 8 cells for the gradient. */
+/** Horn’s weighted east-minus-west height difference; divide by 8 cells for the gradient. */
 function hornEast(h: HeightAt, r: number, c: number): number {
   return (
     h(r - 1, c + 1) + 2 * h(r, c + 1) + h(r + 1, c + 1) - (h(r - 1, c - 1) + 2 * h(r, c - 1) + h(r + 1, c - 1))

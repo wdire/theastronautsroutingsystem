@@ -5,7 +5,7 @@ export const STOPS: readonly SheetStop[] = ['peek', 'half', 'full'];
 export const STOP_WORD: Record<SheetStop, string> = { peek: 'small', half: 'half height', full: 'full height' };
 
 
-/** The sheet's height at each stop, for a viewport and the space kept clear above and below it. */
+/** The sheet’s height at each stop, for a viewport and the space kept clear above and below it. */
 export function sheetHeights(viewportH: number, topClear: number, bottomClear: number): Record<SheetStop, number> {
   const full = Math.max(220, viewportH - topClear - bottomClear);
   return { peek: Math.min(132, full), half: Math.min(full, Math.round((viewportH - bottomClear) * 0.52)), full };

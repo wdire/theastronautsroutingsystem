@@ -1,5 +1,5 @@
 import { Map as MapLibreMap, setWorkerUrl } from 'maplibre-gl';
-// The library's own lookup of its worker breaks under a bundler; hand it the bundled worker instead.
+// The library’s own lookup of its worker breaks under a bundler; hand it the bundled worker instead.
 import workerUrl from 'maplibre-gl/dist/maplibre-gl-worker.mjs?worker&url';
 import { useApp } from '@/store';
 import { baseStyle } from './style';

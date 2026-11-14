@@ -3,7 +3,7 @@ import { Popover, PopoverContent, PopoverTrigger } from '@/ui/components/ui/popo
 import { useApp } from '@/store';
 import { lightTimeS, marsTime, nextLtst, sunPosition } from '@/engines/marsTime';
 import { LANDING_SITE } from '@/lib/constants';
-import { fmtClock, fmtNumber } from '@/lib/format';
+import { fmtClock, fmtNumber, fmtUtc } from '@/lib/format';
 import { cn } from '@/lib/cn';
 import { Row } from '@/ui/shell/Section';
 import type { Scenario } from '@/engines/types';
@@ -67,7 +67,7 @@ function Segments<T extends string>({
   );
 }
 
-/** Top right: Jezero's local time. Opens the clock menu. */
+/** Top right: Jezero’s local time. Opens the clock menu. */
 export function ClockMenu() {
   const second = useApp((s) => Math.floor(s.utcMs / 1000));
   const scenario = useApp((s) => s.scenario);
@@ -122,7 +122,12 @@ export function ClockMenu() {
                   type="button"
                   role="radio"
                   aria-checked={checked}
-                  onClick={() => (time.hour === null ? setClock(Date.now(), true) : setClock(nextLtst(Date.now(), LON, time.hour), false))}
+                  onClick={() => {
+                    if (time.hour === null) return setClock(Date.now(), true);
+                    setClock(nextLtst(Date.now(), LON, time.hour), false);
+                    // Asking for an hour is asking to see its light.
+                    useApp.getState().setLayers({ daylight: false });
+                  }}
                   className={cn(
                     'h-8 rounded-md border px-2.5 text-[13px] font-medium transition-colors',
                     checked ? 'border-primary/60 bg-primary/15 text-foreground' : 'text-muted-foreground hover:bg-secondary hover:text-foreground',
@@ -138,7 +143,7 @@ export function ClockMenu() {
           <Row label="Season" value={`Ls ${fmtNumber(t.lsDeg, 1)}°, ${seasonName(t.lsDeg)}`} />
           <Row label="Mars year" value={fmtNumber(t.marsYear)} />
           <Row label="Sol number" value={fmtNumber(t.sol)} note="Mars Sol Date" />
-          <Row label="Earth time" value={`${new Date(utcMs).toISOString().slice(0, 16).replace('T', ' ')} UTC`} />
+          <Row label="Earth time" value={fmtUtc(utcMs, true)} />
           <Row label="Radio delay to Earth" value={`${Math.floor(light / 60)} min ${String(Math.round(light % 60)).padStart(2, '0')} s`} />
         </div>
         <div className="border-t px-4 py-3">

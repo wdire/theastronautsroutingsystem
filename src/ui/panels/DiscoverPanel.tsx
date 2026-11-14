@@ -25,7 +25,7 @@ function nasaUrl(value: string | undefined): string | null {
   }
 }
 
-/** Up to four Navcam frames the rover took on a sol, asked of NASA's raw-images feed when wanted. */
+/** Up to four Navcam frames the rover took on a sol, asked of NASA’s raw-images feed when wanted. */
 async function framesOn(sol: number, signal: AbortSignal): Promise<RawFrame[]> {
   const q = new URLSearchParams({
     feed: 'raw_images',
@@ -165,15 +165,15 @@ function FollowPerseverance({ traverse, places }: { traverse: Traverse; places: 
       </div>
       {frames && frames.sol === stop.sol ? (
         <div className="mt-3" aria-live="polite">
-          {frames.state === 'loading' ? <p className="text-xs text-muted-foreground">Asking NASA for the rover&apos;s photos from sol {frames.sol}.</p> : null}
-          {frames.state === 'failed' ? <p className="text-xs text-muted-foreground">NASA&apos;s photo feed did not answer. The rest of the app works without it.</p> : null}
+          {frames.state === 'loading' ? <p className="text-xs text-muted-foreground">Asking NASA for the rover’s photos from sol {frames.sol}…</p> : null}
+          {frames.state === 'failed' ? <p className="text-xs text-muted-foreground">NASA’s photo feed did not answer. The rest of the app works without it.</p> : null}
           {frames.state === 'ready' && frames.list.length === 0 ? <p className="text-xs text-muted-foreground">No navigation camera photos are listed for sol {frames.sol}.</p> : null}
           {frames.list.length > 0 ? (
             <>
               <div className="grid grid-cols-2 gap-1.5">
                 {frames.list.map((f) => (
                   <a key={f.src} href={f.full} target="_blank" rel="noreferrer" className="block overflow-hidden rounded bg-sunken">
-                    <img src={f.src} alt={`Navigation camera photo, sol ${frames.sol}`} loading="lazy" className="aspect-[4/3] w-full object-cover" />
+                    <img src={f.src} alt={`Navigation camera photo, sol ${frames.sol}`} loading="lazy" decoding="async" width={320} height={240} className="aspect-[4/3] w-full object-cover" />
                   </a>
                 ))}
               </div>
@@ -202,7 +202,7 @@ export function DiscoverPanel() {
     };
   }, []);
 
-  if (!data) return <p className="px-4 py-5 text-sm text-muted-foreground">Loading what Perseverance found.</p>;
+  if (!data) return <p className="px-4 py-5 text-sm text-muted-foreground">Loading what Perseverance found…</p>;
   const sites = data.places.filter((p) => p.kind !== 'sample');
   const go = (key: string, lon: number, lat: number) => {
     openPlace(key);
@@ -220,7 +220,7 @@ export function DiscoverPanel() {
             <li key={p.id}>
               <button type="button" onClick={() => go(`place:${p.id}`, p.lon, p.lat)} className="flex w-full items-center gap-3 rounded-md p-2 text-left transition-colors hover:bg-secondary">
                 {p.photos[0] ? (
-                  <img src={p.photos[0].src} alt="" loading="lazy" className="size-11 shrink-0 rounded object-cover" />
+                  <img src={p.photos[0].src} alt="" loading="lazy" decoding="async" width={44} height={44} className="size-11 shrink-0 rounded object-cover" />
                 ) : (
                   <span className="size-11 shrink-0 rounded bg-sunken" />
                 )}

@@ -12,7 +12,7 @@ import type { Grid, HazardZone, LonLat, PathPoint, RouteReply, RouteRequest } fr
 
 /* ---------- priority queue ---------- */
 
-/** A binary min-heap of (id, key) pairs with float64 keys. Stale entries are the caller's to skip. */
+/** A binary min-heap of (id, key) pairs with float64 keys. Stale entries are the caller’s to skip. */
 export class MinHeap {
   private keys: Float64Array;
   private ids: Int32Array;
@@ -335,8 +335,8 @@ const NEIGHBOURS: readonly (readonly [number, number])[] = [
 /**
  * A search that can be run a batch at a time, so a worker can look at its messages in between.
  *
- * Lazy Theta*: when a cell is opened, each neighbour is first offered the opened cell's parent as its
- * own parent (a straight line that skips the cell), with the line's cost guessed from the line just
+ * Lazy Theta*: when a cell is opened, each neighbour is first offered the opened cell’s parent as its
+ * own parent (a straight line that skips the cell), with the line’s cost guessed from the line just
  * walked. The guess is checked only when that neighbour is itself opened: the true line is walked
  * then, and if it is cut or dearer than guessed the neighbour falls back to the best cell beside it
  * and goes back in the queue under its true cost.
@@ -553,7 +553,7 @@ export function pathCostS(f: CostField, cells: readonly number[]): number {
 
 /**
  * Drop corners a straight line can skip at no extra cost, again and again until none is left. This
- * is also what joins the search's short lines into the long straight runs of open ground.
+ * is also what joins the search’s short lines into the long straight runs of open ground.
  */
 function pullTight(f: CostField, cells: number[]): number[] {
   const look = 24;
@@ -650,7 +650,7 @@ export function routeOnGrid(
 }
 
 /**
- * The same, pausing between batches so the caller's thread can take messages (a cancel, say).
+ * The same, pausing between batches so the caller’s thread can take messages (a cancel, say).
  * `pause` resolves when the search may go on.
  */
 export async function routeOnGridAsync(

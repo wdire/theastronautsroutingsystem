@@ -24,7 +24,7 @@ export function onExaggeration(cb: (factor: number) => void): () => void {
 
 /**
  * 3D terrain and sun-lit shading. The relief is stretched by zoom (see engines/relief), the shading
- * follows the app clock's sun at the map centre, and the imagery dims toward night.
+ * follows the app clock’s sun at the map centre, and the imagery dims toward night.
  */
 export function addTerrain(map: MapLibreMap): () => void {
   // Terrain and hillshade read the same tiles through two sources, as the library recommends.

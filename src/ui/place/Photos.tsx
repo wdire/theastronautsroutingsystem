@@ -3,7 +3,7 @@ import { ChevronLeft, ChevronRight } from 'lucide-react';
 import type { PlacePhoto } from '@/data/datasets';
 import { cn } from '@/lib/cn';
 
-/** The rover's own photos of a place: what the crew will see when they get there. */
+/** The rover’s own photos of a place: what the crew will see when they get there. */
 export function Photos({ photos, name }: { photos: PlacePhoto[]; name: string }) {
   const strip = useRef<HTMLDivElement>(null);
   const [index, setIndex] = useState(0);
@@ -34,6 +34,9 @@ export function Photos({ photos, name }: { photos: PlacePhoto[]; name: string })
             alt={photo.caption || `${name}, photo ${i + 1}`}
             loading={i === 0 ? 'eager' : 'lazy'}
             decoding="async"
+            width={1200}
+            height={750}
+            fetchPriority={i === 0 ? 'high' : 'auto'}
             className="aspect-[16/10] w-full shrink-0 snap-center object-cover"
           />
         ))}

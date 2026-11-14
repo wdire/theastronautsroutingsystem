@@ -33,12 +33,12 @@ export function baseStyle(): StyleSpecification {
     },
     layers: [
       { id: 'ground', type: 'background', paint: { 'background-color': '#7a4a30' } },
-      // Jezero's floor is dark basalt: the image is lifted a little so its shapes read on a screen.
+      // Jezero’s floor is dark basalt: the image is lifted a little so its shapes read on a screen.
       {
         id: 'base',
         type: 'raster',
         source: SOURCE_BASE,
-        paint: { 'raster-fade-duration': 180, 'raster-resampling': 'linear', 'raster-contrast': 0.28, 'raster-saturation': 0.12, 'raster-brightness-min': 0.06 },
+        paint: { 'raster-fade-duration': 180, 'raster-resampling': 'linear', 'raster-contrast': 0.14, 'raster-saturation': 0.16, 'raster-brightness-min': 0.03 },
       },
       {
         id: 'region-outline',

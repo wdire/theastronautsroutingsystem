@@ -10,7 +10,7 @@ function terrariumBitmap(heights: Float32Array): Promise<ImageBitmap> {
 }
 
 /**
- * Elevation tiles for the map's terrain and hillshade. Where the package has no tile at this zoom,
+ * Elevation tiles for the map’s terrain and hillshade. Where the package has no tile at this zoom,
  * the nearest ancestor is blended up, so relief never drops to a flat sheet at a coverage edge.
  */
 export async function demTile(_rest: string[], z: number, x: number, y: number, signal: AbortSignal): Promise<TileData> {

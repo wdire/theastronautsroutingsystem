@@ -1,9 +1,9 @@
 import { donkiQueries, parseDonkiList, type DonkiFeed, type FeedName } from '@/engines/spaceWeather';
 
 const STORAGE_KEY = 'areo.spaceweather.v1';
-/** DONKI changes a few times a day; half an hour keeps the app polite to NASA's servers. */
+/** DONKI changes a few times a day; half an hour keeps the app polite to NASA’s servers. */
 export const MAX_AGE_MS = 30 * 60_000;
-/** The database's own server at Goddard: answers browsers directly (CORS) and needs no key. */
+/** The database’s own server at Goddard: answers browsers directly (CORS) and needs no key. */
 const CCMC = 'https://ccmc.gsfc.nasa.gov/DONKI/WS/get/';
 const NAMES: readonly FeedName[] = ['enlil', 'sep', 'flr'];
 
@@ -31,7 +31,7 @@ function writeCache(feed: DonkiFeed): void {
   }
 }
 
-/** The app's own function: one cached answer for every visitor. Absent on a plain static host. */
+/** The app’s own function: one cached answer for every visitor. Absent on a plain static host. */
 async function fromFunction(signal: AbortSignal): Promise<DonkiFeed | null> {
   try {
     const response = await fetch('/api/spaceweather', { signal });
@@ -60,8 +60,8 @@ async function fromNasa(nowMs: number, signal: AbortSignal): Promise<DonkiFeed |
 }
 
 /**
- * NASA's space weather feeds: the copy kept in this browser while it is under half an hour old, else a
- * fresh answer (the app's function, then NASA directly). If nothing answers, the old copy if there is
+ * NASA’s space weather feeds: the copy kept in this browser while it is under half an hour old, else a
+ * fresh answer (the app’s function, then NASA directly). If nothing answers, the old copy if there is
  * one, however old; the summary shows when it was fetched. Null only when there is nothing at all.
  */
 export async function loadSpaceWeather(nowMs: number, signal: AbortSignal): Promise<DonkiFeed | null> {

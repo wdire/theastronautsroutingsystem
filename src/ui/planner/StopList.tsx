@@ -26,11 +26,13 @@ function TaskRow({ stopId, task }: { stopId: string; task: Task }) {
       {task.kind === 'custom' ? (
         <input
           aria-label="Task name"
+          name="task-name"
+          autoComplete="off"
           value={task.label ?? ''}
           placeholder="Name this task"
           maxLength={40}
           onChange={(e) => updateTask(stopId, task.id, { label: e.target.value })}
-          className="h-7 min-w-0 flex-1 rounded border border-transparent bg-transparent px-1 text-[13px] outline-none hover:border-input focus:border-ring"
+          className="h-7 min-w-0 flex-1 rounded border border-transparent bg-transparent px-1 text-[13px] outline-none hover:border-input focus-visible:border-ring focus-visible:ring-1 focus-visible:ring-ring"
         />
       ) : (
         <span className="min-w-0 flex-1 truncate text-[13px]">{name}</span>
@@ -38,7 +40,9 @@ function TaskRow({ stopId, task }: { stopId: string; task: Task }) {
       <label className="flex shrink-0 items-center gap-1 text-xs text-muted-foreground">
         <input
           type="number"
+          name="task-minutes"
           inputMode="numeric"
+          autoComplete="off"
           aria-label={`Minutes for ${name}`}
           min={1}
           max={600}
@@ -48,7 +52,7 @@ function TaskRow({ stopId, task }: { stopId: string; task: Task }) {
             const v = Math.round(Number(e.target.value));
             if (Number.isFinite(v)) updateTask(stopId, task.id, { minutes: Math.max(1, Math.min(600, v)) });
           }}
-          className="figure h-7 w-12 rounded border border-input bg-transparent px-1 text-right text-[13px] text-foreground outline-none focus:border-ring"
+          className="figure h-7 w-12 rounded border border-input bg-transparent px-1 text-right text-[13px] text-foreground outline-none focus-visible:border-ring focus-visible:ring-1 focus-visible:ring-ring"
         />
         min
       </label>

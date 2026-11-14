@@ -49,7 +49,7 @@ export interface LayerState {
   names: boolean;
   /** Places Perseverance studied and the samples it took. */
   rover: boolean;
-  /** The line of Perseverance's drive. */
+  /** The line of Perseverance’s drive. */
   traverse: boolean;
   /** One coloured overlay at a time. */
   overlay: Overlay;
@@ -74,14 +74,14 @@ export interface AppState {
   theme: Theme;
 
   /* clock */
-  /** The app's "now" on Mars, as UTC milliseconds. Never runs backwards while a mission runs. */
+  /** The app’s "now" on Mars, as UTC milliseconds. Never runs backwards while a mission runs. */
   utcMs: number;
   /** True while the app clock follows the real present. */
   clockLive: boolean;
   /** A departure chosen by hand, or null to leave now. */
   departUtcMs: number | null;
   scenario: Scenario;
-  /** NASA's space weather feeds as last fetched; null until they arrive. `spaceWeatherFailed` when nothing answered. */
+  /** NASA’s space weather feeds as last fetched; null until they arrive. `spaceWeatherFailed` when nothing answered. */
   spaceWeather: DonkiFeed | null;
   spaceWeatherFailed: boolean;
 
@@ -96,7 +96,7 @@ export interface AppState {
   route: RouteState;
   /** The spot the 3D ground view is open on, or null while the map shows. */
   visor: { lon: number; lat: number } | null;
-  /** The clock stands still (Rover View's fixed times of day). */
+  /** The clock stands still (Rover View’s fixed times of day). */
   clockPaused: boolean;
 
   /* ui */
@@ -179,7 +179,7 @@ export const useApp = create<AppState>()(
       clockPaused: false,
 
       dock: null,
-      layers: { names: true, rover: true, traverse: true, overlay: 'none', daylight: false },
+      layers: { names: true, rover: true, traverse: true, overlay: 'none', daylight: true },
       placeId: null,
       sections: {},
 

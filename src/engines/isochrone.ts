@@ -2,7 +2,7 @@
  * Walking range over real ground: how long it takes to walk from a point to every cell around it,
  * and the lines of equal time.
  *
- * walkingField is a Dijkstra in 16 directions (the 8 neighbours and the 8 knight's moves; with 8
+ * walkingField is a Dijkstra in 16 directions (the 8 neighbours and the 8 knight’s moves; with 8
  * alone the range on flat ground comes out as an octagon). Times are float64 seconds and the queue
  * is compared against those same float64 values, so no cell is skipped by rounding.
  */
@@ -16,7 +16,7 @@ export const SUIT_FLAT_KMH = 3.3;
 export const WALK_BLOCK_DEG = 25;
 
 /**
- * Tobler's hiking function scaled so flat ground is 3.3 km/h, and held to 3.3 km/h where Tobler would
+ * Tobler’s hiking function scaled so flat ground is 3.3 km/h, and held to 3.3 km/h where Tobler would
  * let a gentle descent go faster: the suit sets the top pace (the same rule as vehicles.toblerKmh).
  * Grade is signed, uphill positive. 0 at 25 degrees and steeper, either way.
  */
@@ -26,7 +26,7 @@ export function suitPaceKmh(gradeDeg: number): number {
   return Math.min(SUIT_FLAT_KMH, tobler);
 }
 
-/** The 16 moves as [dRow, dCol]: the 8 neighbours, then the knight's moves. */
+/** The 16 moves as [dRow, dCol]: the 8 neighbours, then the knight’s moves. */
 const MOVES: readonly (readonly [number, number])[] = [
   [-1, 0],
   [1, 0],
@@ -66,7 +66,7 @@ function paceTable(paceKmh: (gradeDeg: number) => number): Float64Array {
  * a contour at the limit closes cleanly.
  *
  * Each step is timed at the pace for its own grade. A step is taken in two halves through the point
- * midway (for a diagonal or knight's move, the mean of the cells it passes between), so a wall one
+ * midway (for a diagonal or knight’s move, the mean of the cells it passes between), so a wall one
  * cell thick is not stepped over.
  */
 export function walkingField(

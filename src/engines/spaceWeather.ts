@@ -1,5 +1,5 @@
 /**
- * Live space weather for Mars, summarised from NASA's DONKI database (Space Weather Database Of
+ * Live space weather for Mars, summarised from NASA’s DONKI database (Space Weather Database Of
  * Notifications, Knowledge, Information): coronal mass ejections that the WSA-ENLIL model sends to Mars,
  * particle events recorded by an instrument at Mars, and the strongest recent solar flare.
  *
@@ -20,7 +20,7 @@ export type SpaceWeatherStatus = 'quiet' | 'watch' | 'warning' | 'unknown';
 
 export interface CmeAtMars {
   arrivalUtcMs: number;
-  /** The model has the cloud's flank, not its centre, reaching Mars. */
+  /** The model has the cloud’s flank, not its centre, reaching Mars. */
   glancing: boolean;
   minor: boolean;
   /** Speed of the fastest ejection in the run, km/s. */
@@ -65,7 +65,7 @@ const CME_WATCH_AHEAD_MS = 7 * DAY;
 const CME_WARN_AHEAD_MS = DAY;
 const SEP_LISTED_BACK_MS = 7 * DAY;
 const SEP_WARN_BACK_MS = 2 * DAY;
-/** Instruments that sit at Mars: MAVEN in orbit, Curiosity's RAD on the ground. */
+/** Instruments that sit at Mars: MAVEN in orbit, Curiosity’s RAD on the ground. */
 const AT_MARS = /\b(MAVEN|MSL|Mars)\b/i;
 
 type Rec = Record<string, unknown>;

@@ -74,7 +74,7 @@ export default function RoverView() {
       app.setClock(nextLtst(app.utcMs, lon, 10), false);
       app.setClockPaused(true);
     }
-    // The scene's rovers and base are worked out first, so the view can open beside one, not inside it.
+    // The scene’s rovers and base are worked out first, so the view can open beside one, not inside it.
     void Promise.all([import('@/visor'), sceneProps(app.plan)])
       .then(async ([{ mountVisor }, props]) => {
         const stand = standpoint(lon, lat, props);
@@ -220,7 +220,7 @@ export default function RoverView() {
         </div>
       ) : !state?.ready ? (
         <div className="pointer-events-none absolute inset-0 grid place-items-center" aria-live="polite">
-          <p className={cn('text-sm font-medium text-white/90', SHADOW)}>{state?.loading ?? 'Building the ground from orbital data'}</p>
+          <p className={cn('text-sm font-medium text-white/90', SHADOW)}>{state?.loading ?? 'Building the ground from orbital data…'}</p>
         </div>
       ) : state.loading ? (
         <p className={cn('pointer-events-none absolute top-16 left-1/2 -translate-x-1/2 text-sm font-medium text-white/90', SHADOW)}>{state.loading}</p>

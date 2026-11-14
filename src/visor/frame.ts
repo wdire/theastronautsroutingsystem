@@ -3,7 +3,7 @@ import { MARS_RADIUS_M } from '@/lib/constants';
 const RAD = Math.PI / 180;
 
 /**
- * The visor's local frame: metres on a plane touching Mars at an origin.
+ * The visor’s local frame: metres on a plane touching Mars at an origin.
  * x points east, z points south (so north is -z, as three.js cameras expect), y is up.
  */
 export interface Frame {
@@ -21,7 +21,7 @@ export function toLonLat(frame: Frame, x: number, z: number): [lon: number, lat:
   return [frame.lon0 + x / (RAD * MARS_RADIUS_M * Math.cos(frame.lat0 * RAD)), frame.lat0 - z / (RAD * MARS_RADIUS_M)];
 }
 
-/** How far the planet's surface has fallen away below the tangent plane at a distance from the origin, m. */
+/** How far the planet’s surface has fallen away below the tangent plane at a distance from the origin, m. */
 export function curvatureDrop(x: number, z: number): number {
   return (x * x + z * z) / (2 * MARS_RADIUS_M);
 }

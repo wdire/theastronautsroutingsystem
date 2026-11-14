@@ -31,7 +31,7 @@ async function fetchBytes(url: string, signal: AbortSignal): Promise<ArrayBuffer
   throw lastError;
 }
 
-/** A package tile as a bitmap, cached. Not tied to one request's abort signal, since others may share it. */
+/** A package tile as a bitmap, cached. Not tied to one request’s abort signal, since others may share it. */
 export function packageBitmap(cov: Coverage, ref: TileRef): Promise<ImageBitmap> {
   const url = tileUrl(cov, ref);
   const hit = bitmapCache.get(url);
@@ -57,7 +57,7 @@ export function ancestorWindow(ref: TileRef, z: number, x: number, y: number): {
   return { sx: (x - (ref.x << dz)) * size, sy: (y - (ref.y << dz)) * size, size };
 }
 
-/** Draws the ancestor's window over the whole tile, smoothed. */
+/** Draws the ancestor’s window over the whole tile, smoothed. */
 async function upsample(cov: Coverage, ref: TileRef, z: number, x: number, y: number): Promise<OffscreenCanvas> {
   const bitmap = await packageBitmap(cov, ref);
   const { sx, sy, size } = ancestorWindow(ref, z, x, y);

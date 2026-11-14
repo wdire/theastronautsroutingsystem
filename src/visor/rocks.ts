@@ -22,7 +22,7 @@ const HEIGHT: Record<Shape, number> = { platy: 0.42, lumpy: 0.72, block: 0.8 };
 
 /**
  * A unit rock: an icosphere pushed out of shape, dusty on the faces that look up. `detail` is the
- * icosphere's subdivision: the same rock is built coarse for the distance and fine for close by.
+ * icosphere’s subdivision: the same rock is built coarse for the distance and fine for close by.
  */
 function rockGeometry(shape: Shape, seed: number, detail: number): BufferGeometry {
   // The icosphere comes as loose triangles; welding them lets the normals run smooth across faces.
@@ -53,7 +53,7 @@ function rockGeometry(shape: Shape, seed: number, detail: number): BufferGeometr
     pos.setXYZ(i, v.x, v.y, v.z);
   }
   g.computeVertexNormals();
-  // Vertex colours: dark basalt below, the ground's butterscotch dust settled on the faces that look up.
+  // Vertex colours: dark basalt below, the ground’s butterscotch dust settled on the faces that look up.
   const normal = g.getAttribute('normal');
   const colours = new Float32Array(normal.count * 3);
   const rock = new Color(0.2, 0.15, 0.125);
@@ -71,7 +71,7 @@ function rockGeometry(shape: Shape, seed: number, detail: number): BufferGeometr
 }
 
 /**
- * Rock surfaces are not smooth paint: this adds mottling and a pitted relief from noise in the rock's
+ * Rock surfaces are not smooth paint: this adds mottling and a pitted relief from noise in the rock’s
  * own space, faded out as the rock shrinks on screen so it never shimmers.
  */
 function rockMaterial(): MeshStandardMaterial {
@@ -166,7 +166,7 @@ export function createRocks(scene: Scene, heightAt: (x: number, z: number) => nu
     const cls = ROCK_CLASSES.find((c) => c.name === name) ?? ROCK_CLASSES[0]!;
     const lod = LOD[name];
     const capacity = Math.ceil(CAPACITY[name] * (to - from) * 1.15);
-    // The share of a class's disc that lies inside the near ring, with room to spare.
+    // The share of a class’s disc that lies inside the near ring, with room to spare.
     const nearShare = Math.min(1, (lod.withinM / cls.radiusM) ** 2 * 2.5 + 0.02);
     const near = instanced(rockGeometry(shape, 11 + i * 7, lod.near), Math.ceil(capacity * nearShare));
     const far = instanced(rockGeometry(shape, 11 + i * 7, lod.far), capacity);

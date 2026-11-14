@@ -2,7 +2,7 @@ import { MARS_RADIUS_M } from '@/lib/constants';
 import { pickScale } from '@/lib/scale';
 import { useMapState } from '@/ui/hooks/useMapState';
 
-/** Metres per CSS pixel at the map centre. MapLibre's zoom 0 world is 512 px wide. */
+/** Metres per CSS pixel at the map centre. MapLibre’s zoom 0 world is 512 px wide. */
 function readScale(map: { getZoom(): number; getCenter(): { lat: number } }): number {
   return (Math.cos((map.getCenter().lat * Math.PI) / 180) * 2 * Math.PI * MARS_RADIUS_M) / (512 * 2 ** map.getZoom());
 }

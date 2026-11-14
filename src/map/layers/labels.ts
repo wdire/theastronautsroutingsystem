@@ -35,7 +35,8 @@ export function addLabels(map: MapLibreMap): () => void {
 
   // Labels are added in priority order: when two overlap, the later one gives way.
   const declutter = () => {
-    const kept: DOMRect[] = [];
+    // Panels count as taken ground: a name under one would only show as a stray end beside it.
+    const kept: DOMRect[] = [...document.querySelectorAll('.panel')].map((el) => el.getBoundingClientRect()).filter((r) => r.width > 0);
     for (const l of labels) {
       if (l.el.dataset.on !== '1') continue;
       const r = l.el.getBoundingClientRect();
@@ -71,7 +72,7 @@ export function addLabels(map: MapLibreMap): () => void {
   void loadNames()
     .then((names) => {
       for (const n of names) {
-        // A feature's name fades out once the feature is much larger than the screen.
+        // A feature’s name fades out once the feature is much larger than the screen.
         const maxZoom = n.diameterKm > 0 ? Math.min(17.1, 16.5 - Math.log2(Math.max(0.5, n.diameterKm) / 6)) : 17.1;
         add(labelElement(n.name, 'feature', `feature:${n.id}`), n.lon, n.lat, 'names', Math.max(5.5, n.minZoom), maxZoom, 'center');
       }
@@ -95,12 +96,18 @@ export function addLabels(map: MapLibreMap): () => void {
   map.on('moveend', declutter);
   const offLayers = useApp.subscribe((s) => s.layers, sync);
   const offMode = useApp.subscribe((s) => s.mode, sync);
+  // A panel that opens or closes changes what is covered; look again once it has been drawn.
+  const offPanels = useApp.subscribe(
+    (s) => `${s.placeId}|${s.plannerOpen}|${s.dock}`,
+    () => requestAnimationFrame(() => requestAnimationFrame(declutter)),
+  );
   return () => {
     disposed = true;
     map.off('zoom', sync);
     map.off('moveend', declutter);
     offLayers();
     offMode();
+    offPanels();
     for (const l of labels) l.marker.remove();
   };
 }

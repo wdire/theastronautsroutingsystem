@@ -1,6 +1,6 @@
 /**
  * Pure pixel maths for live detail: an upsampled package tile gives the colour, a finer greyscale
- * image gives the texture. Only the texture's high-pass is used, so the planet keeps one colour grade.
+ * image gives the texture. Only the texture’s high-pass is used, so the planet keeps one colour grade.
  */
 
 /** High-pass radius in pixels. It grows with the upsampling, or ridges and crater rims turn to grain. */
@@ -56,13 +56,13 @@ export interface DetailLayer {
   /** 0 to 1 per pixel: where the detail exists. Omit for full coverage. */
   mask?: Float32Array;
   radius: number;
-  /** How strongly the texture shows; 1 is the texture's own contrast. */
+  /** How strongly the texture shows; 1 is the texture’s own contrast. */
   gain: number;
 }
 
 /**
  * Blends detail into a base tile, in place.
- * `base` is RGBA of size*size; each layer's arrays are (size + 2 * pad) squared, centred on the tile.
+ * `base` is RGBA of size*size; each layer’s arrays are (size + 2 * pad) squared, centred on the tile.
  */
 export function blendDetail(base: Uint8ClampedArray, size: number, pad: number, layers: readonly DetailLayer[]): void {
   const full = size + 2 * pad;

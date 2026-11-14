@@ -86,7 +86,7 @@ export function StationReadings() {
       </ul>
       <p className="mt-2.5 text-xs leading-relaxed text-faint">
         The lowest and highest air temperature of that sol, and the mean pressure. The rovers report when they can, so the last report may be old
-        {anyBundled && retrieved ? `; the app's copy was taken on ${retrieved}` : ''}.
+        {anyBundled && retrieved ? `; the app’s copy was taken on ${retrieved}` : ''}.
       </p>
     </div>
   );

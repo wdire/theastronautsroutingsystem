@@ -98,7 +98,7 @@ const DETAIL_NEAR = /* glsl */ `
   float tone = (fbm(p * 0.02) - 0.5) * show(30.0, px) + (fbm(p * 0.25) - 0.5) * 0.7 * show(3.0, px) + (fbm(p * 2.3) - 0.5) * 0.5 * show(0.35, px);
   vec3 col = diffuseColor.rgb * (1.0 + tone * 0.3);
 
-  // Ripples whose direction drifts: a few metres apart, and a hand's width apart close up.
+  // Ripples whose direction drifts: a few metres apart, and a hand’s width apart close up.
   float ang = 0.9 + (fbm(p * 0.008) - 0.5) * 1.6;
   vec2 dir = vec2(cos(ang), sin(ang));
   float patchy = smoothstep(0.42, 0.62, fbm(p * 0.015 + 5.0));
@@ -142,7 +142,7 @@ const DETAIL_NEAR = /* glsl */ `
     float open2 = smoothstep(0.3, 0.6, fbm(p * 0.16 + 60.0));
     float joint = (1.0 - smoothstep(0.015, 0.07, j1.x)) * s1 * 0.5 * open1 + (1.0 - smoothstep(0.008, 0.035, j2.x)) * s2 * 0.6 * open2;
     stone *= 1.0 - min(1.0, joint) * 0.42;
-    // Each block's face is tilted its own way.
+    // Each block’s face is tilted its own way.
     stone *= 1.0 + (j1.y - 0.5) * 0.22 * s1 + (j2.y - 0.5) * 0.16 * s2;
     gdBump += (hash22(vec2(j1.y, j2.y) * 97.0) - 0.5) * 0.35 * s1 * rock;
   }

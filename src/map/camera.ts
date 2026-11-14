@@ -15,7 +15,7 @@ export interface View {
 
 /**
  * The opening view: the planet large, pushed to the right on a wide screen and to the top on a
- * phone, so the words have room; Jezero sits a little left of the planet's centre.
+ * phone, so the words have room; Jezero sits a little left of the planet’s centre.
  */
 export function globeView(width = window.innerWidth, height = window.innerHeight): View {
   const wide = width >= 900;

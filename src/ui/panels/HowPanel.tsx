@@ -29,7 +29,7 @@ export function HowPanel() {
           is used.
         </P>
         <P>
-          Heights come from the MOLA laser altimeter, the HRSC and MOLA blended model at 200 m, and the Mars 2020 mission's own models of Jezero at 20 m and
+          Heights come from the MOLA laser altimeter, the HRSC and MOLA blended model at 200 m, and the Mars 2020 mission’s own models of Jezero at 20 m and
           1 m. They are joined so there is no step where one takes over.
         </P>
         <Limits>Away from Jezero the finest detail is fetched live from NASA and USGS servers, so it needs a connection. HiRISE covers only strips of the surface.</Limits>
@@ -39,11 +39,11 @@ export function HowPanel() {
           Jezero is 45 km wide and about 500 m deep. Drawn to scale it looks flat, so the map stretches heights by up to three times. The chip at the bottom
           of the map always says by how much.
         </P>
-        <P>The shading follows the real sun at Jezero for the time on the clock, and the map goes dark at night. Full daylight in the layers panel turns that off.</P>
+        <P>The map is lit as at mid-morning so it always reads. Follow the real sun in the layers panel, or an hour picked on the Mars clock, lights it by the Sun at Jezero instead: long shadows at dawn and dusk, dark at night.</P>
       </Section>
       <Section id="how-routes" title="Routes" hint="How a route is found over real terrain">
         <P>
-          A route is searched on a grid of heights, here about 20 m in the crater and 5 m near the rover's path. The search may cut across cells at any angle,
+          A route is searched on a grid of heights, here about 20 m in the crater and 5 m near the rover’s path. The search may cut across cells at any angle,
           so routes are not staircases. Ground steeper than the vehicle can climb is never crossed.
         </P>
         <P>
@@ -51,11 +51,11 @@ export function HowPanel() {
           foot that is the energy your body spends, on wheels the battery.
         </P>
         <P>When two styles follow the same ground they are shown as one card.</P>
-        <Limits>The grid cannot see a rock or a sand trap smaller than its cells. Perseverance's real drive detours for hazards a metre across.</Limits>
+        <Limits>The grid cannot see a rock or a sand trap smaller than its cells. Perseverance’s real drive detours for hazards a metre across.</Limits>
       </Section>
       <Section id="how-vehicles" title="Vehicles and walking" hint="Speeds and limits">
         <P>
-          Walking speed follows Tobler's hiking rule, capped at 3.3 km/h for a pressurised suit. The effort of walking follows the Pandolf load-carriage
+          Walking speed follows Tobler’s hiking rule, capped at 3.3 km/h for a pressurised suit. The effort of walking follows the Pandolf load-carriage
           equation with a 75 kg person in a 45 kg suit, scaled for Mars gravity. Ten degrees uphill costs nearly twice the flat.
         </P>
         <Limits>Nobody has walked on Mars. These are Earth and Apollo figures scaled, and they are estimates.</Limits>
@@ -66,12 +66,12 @@ export function HowPanel() {
           cameras record, because orbital colour looks too red from eye level.
         </P>
         <P>Rocks, sand ripples and rock layers smaller than the data are drawn in so the scene has scale. They are illustrative, not measured.</P>
-        <P>The sky, the sun's position and the blue glow at sunset follow the hour and the dust in the air.</P>
+        <P>The sky, the sun’s position and the blue glow at sunset follow the hour and the dust in the air.</P>
       </Section>
       <Section id="how-time" title="Mars time" hint="Sols, seasons and the local clock">
         <P>
           Times are local true solar time at Jezero: noon is when the sun is highest. A sol is 24 h 39 min 35 s. Seasons are given as Ls, the angle of Mars
-          around the Sun, where 0 is the start of northern spring. The method is the one NASA's Mars24 clock uses (Allison and McEwen, 2000).
+          around the Sun, where 0 is the start of northern spring. The method is the one NASA’s Mars24 clock uses (Allison and McEwen, 2000).
         </P>
       </Section>
       <Section id="how-weather" title="Temperature, pressure and dust" hint="Modelled conditions">
@@ -84,7 +84,7 @@ export function HowPanel() {
       </Section>
       <Section id="how-radiation" title="Radiation" hint="Dose on the surface">
         <P>
-          Curiosity's RAD instrument measures about 0.64 mSv per sol in Gale crater. That figure is scaled here by how much air is overhead: lower ground
+          Curiosity’s RAD instrument measures about 0.64 mSv per sol in Gale crater. That figure is scaled here by how much air is overhead: lower ground
           has more air above it and a little less dose. A solar particle event raises it for hours.
         </P>
         <Limits>Dose varies with the solar cycle and with shelter from nearby cliffs, which this model only approximates.</Limits>
@@ -107,7 +107,7 @@ export function HowPanel() {
         <P>The geologic map is the USGS map of the whole planet (Tanaka and others, 2014). Its units are tens of kilometres across.</P>
         <P>
           The mineral overlays are from CRISM, a spectrometer on Mars Reconnaissance Orbiter that reads minerals from the colours of reflected sunlight.
-          Olivine and carbonate around Jezero's rim are a reason this crater was chosen for Perseverance.
+          Olivine and carbonate around Jezero’s rim are a reason this crater was chosen for Perseverance.
         </P>
       </Section>
     </div>

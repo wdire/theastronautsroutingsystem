@@ -46,7 +46,7 @@ function santeeCorrectionW(speedMs: number, gradePct: number): number {
 }
 
 /**
- * Pandolf minus Santee's correction for a descent. The correction is shifted so that it is zero on the flat
+ * Pandolf minus Santee’s correction for a descent. The correction is shifted so that it is zero on the flat
  * (assumption): as published it leaves a 40 W step between level ground and the slightest descent.
  */
 function downhillW(speedMs: number, gradePct: number): number {
@@ -54,7 +54,7 @@ function downhillW(speedMs: number, gradePct: number): number {
   const atG = pandolfW(speedMs, g) - (santeeCorrectionW(speedMs, g) - santeeCorrectionW(speedMs, 0));
   if (gradePct >= -SANTEE_LIMIT_PCT) return atG;
   const total = BODY_KG + SUIT_KG;
-  // Slope of the corrected cost with grade at the edge of Santee's data, W per percent (negative: steeper costs more).
+  // Slope of the corrected cost with grade at the edge of Santee’s data, W per percent (negative: steeper costs more).
   const slope =
     TERRAIN * total * 0.35 * speedMs -
     TERRAIN * ((total * speedMs) / 3.5 - (2 * total * (-SANTEE_LIMIT_PCT + 6)) / BODY_KG);

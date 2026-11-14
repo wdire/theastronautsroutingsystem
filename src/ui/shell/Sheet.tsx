@@ -14,7 +14,7 @@ function subscribeResize(onChange: () => void): () => void {
 interface SheetProps {
   stop: SheetStop;
   onStop: (stop: SheetStop) => void;
-  /** What the sheet holds, for the handle's label: "Mission plan". */
+  /** What the sheet holds, for the handle’s label: "Mission plan". */
   label: string;
   /** Space kept clear above the sheet at full height and below it, px. */
   topClear: number;

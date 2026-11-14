@@ -16,7 +16,7 @@ function reading(v: unknown, lo: number, hi: number): number | null {
 }
 
 /**
- * Reads a mars.nasa.gov weather feed (Curiosity's lists `soles`, Perseverance's `sols`) and keeps the
+ * Reads a mars.nasa.gov weather feed (Curiosity’s lists `soles`, Perseverance’s `sols`) and keeps the
  * newest `keep` sols that have a temperature or a pressure. Values outside what Mars can do are feed
  * glitches and are dropped. Anything unreadable gives an empty list.
  */

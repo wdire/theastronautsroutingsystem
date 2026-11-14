@@ -86,7 +86,7 @@ export function tauAt(lat: number, lon: number, utcMs: number, scenario: Scenari
 }
 
 /**
- * How far you can see along the ground, km. Koschmieder's rule (visual range = 3.912 / extinction) with the
+ * How far you can see along the ground, km. Koschmieder’s rule (visual range = 3.912 / extinction) with the
  * dust mixed evenly through one scale height, so extinction = tau / 11.1 km (approximate). Capped at 300 km.
  */
 export function visibilityKm(tau: number): number {
@@ -168,13 +168,13 @@ export function temperatureC(lat: number, lon: number, elev: number, utcMs: numb
  * 3% difference between a day and a sol is well inside the error bar.
  */
 export const RAD_GALE_MSV_PER_SOL = 0.64;
-/** Elevation of Curiosity's landing site, m (about -4,500 m on the MOLA areoid). */
+/** Elevation of Curiosity’s landing site, m (about -4,500 m on the MOLA areoid). */
 export const GALE_ELEV_M = -4500;
 /** Air overhead at Gale at the annual mean pressure, g/cm2: pressure / gravity. About 22.6. */
 const GALE_COLUMN = columnGcm2(DATUM_PRESSURE_PA * Math.exp(-GALE_ELEV_M / SCALE_HEIGHT_M));
-/** Air needed to cut the cosmic-ray dose by 1/e, g/cm2 (approximate): between RAD's own response to daily pressure changes (Rafkin et al. 2014) and model maps of dose against altitude (Saganti et al. 2004). */
+/** Air needed to cut the cosmic-ray dose by 1/e, g/cm2 (approximate): between RAD’s own response to daily pressure changes (Rafkin et al. 2014) and model maps of dose against altitude (Saganti et al. 2004). */
 const GCR_ATTENUATION_GCM2 = 50;
-/** Cosmic-ray dose at solar minimum against mid-cycle (approximate): RAD's dose rate rose by about 45% from 2013 to the 2019-20 solar minimum. */
+/** Cosmic-ray dose at solar minimum against mid-cycle (approximate): RAD’s dose rate rose by about 45% from 2013 to the 2019-20 solar minimum. */
 const SOLAR_MIN_FACTOR = 1.45;
 /** Cosmic-ray dose at a strong solar maximum against mid-cycle (assumption). */
 const SOLAR_MAX_FACTOR = 0.6;
@@ -187,7 +187,7 @@ function columnGcm2(pressure: number): number {
   return pressure / MARS_G / 10; // Pa / (m/s2) = kg/m2; 10 kg/m2 = 1 g/cm2
 }
 
-/** RAD's 2012-13 measurement fell in a weak solar maximum with middling shielding by the solar wind, so it is taken as the mid-cycle value (assumption). */
+/** RAD’s 2012-13 measurement fell in a weak solar maximum with middling shielding by the solar wind, so it is taken as the mid-cycle value (assumption). */
 function solarCycleFactor(solarCycle: number): number {
   const s = clamp(Number.isFinite(solarCycle) ? solarCycle : 0.5, 0, 1);
   return s <= 0.5 ? SOLAR_MIN_FACTOR + (1 - SOLAR_MIN_FACTOR) * (s / 0.5) : 1 + (SOLAR_MAX_FACTOR - 1) * ((s - 0.5) / 0.5);
@@ -196,7 +196,7 @@ function solarCycleFactor(solarCycle: number): number {
 /**
  * Radiation dose equivalent, mSv per sol: the RAD value at Gale, scaled by the mass of air overhead (less air
  * higher up, and less in the low-pressure season), the solar cycle, a solar particle event if one is under
- * way, and the fraction that gets through the vehicle's shielding (1 = none).
+ * way, and the fraction that gets through the vehicle’s shielding (1 = none).
  */
 export function doseMSvPerSol(elev: number, utcMs: number, scenario: Scenario, doseFactor = 1): number {
   const column = columnGcm2(pressurePa(elev, utcMs));
@@ -241,8 +241,8 @@ const ENCOUNTER_WINDOW_LS = 0.6;
 
 /**
  * Meteor showers at Mars are predictions from comet orbits; none is confirmed as a yearly event. Solar
- * longitudes here are approximate: the two dated events are this module's Mars time for the date of the
- * observation, the two predicted ones are where Mars passes closest to the comet's orbit (Christou 2010,
+ * longitudes here are approximate: the two dated events are this module’s Mars time for the date of the
+ * observation, the two predicted ones are where Mars passes closest to the comet’s orbit (Christou 2010,
  * MNRAS 402, names both comets as candidates).
  */
 const SHOWERS: readonly ShowerEntry[] = [
@@ -256,19 +256,19 @@ const SHOWERS: readonly ShowerEntry[] = [
     name: 'Olbers meteors',
     parent: '13P/Olbers',
     lsDeg: 1,
-    note: "Predicted, not yet seen. Mars passes close to the comet's orbit near this date. Date approximate.",
+    note: "Predicted, not yet seen. Mars passes close to the comet’s orbit near this date. Date approximate.",
   },
   {
     name: 'du Toit-Hartley meteors',
     parent: '79P/du Toit-Hartley',
     lsDeg: 172,
-    note: "Predicted. A layer of meteor metals that Mars Global Surveyor saw high in the air in April 2003 was linked to this comet's dust (Christou et al. 2007). Date approximate, to within about 8 degrees.",
+    note: "Predicted. A layer of meteor metals that Mars Global Surveyor saw high in the air in April 2003 was linked to this comet’s dust (Christou et al. 2007). Date approximate, to within about 8 degrees.",
   },
   {
     name: 'Halley meteors',
     parent: '1P/Halley',
     lsDeg: 325,
-    note: "Predicted, not yet seen. Mars passes close to Halley's orbit near this date. Date approximate.",
+    note: "Predicted, not yet seen. Mars passes close to Halley’s orbit near this date. Date approximate.",
   },
   {
     name: 'Siding Spring meteor storm',

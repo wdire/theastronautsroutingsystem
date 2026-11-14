@@ -32,7 +32,7 @@ export function fieldHeightAt(f: HeightField, x: number, z: number): number | nu
   return c + (b - c) * (1 - u) + (d - c) * (1 - v);
 }
 
-/** Triangle indices for an n by n field, matching fieldHeightAt's split. */
+/** Triangle indices for an n by n field, matching fieldHeightAt’s split. */
 export function fieldIndices(n: number): Uint32Array {
   const out = new Uint32Array((n - 1) * (n - 1) * 6);
   let k = 0;

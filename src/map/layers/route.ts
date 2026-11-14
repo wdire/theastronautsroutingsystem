@@ -21,7 +21,7 @@ const line = (path: readonly PathPoint[]) => ({
 const EMPTY = { type: 'FeatureCollection' as const, features: [] };
 
 /**
- * A line-gradient that colours the route by slope against the vehicle's limits.
+ * A line-gradient that colours the route by slope against the vehicle’s limits.
  * Stops are placed by distance along the route; close stops of the same colour are merged.
  */
 export function slopeGradient(path: readonly PathPoint[], comfortDeg: number, blockDeg: number): ExpressionSpecification {

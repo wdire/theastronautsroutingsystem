@@ -61,7 +61,7 @@ function Details({ sw }: { sw: SpaceWeather }) {
   );
 }
 
-/** The live block of the clock menu: what NASA's space weather database says about Mars today. */
+/** The live block of the clock menu: what NASA’s space weather database says about Mars today. */
 export function SpaceWeatherBlock() {
   const sw = useSpaceWeather();
   const failed = useApp((s) => s.spaceWeatherFailed);
@@ -97,7 +97,7 @@ export function SpaceWeatherBlock() {
       ) : failed ? (
         <>
           <p className="mt-1.5 text-[13px] leading-relaxed text-muted-foreground">
-            NASA&apos;s space weather database did not answer, so there is no live forecast. Plans still work; test one against a particle event with the switch above.
+            NASA’s space weather database did not answer, so there is no live forecast. Plans still work; test one against a particle event with the switch above.
           </p>
           <button
             type="button"
@@ -108,11 +108,11 @@ export function SpaceWeatherBlock() {
             }}
             className="mt-2 h-8 rounded-md border px-2.5 text-[13px] font-medium transition-colors hover:bg-secondary disabled:opacity-50"
           >
-            {asking ? 'Asking NASA' : 'Try again'}
+            {asking ? 'Asking NASA…' : 'Try again'}
           </button>
         </>
       ) : (
-        <p className="mt-1.5 text-[13px] text-muted-foreground">Asking NASA.</p>
+        <p className="mt-1.5 text-[13px] text-muted-foreground">Asking NASA…</p>
       )}
     </div>
   );

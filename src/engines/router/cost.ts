@@ -1,8 +1,8 @@
 /**
  * What a route costs: builds the CostField the search runs on, for one vehicle and one style.
  *
- * The cost of a move is seconds: its length over the vehicle's speed on the slope along the way.
- * Ground steeper than the vehicle's blocking slope, and every hazard zone, is blocked. On top of
+ * The cost of a move is seconds: its length over the vehicle’s speed on the slope along the way.
+ * Ground steeper than the vehicle’s blocking slope, and every hazard zone, is blocked. On top of
  * that each cell carries a multiplier (1 or more) that says how much a second spent there weighs:
  *
  *   1 + hug * H + rugged * R + dose * D + cold * C + dust * T + basin * B
@@ -24,7 +24,7 @@ import type { CostField, CostWords, EndBlock } from './core';
 export interface StyleWeights {
   /**
    * Hugging steep ground: 0 where the steepest slope on a cell and its 8 neighbours is at or below
-   * the vehicle's comfortable slope, rising (squared) to 1 where it reaches the blocking slope.
+   * the vehicle’s comfortable slope, rising (squared) to 1 where it reaches the blocking slope.
    */
   hug: number;
   /** Ruggedness: mean height step to the 8 neighbours over the step the blocking slope would give. */
@@ -47,7 +47,7 @@ export interface StyleWeights {
 
 /**
  * The weights for each style.
- * - safest: a second on ground at the vehicle's limit counts four times; rough, dusty, exposed and
+ * - safest: a second on ground at the vehicle’s limit counts four times; rough, dusty, exposed and
  *   enclosed ground all cost, and turns are dear so the line is smooth.
  * - fastest: travel time with just enough weight on steep and rough ground that it does not scrape
  *   the limit to save a few seconds.
@@ -60,7 +60,7 @@ export const STYLE_WEIGHTS: Record<RouteStyle, StyleWeights> = {
   eco: { hug: 1, rugged: 0.75, dose: 0, cold: 0.25, dust: 0.25, basin: 0.5, turn: 1 },
 };
 
-/** The steepest ground a small helicopter can take off from and land on, degrees (approximate; Ingenuity's airfields were chosen under about 10). */
+/** The steepest ground a small helicopter can take off from and land on, degrees (approximate; Ingenuity’s airfields were chosen under about 10). */
 export const AIR_LANDING_SLOPE_DEG = 10;
 /** Radius of the neighbourhood a basin is measured against, metres. */
 export const BASIN_RADIUS_M = 1500;
@@ -75,7 +75,7 @@ export interface CostOptions {
   hazards: readonly HazardZone[];
 }
 
-/** The models the cost reads. Tests pass small fakes; the defaults are the app's engines. */
+/** The models the cost reads. Tests pass small fakes; the defaults are the app’s engines. */
 export interface CostDeps {
   speedMs(vehicle: Vehicle, gradeDeg: number): number;
   walkingW(speedKmh: number, gradeDeg: number): number;
@@ -210,7 +210,7 @@ function neighbourhoodMean(grid: Grid, radiusCells: number): Float32Array {
 /**
  * Build the cost field for a vehicle and a style on a grid.
  *
- * Blocked: cells steeper (Horn) than the vehicle's blocking slope, and cells whose centre is inside
+ * Blocked: cells steeper (Horn) than the vehicle’s blocking slope, and cells whose centre is inside
  * a hazard zone. The helicopter is blocked only by hazard zones in flight; it needs ground no
  * steeper than AIR_LANDING_SLOPE_DEG at its two ends.
  */
@@ -241,7 +241,7 @@ export function makeCost(grid: Grid, options: CostOptions, deps: Partial<CostDep
     const c0 = grid.colOf(zone.lon);
     if (!(zone.radiusM > 0) || !Number.isFinite(r0) || !Number.isFinite(c0)) return;
     const rowAt = Math.min(rows - 1, Math.max(0, Math.round(r0)));
-    // Half a cell's diagonal more than the radius: any cell that reaches into the zone is blocked,
+    // Half a cell’s diagonal more than the radius: any cell that reaches into the zone is blocked,
     // so no point of a route, wherever it lies in its cell, is inside the zone.
     const reach = zone.radiusM / (cellMByRow[rowAt] as number) + Math.SQRT1_2;
     if (!Number.isFinite(reach)) return;
@@ -307,7 +307,7 @@ export function makeCost(grid: Grid, options: CostOptions, deps: Partial<CostDep
     }
   }
 
-  /* Radiation: by height, read from a table over the grid's range of heights. */
+  /* Radiation: by height, read from a table over the grid’s range of heights. */
   const doseWeight = vehicle.crew > 0 ? weights.dose : 0;
   if (doseWeight > 0) {
     let lo = Infinity;

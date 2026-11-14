@@ -1,5 +1,5 @@
 /**
- * The router's Web Worker: routes one request at a time off the main thread.
+ * The router’s Web Worker: routes one request at a time off the main thread.
  *
  * In:  { type: 'route', request, grid }   route this request on this grid (a GridSpec)
  *      { type: 'cancel', requestId }      drop every queued or running request with this id

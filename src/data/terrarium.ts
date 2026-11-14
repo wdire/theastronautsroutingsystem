@@ -24,9 +24,9 @@ export function encodeTerrarium(heights: Float32Array, out = new Uint8ClampedArr
 }
 
 /**
- * Heights for a descendant tile, read out of an ancestor tile's heights by bilinear blending.
+ * Heights for a descendant tile, read out of an ancestor tile’s heights by bilinear blending.
  * `dz` is how many zoom levels below the ancestor the tile sits; (dx, dy) its position inside it.
- * Samples sit at pixel centres, so the blend is taken between the ancestor's centres, clamped at its edge.
+ * Samples sit at pixel centres, so the blend is taken between the ancestor’s centres, clamped at its edge.
  */
 export function upsampleHeights(src: Float32Array, dz: number, dx: number, dy: number, out = new Float32Array(TILE * TILE)): Float32Array {
   const scale = 1 / 2 ** dz;
@@ -60,7 +60,7 @@ export interface TileWindow {
   y0: number;
   x1: number;
   y1: number;
-  /** Pixel window inside that tile range: the grid's first sample and its size. */
+  /** Pixel window inside that tile range: the grid’s first sample and its size. */
   left: number;
   top: number;
   cols: number;

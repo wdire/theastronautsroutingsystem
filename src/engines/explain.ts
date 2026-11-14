@@ -214,7 +214,7 @@ function limitLine(input: ExplainInput, along: number[]): string {
 }
 
 /**
- * Four or five short lines, in this order: the route's shape against the straight line; how the day
+ * Four or five short lines, in this order: the route’s shape against the straight line; how the day
  * ends; the rock units crossed and where older rock is reached (only with a geologic map and a mapped
  * route); time spent parked; and the point of no return, the walk-home limit, or the climb.
  */

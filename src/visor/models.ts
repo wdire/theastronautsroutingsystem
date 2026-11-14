@@ -6,9 +6,9 @@ export type ModelName = 'perseverance' | 'ingenuity' | 'sev' | 'habitat' | 'z2';
 
 interface ModelSpec {
   url: string;
-  /** The file's units to metres. */
+  /** The file’s units to metres. */
   scale: number;
-  /** Turn about the vertical so the model's front faces north (-z) before any heading is applied. */
+  /** Turn about the vertical so the model’s front faces north (-z) before any heading is applied. */
   yawDeg: number;
   /** Wheel track and wheelbase in metres for vehicles that rest on wheels; null for things that stand level. */
   stance: { width: number; length: number } | null;
@@ -133,7 +133,7 @@ export function standIn(name: ModelName): Group {
   return g;
 }
 
-/** Frees a clone's own resources. The cached original is shared and stays. */
+/** Frees a clone’s own resources. The cached original is shared and stays. */
 export function disposeObject(root: Object3D): void {
   root.traverse((o) => {
     const mesh = o as Mesh;

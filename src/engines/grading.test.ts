@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { gradeColour, gradeGain, gradePixels } from './grading';
+import { gradeColour, gradeGain, gradePixels, mapToneAmount, mapToneLut } from './grading';
 
 const lum = (c: readonly number[]) => 0.2126 * (c[0] ?? 0) + 0.7152 * (c[1] ?? 0) + 0.0722 * (c[2] ?? 0);
 
@@ -50,5 +50,35 @@ describe('ground grading', () => {
     expect(px[3]).toBe(200);
     expect(px[0]).toBeGreaterThan(px[1] ?? 0);
     expect(px[1]).toBeGreaterThan(56);
+  });
+});
+
+describe('mapToneLut', () => {
+  it('changes nothing at amount 0', () => {
+    const lut = mapToneLut(0);
+    for (let i = 0; i < 256; i += 17) expect(lut[i]).toBe(i);
+  });
+  it('lifts shadows and midtones, keeps black and white, and never reverses two tones', () => {
+    const lut = mapToneLut(1);
+    expect(lut[0]).toBe(0);
+    expect(lut[255]).toBe(255);
+    expect(lut[48]).toBeGreaterThan(48 + 30);
+    expect(lut[128]).toBeGreaterThan(128 + 25);
+    expect((lut[230] ?? 0) - 230).toBeLessThan(18);
+    for (let i = 1; i < 256; i += 1) expect(lut[i]).toBeGreaterThanOrEqual(lut[i - 1] ?? 0);
+  });
+  it('treats junk as no change', () => {
+    expect(mapToneLut(Number.NaN)[100]).toBe(100);
+    expect(mapToneLut(9)[100]).toBe(mapToneLut(1)[100]);
+  });
+});
+
+describe('mapToneAmount', () => {
+  it('leaves the globe alone and is full from the regional view in', () => {
+    expect(mapToneAmount(0)).toBe(0);
+    expect(mapToneAmount(4)).toBe(0);
+    expect(mapToneAmount(7)).toBe(1);
+    expect(mapToneAmount(14)).toBe(1);
+    expect(mapToneAmount(5.5)).toBeCloseTo(0.5, 6);
   });
 });

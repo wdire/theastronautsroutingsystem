@@ -4,7 +4,7 @@ import { useApp } from '@/store';
 import { createMap, destroyMap, whenMapReady } from './instance';
 import { flyIn, isInRegion, startGlobeSpin } from './camera';
 import { setTileHandler } from './protocol';
-import { imgTile } from './protocol/img';
+import { mapImgTile } from './protocol/tone';
 import { demTile } from './protocol/dem';
 import { addTerrain } from './terrain';
 import { addPlacePicking } from './pick';
@@ -20,7 +20,7 @@ import { groundAtCached } from '@/data/dem';
 import { marsTime } from '@/engines/marsTime';
 import { fmtClock, fmtDeg, fmtElevation } from '@/lib/format';
 
-setTileHandler('img', imgTile);
+setTileHandler('img', mapImgTile);
 setTileHandler('dem', demTile);
 
 /** The one map of the app. Everything else draws over it. */
