@@ -59,7 +59,14 @@ be live wherever it changes. Done:
 - Live track: `/api/traverse` (MMGIS, six-hour cache); the bundled copy is the fallback.
 - README has a table of what is live and what is shipped, and why.
 
-Open from this session: the near layer's image is 2 m (HiRISE level 3) to keep cold loads short; at drone height
+Later the same evening, after the team saw Rover View stuck on "Building the ground…": on a high-density
+screen n8ao's half-resolution mode threw every frame before the view could say it was ready, and the browser
+reported each throw to the dev server, which pegged it. Half resolution is off, a failing composer falls back to
+a plain render, and the map no longer asks /api/hirise at all (Esri's tiled HiRISE and the package terrain).
+Rover View's near image comes from Esri too; only the close patch and the near model read USGS, three requests
+at a time, nearest first. Test with `deviceScaleFactor: 2`. Tone mapping is ACES at exposure 0.78.
+
+Open from this session: the near layer's image is Esri's (about 1.3 m) to keep cold loads short; at drone height
 it looks soft beyond 128 m. Rocks are still drawn in, not placed from HiRISE boulders. The Ingenuity rotor still
 does not turn.
 

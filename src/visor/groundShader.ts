@@ -134,7 +134,7 @@ const DETAIL_NEAR = /* glsl */ `
     broken = mix(broken, smoothstep(0.02, 0.1, fine), hiOn);
   }
   // A gentle curve on the ratio: shadows of rocks stay dark, bright faces do not clip.
-  float lift = ratio < 1.0 ? pow(ratio, 1.25) : 1.0 + (ratio - 1.0) * 0.8;
+  float lift = ratio < 1.0 ? pow(ratio, 1.6) : 1.0 + (ratio - 1.0) * 1.05;
   base *= mix(1.0, lift, hiOn);
 
   // Tone patches the orbiters would show as one pixel.

@@ -8,8 +8,8 @@ import {
   type Texture,
   FogExp2,
   HemisphereLight,
-  NeutralToneMapping,
-  PCFSoftShadowMap,
+  ACESFilmicToneMapping,
+  PCFShadowMap,
   PerspectiveCamera,
   SRGBColorSpace,
   Scene,
@@ -142,9 +142,9 @@ export async function mountVisor(canvas: HTMLCanvasElement, options: VisorOption
     throw new WebGLUnavailableError();
   }
   renderer.shadowMap.enabled = true;
-  renderer.shadowMap.type = PCFSoftShadowMap;
-  renderer.toneMapping = NeutralToneMapping;
-  renderer.toneMappingExposure = 0.95;
+  renderer.shadowMap.type = PCFShadowMap;
+  renderer.toneMapping = ACESFilmicToneMapping;
+  renderer.toneMappingExposure = 0.78;
   renderer.outputColorSpace = SRGBColorSpace;
   const maxAniso = renderer.capabilities.getMaxAnisotropy();
 
@@ -173,6 +173,7 @@ export async function mountVisor(canvas: HTMLCanvasElement, options: VisorOption
   scene.add(sky.mesh);
 
   /* ---- what the camera sees goes through ambient occlusion, then antialiasing, then tone mapping ---- */
+  let postOk = true;
   const composer = new EffectComposer(renderer, new WebGLRenderTarget(1, 1, { type: HalfFloatType }));
   const ao = new N8AOPass(scene, camera, 1, 1);
   ao.configuration.aoRadius = 1.6;
@@ -387,8 +388,9 @@ export async function mountVisor(canvas: HTMLCanvasElement, options: VisorOption
     const low = effective === 'low';
     renderer.setPixelRatio(low ? 1 : Math.min(window.devicePixelRatio || 1, 2));
     composer.setPixelRatio(renderer.getPixelRatio());
-    ao.enabled = !low;
-    ao.configuration.halfRes = renderer.getPixelRatio() > 1.5;
+    // Half-resolution AO is left off: switching it made n8ao hand three.js a render target it could not
+    // set up on a high-density screen, and every frame threw.
+    ao.enabled = !low && postOk;
     groundQuality.value = low ? 0 : 1;
     rocks.setLowQuality(low);
     sun.shadow.mapSize.set(low ? 1024 : 2048, low ? 1024 : 2048);
@@ -431,15 +433,16 @@ export async function mountVisor(canvas: HTMLCanvasElement, options: VisorOption
     sky.update(sk, skySun);
     renewEnvironment(skySun);
     sun.color.setRGB(...sk.sun);
-    sun.intensity = sk.sunIntensity * 1.15;
+    sun.intensity = sk.sunIntensity * 1.35;
     sun.castShadow = sk.sunIntensity > 0.15;
     // Most of the fill comes from the sky's environment map; the hemisphere adds the ground's bounce.
-    hemi.intensity = sk.ambient * 0.35;
-    scene.environmentIntensity = sk.ambient * 0.55;
+    hemi.intensity = sk.ambient * 0.22;
+    scene.environmentIntensity = sk.ambient * 0.42;
     hemi.color.setRGB(sk.zenith[0] * 0.6 + 0.4, sk.zenith[1] * 0.6 + 0.38, sk.zenith[2] * 0.6 + 0.36);
     hemi.groundColor.setRGB(0.5, 0.38, 0.27);
     fog.color.setRGB(...sk.fog);
-    fog.density = sk.fogDensity;
+    // The dust haze, a little thinner than the visibility model alone: distant relief should still read.
+    fog.density = sk.fogDensity * 0.6;
     state.sunElevDeg = s.elevDeg;
   };
 
@@ -550,7 +553,19 @@ export async function mountVisor(canvas: HTMLCanvasElement, options: VisorOption
     sun.target.position.set(Math.round(pos.x / texel) * texel, ground, Math.round(pos.z / texel) * texel);
     sun.position.copy(sun.target.position).addScaledVector(sunDir, 400);
 
-    composer.render(dt);
+    if (postOk) {
+      try {
+        composer.render(dt);
+      } catch (err) {
+        // Post-processing is a nicety: if it fails on this machine the scene is drawn plainly, once warned.
+        postOk = false;
+        ao.enabled = false;
+        console.warn('Rover View: post-processing failed, drawing without it.', err);
+        renderer.render(scene, camera);
+      }
+    } else {
+      renderer.render(scene, camera);
+    }
 
     if (!state.ready && layers.near.patch && layers.mid.patch) {
       state.ready = true;
