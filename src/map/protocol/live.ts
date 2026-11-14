@@ -1,0 +1,181 @@
+import { pxToLat, pxToLon } from '@/lib/geo';
+
+/**
+ * Live imagery from NASA and USGS services that publish equirectangular tiles. Tiles are fetched,
+ * stitched and warped to Web Mercator on a CPU canvas, one map tile (plus padding) at a time.
+ */
+export interface EquirectSource {
+  id: string;
+  tileSize: number;
+  /** Degrees per pixel at level 0. */
+  baseRes: number;
+  maxLevel: number;
+  /** The source level whose pixels are at least as fine as a Mercator tile at zoom z. */
+  levelFor(z: number): number;
+  url(level: number, row: number, col: number): string;
+}
+
+const ESRI = 'https://astro.arcgis.com/arcgis/rest/services/OnMars';
+const TREK = 'https://trek.nasa.gov/tiles/Mars/EQ';
+
+/** MRO CTX global mosaic, about 5 m per pixel (Esri OnMars). */
+export const CTX: EquirectSource = {
+  id: 'ctx',
+  tileSize: 512,
+  baseRes: 0.3515625,
+  maxLevel: 15,
+  levelFor: (z) => z - 2,
+  url: (l, r, c) => `${ESRI}/CTX/MapServer/tile/${l}/${r}/${c}`,
+};
+
+/** MRO HiRISE, a sparse mosaic of 25 to 50 cm images (Esri OnMars). Transparent where no image exists. */
+export const HIRISE: EquirectSource = {
+  id: 'hirise',
+  tileSize: 512,
+  baseRes: 0.3515625,
+  maxLevel: 17,
+  levelFor: (z) => z - 2,
+  url: (l, r, c) => `${ESRI}/HiRISE/MapServer/tile/${l}/${r}/${c}`,
+};
+
+/** Viking MDIM 2.1 colour mosaic, 232 m per pixel (NASA Mars Trek). */
+export const VIKING: EquirectSource = {
+  id: 'viking',
+  tileSize: 256,
+  baseRes: 0.703125,
+  maxLevel: 7,
+  levelFor: (z) => z - 1,
+  url: (l, r, c) => `${TREK}/Mars_Viking_MDIM21_ClrMosaic_global_232m/1.0.0/default/default028mm/${l}/${r}/${c}.jpg`,
+};
+
+const tileCache = new Map<string, Promise<ImageBitmap | null>>();
+const TILE_CACHE_MAX = 80;
+const MAX_PARALLEL = 8;
+let running = 0;
+const waiting: (() => void)[] = [];
+
+async function withSlot<T>(fn: () => Promise<T>): Promise<T> {
+  if (running >= MAX_PARALLEL) await new Promise<void>((resolve) => waiting.push(resolve));
+  running += 1;
+  try {
+    return await fn();
+  } finally {
+    running -= 1;
+    waiting.shift()?.();
+  }
+}
+
+/** One source tile, or null if the service has none there or does not answer in time. Never rejects. */
+function sourceTile(src: EquirectSource, level: number, row: number, col: number, timeoutMs: number): Promise<ImageBitmap | null> {
+  const url = src.url(level, row, col);
+  const hit = tileCache.get(url);
+  if (hit) {
+    tileCache.delete(url);
+    tileCache.set(url, hit);
+    return hit;
+  }
+  const made = withSlot(async () => {
+    const abort = new AbortController();
+    const timer = setTimeout(() => abort.abort(), timeoutMs);
+    try {
+      const res = await fetch(url, { signal: abort.signal, mode: 'cors' });
+      if (!res.ok || !(res.headers.get('content-type') ?? '').startsWith('image/')) return null;
+      return await createImageBitmap(await res.blob());
+    } catch {
+      return null;
+    } finally {
+      clearTimeout(timer);
+    }
+  });
+  // A miss is not kept: the service may answer next time.
+  void made.then((bitmap) => {
+    if (!bitmap) tileCache.delete(url);
+  });
+  tileCache.set(url, made);
+  if (tileCache.size > TILE_CACHE_MAX) {
+    const oldest = tileCache.keys().next().value;
+    if (oldest !== undefined) tileCache.delete(oldest);
+  }
+  return made;
+}
+
+export interface Warped {
+  /** RGBA, (256 + 2 * pad) squared. Alpha is 0 where the source had nothing. */
+  rgba: Uint8ClampedArray;
+  size: number;
+  /** Share of the padded tile the source covered, 0 to 1. */
+  coverage: number;
+}
+
+/**
+ * The part of a source that covers map tile (z, x, y) plus `pad` pixels on every side, in Web Mercator.
+ * Null if the source has no level for this zoom or nothing came back.
+ */
+export async function warpToTile(src: EquirectSource, z: number, x: number, y: number, pad: number, timeoutMs = 15000): Promise<Warped | null> {
+  const level = Math.min(src.maxLevel, src.levelFor(z));
+  if (level < 0) return null;
+  const size = 256 + 2 * pad;
+  const res = src.baseRes / 2 ** level;
+  const ts = src.tileSize;
+  const levelCols = Math.round(360 / (res * ts));
+  const levelRows = Math.round(180 / (res * ts));
+
+  // Source pixel coordinates of every output column and row. Longitude is linear, latitude is not.
+  const sx = new Float64Array(size);
+  const sy = new Float64Array(size);
+  for (let i = 0; i < size; i += 1) {
+    sx[i] = (pxToLon(x * 256 - pad + i + 0.5, z) + 180) / res - 0.5;
+    sy[i] = (90 - pxToLat(y * 256 - pad + i + 0.5, z)) / res - 0.5;
+  }
+  const col0 = Math.max(0, Math.floor((sx[0] ?? 0) / ts));
+  const col1 = Math.min(levelCols - 1, Math.floor(((sx[size - 1] ?? 0) + 1) / ts));
+  const row0 = Math.max(0, Math.floor((sy[0] ?? 0) / ts));
+  const row1 = Math.min(levelRows - 1, Math.floor(((sy[size - 1] ?? 0) + 1) / ts));
+  if (col1 < col0 || row1 < row0 || (col1 - col0 + 1) * (row1 - row0 + 1) > 16) return null;
+
+  const jobs: Promise<{ bitmap: ImageBitmap | null; r: number; c: number }>[] = [];
+  for (let r = row0; r <= row1; r += 1) {
+    for (let c = col0; c <= col1; c += 1) jobs.push(sourceTile(src, level, r, c, timeoutMs).then((bitmap) => ({ bitmap, r, c })));
+  }
+  const tiles = await Promise.all(jobs);
+  if (tiles.every((t) => !t.bitmap)) return null;
+
+  const mw = (col1 - col0 + 1) * ts;
+  const mh = (row1 - row0 + 1) * ts;
+  const mosaic = new OffscreenCanvas(mw, mh);
+  const ctx = mosaic.getContext('2d', { willReadFrequently: true });
+  if (!ctx) return null;
+  for (const t of tiles) if (t.bitmap) ctx.drawImage(t.bitmap, (t.c - col0) * ts, (t.r - row0) * ts, ts, ts);
+  const srcPx = ctx.getImageData(0, 0, mw, mh).data;
+
+  const rgba = new Uint8ClampedArray(size * size * 4);
+  const ox = col0 * ts;
+  const oy = row0 * ts;
+  let covered = 0;
+  for (let j = 0; j < size; j += 1) {
+    const fy = Math.max(0, Math.min(mh - 1.001, (sy[j] ?? 0) - oy));
+    const y0 = Math.floor(fy);
+    const ty = fy - y0;
+    for (let i = 0; i < size; i += 1) {
+      const fx = Math.max(0, Math.min(mw - 1.001, (sx[i] ?? 0) - ox));
+      const x0 = Math.floor(fx);
+      const tx = fx - x0;
+      const a = (y0 * mw + x0) * 4;
+      const b = a + 4;
+      const c = a + mw * 4;
+      const d = c + 4;
+      const wa = (1 - tx) * (1 - ty);
+      const wb = tx * (1 - ty);
+      const wc = (1 - tx) * ty;
+      const wd = tx * ty;
+      const o = (j * size + i) * 4;
+      const alpha = (srcPx[a + 3] ?? 0) * wa + (srcPx[b + 3] ?? 0) * wb + (srcPx[c + 3] ?? 0) * wc + (srcPx[d + 3] ?? 0) * wd;
+      rgba[o] = (srcPx[a] ?? 0) * wa + (srcPx[b] ?? 0) * wb + (srcPx[c] ?? 0) * wc + (srcPx[d] ?? 0) * wd;
+      rgba[o + 1] = (srcPx[a + 1] ?? 0) * wa + (srcPx[b + 1] ?? 0) * wb + (srcPx[c + 1] ?? 0) * wc + (srcPx[d + 1] ?? 0) * wd;
+      rgba[o + 2] = (srcPx[a + 2] ?? 0) * wa + (srcPx[b + 2] ?? 0) * wb + (srcPx[c + 2] ?? 0) * wc + (srcPx[d + 2] ?? 0) * wd;
+      rgba[o + 3] = alpha;
+      if (alpha > 8) covered += 1;
+    }
+  }
+  return { rgba, size, coverage: covered / (size * size) };
+}

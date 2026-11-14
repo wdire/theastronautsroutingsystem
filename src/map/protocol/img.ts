@@ -1,9 +1,19 @@
 import { getCoverage, loadCoverage, nearestTile, tileUrl, type Coverage, type TileRef } from '@/data/coverage';
 import { flatTile, MARS_FLAT, type TileData } from './index';
+import { blendDetail, highPassRadius, luminance, type DetailLayer } from './detail';
+import { CTX, HIRISE, VIKING, warpToTile, type EquirectSource } from './live';
 
 /** Decoded package tiles kept for upsampling, most recently used last. */
 const bitmapCache = new Map<string, Promise<ImageBitmap>>();
 const BITMAP_CACHE_MAX = 96;
+
+/** Zoom from which each live source adds detail, and the zoom whose detail it already matches. */
+const VIKING_FROM = 5;
+const CTX_FROM = 9;
+const HIRISE_FROM = 14;
+/** A package tile at this zoom or deeper already holds everything the source could add. */
+const VIKING_NATIVE = 7;
+const CTX_NATIVE = 13;
 
 async function fetchBytes(url: string, signal: AbortSignal): Promise<ArrayBuffer> {
   let lastError: unknown;
@@ -48,24 +58,72 @@ export function ancestorWindow(ref: TileRef, z: number, x: number, y: number): {
 }
 
 /** Draws the ancestor's window over the whole tile, smoothed. */
-export async function upsample(cov: Coverage, ref: TileRef, z: number, x: number, y: number): Promise<OffscreenCanvas> {
+async function upsample(cov: Coverage, ref: TileRef, z: number, x: number, y: number): Promise<OffscreenCanvas> {
   const bitmap = await packageBitmap(cov, ref);
   const { sx, sy, size } = ancestorWindow(ref, z, x, y);
   const canvas = new OffscreenCanvas(256, 256);
-  const ctx = canvas.getContext('2d');
+  const ctx = canvas.getContext('2d', { willReadFrequently: true });
   if (!ctx) throw new Error('no 2d context');
   ctx.imageSmoothingEnabled = true;
   ctx.imageSmoothingQuality = 'high';
-  // Half a source pixel of margin keeps the smoothing from pulling in the neighbour's edge.
   ctx.drawImage(bitmap, sx, sy, size, size, 0, 0, 256, 256);
   return canvas;
 }
 
+async function detailLayer(
+  src: EquirectSource,
+  z: number,
+  x: number,
+  y: number,
+  pad: number,
+  radius: number,
+  gain: number,
+  masked: boolean,
+): Promise<DetailLayer | null> {
+  const warped = await warpToTile(src, z, x, y, pad);
+  if (!warped || warped.coverage < 0.02) return null;
+  const layer: DetailLayer = { lum: luminance(warped.rgba), radius, gain };
+  if (masked || warped.coverage < 0.999) {
+    const mask = new Float32Array(warped.size * warped.size);
+    for (let i = 0; i < mask.length; i += 1) mask[i] = (warped.rgba[i * 4 + 3] ?? 0) / 255;
+    layer.mask = mask;
+  }
+  return layer;
+}
+
+/**
+ * Base imagery for any tile to zoom 17. The package tile if there is one; otherwise the nearest
+ * package ancestor, upsampled for colour, with live detail blended into its brightness:
+ * Viking below zoom 9, CTX from 9, and HiRISE on top from 14 wherever an image covers the tile.
+ * With no connection the upsampled ancestor is returned as it is, so there is always ground.
+ */
 export async function imgTile(_rest: string[], z: number, x: number, y: number, signal: AbortSignal): Promise<TileData> {
   const cov = getCoverage() ?? (await loadCoverage());
   if (!cov) return flatTile(MARS_FLAT);
   const ref = nearestTile(cov, ['img', 'planetImg'], z, x, y);
   if (!ref) return flatTile(MARS_FLAT);
   if (ref.z === z) return fetchBytes(tileUrl(cov, ref), signal);
-  return (await upsample(cov, ref, z, x, y)).transferToImageBitmap();
+
+  const canvas = await upsample(cov, ref, z, x, y);
+  const wanted: Promise<DetailLayer | null>[] = [];
+  const pad = 32;
+  if (z >= CTX_FROM && ref.z < CTX_NATIVE) {
+    wanted.push(detailLayer(CTX, z, x, y, pad, highPassRadius(z, ref.z), 1, false));
+  } else if (z >= VIKING_FROM && z < CTX_FROM && ref.z < VIKING_NATIVE) {
+    wanted.push(detailLayer(VIKING, z, x, y, pad, highPassRadius(z, ref.z), 0.9, false));
+  }
+  if (z >= HIRISE_FROM) {
+    wanted.push(detailLayer(HIRISE, z, x, y, pad, highPassRadius(z, Math.max(ref.z, CTX_NATIVE)), 1.1, true));
+  }
+  if (wanted.length === 0 || (typeof navigator !== 'undefined' && navigator.onLine === false)) return canvas.transferToImageBitmap();
+
+  const layers = (await Promise.all(wanted)).filter((l): l is DetailLayer => l !== null);
+  if (signal.aborted) throw new DOMException('aborted', 'AbortError');
+  if (layers.length === 0) return canvas.transferToImageBitmap();
+  const ctx = canvas.getContext('2d', { willReadFrequently: true });
+  if (!ctx) return canvas.transferToImageBitmap();
+  const image = ctx.getImageData(0, 0, 256, 256);
+  blendDetail(image.data, 256, pad, layers);
+  ctx.putImageData(image, 0, 0);
+  return canvas.transferToImageBitmap();
 }
