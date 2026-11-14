@@ -1,5 +1,40 @@
 # Progress
 
+## Start here (handoff written 2026-11-14, end of the second session)
+
+State: branch `main`, 15 commits ahead of `origin/main` (not pushed; the team pushes, or asks for it). Working tree clean.
+`npx tsc --noEmit -p tsconfig.json`, `npx eslint .`, `npx vitest run` (421 tests) and `npx playwright test --trace off`
+(23 tests) all pass. `npm run build` passes: first load 386 kB gzipped, the NASA key is not in `dist`.
+
+Read, in this order: this section, `docs/superpowers/specs/2026-11-14-areo-design.md` (what the team asked for),
+`docs/build-spec.md` (the spec), the rulings at the end of this file.
+
+Open, most important first:
+1. The final whole-branch review was started and its report never read (the session ended first). Run it again:
+   a fresh reviewer, read-only, over `git diff 2db0bf6..HEAD -- src api tests vercel.json package.json`, looking for
+   real defects in `src/sim/controller.ts` and `world.ts` (clock ownership, reroute, stuck states), the automatic
+   departure in `src/planner/routing.ts`, the 3D mission view (`src/visor/party.ts`, `index.ts`, disposal), the
+   functions under `api/` and `src/engines/export.ts` (escaping, the key), and the plan's Review Focus list in
+   `docs/superpowers/plans/2026-11-14-areo.md`. Fix Critical and Important findings with a failing test first.
+2. Not checked against the spec's own number: in Discover, "Check the planner against Perseverance", the leg from
+   the delta top to the rim by Neretva Vallis should come out near 100 m and 87% within 300 m. Run it and compare.
+3. Deploy: push `main`, import the GitHub repository in Vercel (settings come from `vercel.json`), optionally set
+   `NASA_API_KEY`. The functions were bundled and run on their own here; Vercel's own build has not been run.
+4. Not tried on a real phone (only a phone-sized browser with a real GPU).
+5. Rough edges seen and left: in the chase camera the guide chevrons are hidden behind the party on a straight
+   path; the open rover is drawn with the pressurised rover's model; the stop marks on the run panel's progress
+   bar sit at the time the crew leaves a stop, not when it arrives; Ingenuity's rotor does not turn.
+6. Not built, named in the README: a base console in a second tab (`src/sim/sync.ts` has the channel), sound
+   effects, moons and dust motes in 3D, photo cards beside the rover's stops in 3D, a limit for cold.
+
+How to work here: dev server `npm run dev -- --port 5173 --strictPort` from a shell (restart it after adding a
+new folder under `src/ui`, or Tailwind misses the new classes); screenshots with a Playwright script using
+`--use-angle=metal`; commits in plain sentences with no co-author trailer; English everywhere in the project.
+The model that wrote most of this stopped on the trip-budget content; Opus subagents wrote `tripComputer.ts`,
+`departure.ts`, `export.ts`, `validate.ts`, `missions.ts`, `alerts.ts` and `src/sim/*` without trouble.
+
+## Ledger
+
 Plan: docs/superpowers/plans/2026-11-14-areo.md. One line per task, then rulings.
 
 - [x] 1 Skeleton, design system, store, globe entry (store, URL sync, tokens, Archivo, globe in and out; e2e globe.spec passes). Panels and dock come with their tasks.
