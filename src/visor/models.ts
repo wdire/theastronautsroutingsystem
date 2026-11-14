@@ -118,11 +118,22 @@ export function disposeObject(root: Object3D): void {
   });
 }
 
+let users = 0;
+
+/** A 3D view that is going to use the models says so, and says when it is done. */
+export function retainModels(): void {
+  users += 1;
+}
+
 /**
- * Frees every loaded model: about 100 MB of decoded textures that would otherwise outlive the 3D view.
- * The files stay in the browser's cache, so the next visit decodes them again without a download.
+ * Frees every loaded model once no view uses them: about 100 MB of decoded textures that would
+ * otherwise outlive the 3D view. The files stay in the browser's cache, so the next visit decodes
+ * them again without a download. Counted, because two views can overlap for a moment (React mounts
+ * twice in development) and one must not free what the other is drawing.
  */
-export function disposeModels(): void {
+export function releaseModels(): void {
+  users = Math.max(0, users - 1);
+  if (users > 0) return;
   for (const pending of cache.values()) {
     void pending
       .then((root) => {

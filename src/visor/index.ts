@@ -23,7 +23,7 @@ import { createSky } from './sky';
 import { createRocks } from './rocks';
 import { skyState } from './skyModel';
 import { createProps, keepOutside } from './props';
-import { disposeModels } from './models';
+import { releaseModels, retainModels } from './models';
 import type { PropSpec } from './modelSpecs';
 
 export type { PropSpec } from './modelSpecs';
@@ -195,6 +195,7 @@ export async function mountVisor(canvas: HTMLCanvasElement, options: VisorOption
 
   const heightAt = (x: number, z: number): number => layers.near.patch?.heightAt(x, z) ?? layers.mid.patch?.heightAt(x, z) ?? layers.far.patch?.heightAt(x, z) ?? 0;
 
+  retainModels();
   const nearHeight = (x: number, z: number) => layers.near.patch?.heightAt(x, z) ?? null;
   const props = createProps(scene, frame, options.props ?? [], nearHeight);
   // Rocks stand on the near patch only: beyond it they would be smaller than a pixel.
@@ -444,7 +445,7 @@ export async function mountVisor(canvas: HTMLCanvasElement, options: VisorOption
       for (const layer of Object.values(layers)) layer.patch?.dispose();
       rocks.dispose();
       props.dispose();
-      disposeModels();
+      releaseModels();
       sky.dispose();
       renderer.dispose();
     },

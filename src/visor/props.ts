@@ -3,6 +3,7 @@ import { clone as cloneSkinned } from 'three/examples/jsm/utils/SkeletonUtils.js
 import { toLocal, type Frame } from './frame';
 import { disposeObject, loadModel, standIn } from './models';
 import { MODELS, type PropSpec } from './modelSpecs';
+import { rigSuit, type Suit } from './suit';
 
 export interface Seat {
   y: number;
@@ -61,6 +62,8 @@ interface Item {
   body: Object3D | null;
   /** The NASA model has been asked for. */
   asked: boolean;
+  /** The rig, when this is a suited crew member. */
+  suit: Suit | null;
   shadows: boolean;
 }
 
@@ -90,7 +93,7 @@ export function createProps(scene: Scene, frame: Frame, specs: readonly PropSpec
     anchor.name = spec.id;
     anchor.visible = false;
     scene.add(anchor);
-    return { spec, x, z, anchor, body: null, asked: false, shadows: true };
+    return { spec, x, z, anchor, body: null, asked: false, suit: null, shadows: true };
   });
   const clearings: readonly Clearing[] = items.map((i) => ({ x: i.x, z: i.z, r: MODELS[i.spec.model].clearM }));
 
@@ -129,7 +132,11 @@ export function createProps(scene: Scene, frame: Frame, specs: readonly PropSpec
     item.asked = true;
     loadModel(item.spec.model)
       .then((model) => {
-        if (!disposed) swapBody(item, cloneSkinned(model));
+        if (disposed) return;
+        // A suit gets its own skeleton so it can stand at ease and walk; everything else is a plain copy.
+        const suit = item.spec.model === 'z2' ? rigSuit(model) : null;
+        item.suit = suit;
+        swapBody(item, suit ? suit.root : cloneSkinned(model));
       })
       .catch(() => {
         // The stand-in stays; coming near again tries once more.
@@ -179,6 +186,7 @@ export function createProps(scene: Scene, frame: Frame, specs: readonly PropSpec
       for (const item of items) {
         scene.remove(item.anchor);
         if (item.body) disposeObject(item.body);
+        item.suit?.dispose();
       }
     },
   };
