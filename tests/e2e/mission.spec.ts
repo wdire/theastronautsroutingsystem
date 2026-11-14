@@ -96,3 +96,31 @@ test('the base answers on the radio from the crew’s own numbers', async ({ pag
   await expect(radio.getByText('Base', { exact: true })).toBeVisible({ timeout: 30_000 });
   await expect(radio.locator('li').filter({ hasText: 'Base' })).toContainText(/\d/);
 });
+
+test('riding along shows the crew in 3D from three cameras, each above the ground, with the objective', async ({ page }) => {
+  test.setTimeout(240_000);
+  await start(page);
+  await page.getByRole('button', { name: 'Ride along' }).click();
+  const view = page.getByRole('region', { name: 'Rover View' });
+  await page.waitForFunction(() => window.__areoVisor?.getState().ready === true, undefined, { timeout: 200_000 });
+  // The same objective the run panel names, in the helmet's own words.
+  await expect(view.getByText(/Wildcat Ridge, [\d.]+\skm/)).toBeVisible();
+  await expect(view.getByRole('meter', { name: 'Oxygen' })).toBeVisible();
+
+  for (const camera of ['Chase', 'Orbit', 'Helmet'] as const) {
+    await view.getByRole('radio', { name: camera }).click();
+    await expect.poll(() => page.evaluate(() => window.__areoVisor?.getState().camera)).toBe(camera.toLowerCase());
+    await page.waitForTimeout(1500);
+    // Never under the ground, whichever camera it is.
+    expect(await page.evaluate(() => window.__areoVisor?.eyeAboveGround() ?? -1)).toBeGreaterThan(0.5);
+  }
+
+  // The mission clock still runs while riding, and leaving the view leaves the mission running.
+  const before = await page.evaluate(() => window.__areo?.getState().world?.utcMs ?? 0);
+  await view.getByRole('radio', { name: '20×' }).click();
+  await expect.poll(() => page.evaluate(() => window.__areo?.getState().world?.utcMs ?? 0), { timeout: 30_000 }).toBeGreaterThan(before + 60_000);
+  await page.keyboard.press('Escape');
+  await expect(view).toHaveCount(0);
+  await expect(page.getByRole('region', { name: 'Mission', exact: true })).toBeVisible();
+  expect(await page.evaluate(() => window.__areo?.getState().clockLive)).toBe(false);
+});

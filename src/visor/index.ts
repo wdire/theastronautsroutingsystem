@@ -11,11 +11,11 @@ import {
   Vector3,
   WebGLRenderer,
 } from 'three';
-import type { Scenario } from '@/engines/types';
+import type { Scenario, VehicleId } from '@/engines/types';
 import { sunPosition } from '@/engines/marsTime';
 import { tauAt, visibilityKm } from '@/engines/environment';
 import { groundAt } from '@/data/dem';
-import { bearingOf, toLonLat, type Frame } from './frame';
+import { bearingOf, toLocal, toLonLat, type Frame } from './frame';
 import { buildPatch, FAR, HOLE_INSET_M, MID, NEAR, type Patch, type PatchSpec } from './patch';
 import { fieldSlopeAt } from './heightfield';
 import { groundQuality } from './groundShader';
@@ -23,6 +23,8 @@ import { createSky } from './sky';
 import { createRocks } from './rocks';
 import { skyState } from './skyModel';
 import { createProps, keepOutside } from './props';
+import { createParty } from './party';
+import { createGuides } from './guides';
 import { releaseModels, retainModels } from './models';
 import type { PropSpec } from './modelSpecs';
 
@@ -39,7 +41,22 @@ export interface VisorOptions {
   scenario: () => Scenario;
   /** The rovers, base and vehicles standing in the scene. */
   props?: readonly PropSpec[];
+  /** A running mission to ride along with. Absent: the viewer walks on their own. */
+  mission?: MissionFeed;
   onState?: (state: VisorState) => void;
+}
+
+export type CameraMode = 'helmet' | 'chase' | 'orbit';
+
+/** What the view needs from a running mission, asked every frame. */
+export interface MissionFeed {
+  vehicle: VehicleId;
+  /** Where the crew is now; null once there is no mission. */
+  crew(): { lon: number; lat: number; headingDeg: number; speedMs: number; moving: boolean } | null;
+  /** The route from the crew on, nearest first, and the next objective. */
+  ahead(): { path: readonly (readonly [number, number])[]; objective: readonly [number, number] | null };
+  /** The clock is running at 5x or faster: draw less. */
+  fast(): boolean;
 }
 
 export interface VisorState {
@@ -59,6 +76,8 @@ export interface VisorState {
   sunElevDeg: number;
   /** The id of the prop the viewer stands near, or null. */
   near: string | null;
+  /** Which camera shows a mission; 'helmet' when there is none. */
+  camera: CameraMode;
 }
 
 export interface VisorHandle {
@@ -66,12 +85,16 @@ export interface VisorHandle {
   setMove(right: number, forward: number, fast?: boolean): void;
   look(dYawDeg: number, dPitchDeg: number): void;
   setQuality(q: Quality): void;
+  /** Which camera follows the mission. */
+  setCamera(mode: CameraMode): void;
   resize(): void;
   getState(): VisorState;
   /** Where each prop stands, in scene metres; for tests. */
   props(): { id: string; x: number; z: number; y: number; seated: boolean; real: boolean }[];
   /** The viewer’s place in scene metres (x east, z south). */
   position(): { x: number; y: number; z: number };
+  /** How far the camera is above the drawn ground under it, m. Never negative. */
+  eyeAboveGround(): number;
   /** What the last frame cost, for the performance checks. */
   stats(): { triangles: number; calls: number; rocks: number };
   dispose(): void;
@@ -154,6 +177,7 @@ export async function mountVisor(canvas: HTMLCanvasElement, options: VisorOption
     quality: 'high',
     sunElevDeg: 0,
     near: null,
+    camera: options.mission ? 'chase' : 'helmet',
   };
 
   /* ---- ground layers ---- */
@@ -201,11 +225,20 @@ export async function mountVisor(canvas: HTMLCanvasElement, options: VisorOption
   // Rocks stand on the near patch only: beyond it they would be smaller than a pixel.
   const rocks = createRocks(scene, nearHeight, (x, z) => (layers.near.patch ? fieldSlopeAt(layers.near.patch.field, x, z) : 0), props.clearings);
   let rocksPatch: Patch | null = null;
+  const mission = options.mission;
+  const party = mission ? createParty(scene, mission.vehicle, heightAt) : null;
+  const guides = mission ? createGuides(scene, heightAt) : null;
+  let lastGuides = -1e9;
+  // The chase camera swings round behind the party at its own pace, so a turn does not whip the view.
+  let chaseAngle = Number.NaN;
+  let orbitAngle = 0;
+  let eyeAbove = EYE_M;
 
   /* ---- viewer ---- */
   const pos = new Vector3(0, EYE_M, 0);
-  let yaw = ((options.headingDeg ?? 0) * Math.PI) / 180;
-  let pitch = -0.06;
+  // In a mission these are offsets from the camera's own direction; on foot they are the direction itself.
+  let yaw = options.mission ? 0 : ((options.headingDeg ?? 0) * Math.PI) / 180;
+  let pitch = options.mission ? 0 : -0.06;
   let eyeY = EYE_M;
   const keys = new Set<string>();
   const pad = { right: 0, forward: 0, fast: false };
@@ -315,19 +348,67 @@ export async function mountVisor(canvas: HTMLCanvasElement, options: VisorOption
     last = now;
     if (dt > 0) fpsSmooth += (1 / dt - fpsSmooth) * 0.05;
 
-    // Walk: keys or the on-screen pad, along the way the viewer faces.
-    const fwd = (keys.has('KeyW') || keys.has('ArrowUp') ? 1 : 0) - (keys.has('KeyS') || keys.has('ArrowDown') ? 1 : 0) + pad.forward;
-    const right = (keys.has('KeyD') || keys.has('ArrowRight') ? 1 : 0) - (keys.has('KeyA') || keys.has('ArrowLeft') ? 1 : 0) + pad.right;
-    const len = Math.hypot(fwd, right);
-    if (len > 0.01) {
-      const speed = (keys.has('ShiftLeft') || keys.has('ShiftRight') || pad.fast ? FAST_MS : WALK_MS) * Math.min(1, len);
-      const sin = Math.sin(yaw);
-      const cos = Math.cos(yaw);
-      // Facing direction for yaw 0 is north (-z); positive yaw turns toward the east.
-      const nx = pos.x + ((fwd * sin + right * cos) / len) * speed * dt;
-      const nz = pos.z + ((-fwd * cos + right * sin) / len) * speed * dt;
-      // Nobody walks through a rover: a step into one ends at its side.
-      [pos.x, pos.z] = keepOutside(nx, nz, props.clearings, 0.75);
+    let viewYaw = yaw;
+    let viewPitch = pitch;
+    const crew = mission && party ? mission.crew() : null;
+    if (crew && party) {
+      // Riding along: the party follows the simulation and the camera follows the party.
+      const [tx, tz] = toLocal(frame, crew.lon, crew.lat);
+      party.update({ x: tx, z: tz, headingDeg: crew.headingDeg, speedMs: crew.speedMs, moving: crew.moving }, dt);
+      const f = party.focus();
+      party.setFirstPerson(state.camera === 'helmet');
+      if (state.camera === 'helmet') {
+        // Through the eyes of the last in file: the leader walks ahead in view.
+        pos.x = f.rear.x;
+        pos.z = f.rear.z;
+        viewYaw = f.rear.heading + yaw;
+        eyeAbove = party.eyeM;
+      } else {
+        const behind = f.heading + Math.PI;
+        if (Number.isNaN(chaseAngle)) chaseAngle = behind;
+        let d = (behind - chaseAngle) % (Math.PI * 2);
+        if (d > Math.PI) d -= Math.PI * 2;
+        if (d < -Math.PI) d += Math.PI * 2;
+        chaseAngle += d * Math.min(1, dt * 1.6);
+        orbitAngle += dt * 0.12;
+        const orbit = state.camera === 'orbit';
+        const away = (orbit ? orbitAngle : chaseAngle) + yaw;
+        const dist = party.sizeM * (orbit ? 2.1 : 1.5) + (orbit ? 6 : 3.5);
+        pos.x = f.x + Math.sin(away) * dist;
+        pos.z = f.z - Math.cos(away) * dist;
+        eyeAbove = orbit ? 3.6 : 2.5;
+        // Look at the party's shoulders from wherever the camera has ended up.
+        viewYaw = away + Math.PI;
+        viewPitch = Math.atan2(eyeY - (f.y + 1.3), dist) + pitch;
+      }
+      if (guides && mission && now - lastGuides > 350) {
+        lastGuides = now;
+        const ahead = mission.ahead();
+        const objective = ahead.objective ? toLocal(frame, ahead.objective[0], ahead.objective[1]) : null;
+        guides.update(
+          ahead.path.map((p) => {
+            const [x, z] = toLocal(frame, p[0], p[1]);
+            return { x, z };
+          }),
+          objective ? { x: objective[0], z: objective[1] } : null,
+        );
+      }
+    } else {
+      // Walk: keys or the on-screen pad, along the way the viewer faces.
+      const fwd = (keys.has('KeyW') || keys.has('ArrowUp') ? 1 : 0) - (keys.has('KeyS') || keys.has('ArrowDown') ? 1 : 0) + pad.forward;
+      const right = (keys.has('KeyD') || keys.has('ArrowRight') ? 1 : 0) - (keys.has('KeyA') || keys.has('ArrowLeft') ? 1 : 0) + pad.right;
+      const len = Math.hypot(fwd, right);
+      if (len > 0.01) {
+        const speed = (keys.has('ShiftLeft') || keys.has('ShiftRight') || pad.fast ? FAST_MS : WALK_MS) * Math.min(1, len);
+        const sin = Math.sin(yaw);
+        const cos = Math.cos(yaw);
+        // Facing direction for yaw 0 is north (-z); positive yaw turns toward the east.
+        const nx = pos.x + ((fwd * sin + right * cos) / len) * speed * dt;
+        const nz = pos.z + ((-fwd * cos + right * sin) / len) * speed * dt;
+        // Nobody walks through a rover: a step into one ends at its side.
+        [pos.x, pos.z] = keepOutside(nx, nz, props.clearings, 0.75);
+      }
+      eyeAbove = EYE_M;
     }
 
     ensure('far', pos.x, pos.z);
@@ -336,12 +417,13 @@ export async function mountVisor(canvas: HTMLCanvasElement, options: VisorOption
 
     // Stand on the drawn ground, and ease the eye height so steps in the data do not jolt the view.
     const ground = heightAt(pos.x, pos.z);
-    const target = ground + EYE_M;
+    const target = ground + eyeAbove;
     eyeY += (target - eyeY) * Math.min(1, dt * 10);
+    // Never under the ground, whichever camera it is.
     if (eyeY < ground + 0.6) eyeY = ground + 0.6;
     pos.y = eyeY;
     camera.position.copy(pos);
-    camera.rotation.set(-pitch, -yaw, 0);
+    camera.rotation.set(-Math.max(-1.3, Math.min(1.3, viewPitch)), -viewYaw, 0);
     sky.mesh.position.copy(pos);
     sky.mesh.scale.setScalar(100_000);
 
@@ -362,7 +444,12 @@ export async function mountVisor(canvas: HTMLCanvasElement, options: VisorOption
     if (!state.ready && layers.near.patch && layers.mid.patch) {
       state.ready = true;
       state.loading = null;
-      eyeY = heightAt(pos.x, pos.z) + EYE_M;
+      eyeY = heightAt(pos.x, pos.z) + eyeAbove;
+    }
+    if (quality === 'auto' && state.ready && mission?.fast() && effective === 'high') {
+      // At 5x and faster the ground streams past: detail nobody can see is not drawn.
+      effective = 'low';
+      applyQuality();
     }
     if (quality === 'auto' && state.ready) {
       if (fpsSmooth < 24 && effective === 'high') {
@@ -383,8 +470,8 @@ export async function mountVisor(canvas: HTMLCanvasElement, options: VisorOption
       state.elev = ground + frame.base;
       const near = layers.near.patch;
       state.slopeDeg = near ? fieldSlopeAt(near.field, pos.x, pos.z) : 0;
-      state.headingDeg = bearingOf(Math.sin(yaw), -Math.cos(yaw));
-      state.pitchDeg = (-pitch * 180) / Math.PI;
+      state.headingDeg = bearingOf(Math.sin(viewYaw), -Math.cos(viewYaw));
+      state.pitchDeg = (-viewPitch * 180) / Math.PI;
       state.fps = Math.round(fpsSmooth);
       if (near) state.groundSource = groundSourceName(near.demSourceZoom);
       state.near = props.nearest(pos.x, pos.z, 60);
@@ -424,10 +511,17 @@ export async function mountVisor(canvas: HTMLCanvasElement, options: VisorOption
         applyQuality();
       }
     },
+    setCamera(mode) {
+      state.camera = mode;
+      // The drag offset belongs to the camera it was made on.
+      yaw = 0;
+      pitch = mode === 'helmet' ? -0.06 : 0;
+    },
     resize,
     getState: () => ({ ...state }),
     props: () => props.list(),
     position: () => ({ x: pos.x, y: pos.y, z: pos.z }),
+    eyeAboveGround: () => pos.y - heightAt(pos.x, pos.z),
     stats: () => ({ triangles: renderer.info.render.triangles, calls: renderer.info.render.calls, rocks: rocks.count() }),
     dispose() {
       disposed = true;
@@ -445,6 +539,8 @@ export async function mountVisor(canvas: HTMLCanvasElement, options: VisorOption
       for (const layer of Object.values(layers)) layer.patch?.dispose();
       rocks.dispose();
       props.dispose();
+      party?.dispose();
+      guides?.dispose();
       releaseModels();
       sky.dispose();
       renderer.dispose();

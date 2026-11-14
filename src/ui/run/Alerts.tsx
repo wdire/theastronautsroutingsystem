@@ -17,9 +17,10 @@ function change(amount: number, unit: (v: number) => string, more: string, less:
 /**
  * The alert the crew should look at now: the most severe one still open. A warning sits in the middle
  * of the screen and holds the mission until it is answered; the rest sit at the top and can wait.
- * A proposed new route is shown the same way, with what it costs, before it is taken.
+ * A proposed new route is shown the same way, with what it costs, before it is taken. The same card,
+ * with the same look, is used over the map and in the helmet view.
  */
-export function Alerts() {
+export function Alerts({ inVisor = false }: { inVisor?: boolean }) {
   const alerts = useApp((s) => s.world?.alerts);
   const routingId = useApp((s) => s.routingAlertId);
   const proposed = useApp((s) => s.proposed);
@@ -36,7 +37,7 @@ export function Alerts() {
       className={cn(
         'panel pointer-events-auto absolute left-1/2 w-[min(27rem,calc(100vw-1.5rem))] -translate-x-1/2 border-l-4 p-3.5',
         look.border,
-        centred ? 'top-[26%] shadow-2xl' : 'top-3 max-md:top-[7.75rem]',
+        centred ? 'top-[26%] shadow-2xl' : inVisor ? 'top-16' : 'top-3 max-md:top-[7.75rem]',
       )}
     >
       <div className="flex items-start gap-2.5">

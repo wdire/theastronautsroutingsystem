@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { MessageSquare, Pause, Play, Square } from 'lucide-react';
+import { Binoculars, MessageSquare, Pause, Play, Square } from 'lucide-react';
 import { marsTime } from '@/engines/marsTime';
 import { missionById } from '@/engines/missions';
 import type { CrewSnapshot } from '@/engines/types';
@@ -218,7 +218,17 @@ export function RunPanel() {
                 <div className="figure text-[13px] font-semibold">{fmtNumber(crew.doseMSv, 2)} mSv</div>
               </div>
             </div>
-            <Chat world={world} />
+            <div className="flex flex-wrap items-center gap-2">
+              <button
+                type="button"
+                onClick={() => useApp.getState().openVisor({ lon: crew.lon, lat: crew.lat })}
+                className="inline-flex h-9 items-center gap-2 rounded-md border px-2.5 text-[13px] font-medium transition-colors hover:bg-secondary pointer-coarse:h-11"
+              >
+                <Binoculars className="size-4 text-muted-foreground" aria-hidden />
+                Ride along
+              </button>
+              <Chat world={world} />
+            </div>
           </div>
         </>
       )}

@@ -232,7 +232,7 @@ export function rigSuit(model: Object3D): Suit | null {
       // The hip swings the leg; the knee bends only while that leg comes forward.
       bones[`hip${side}`].rotation.x = -leg * 0.46 * s;
       const lift = Math.max(0, Math.cos(a) * sign);
-      bones[`knee${side}`].rotation.x = lift * 0.85 * s;
+      bones[`knee${side}`].rotation.x = lift * 0.6 * s;
       // The boot stays flat on the ground: it undoes what the hip and knee turned.
       bones[`ankle${side}`].rotation.x = -(bones[`hip${side}`].rotation.x + bones[`knee${side}`].rotation.x) * 0.9;
       // Arms hang at ease, lowered from the model's reaching pose, and swing against the legs.

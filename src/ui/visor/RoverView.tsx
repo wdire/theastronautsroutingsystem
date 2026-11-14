@@ -7,6 +7,8 @@ import { cn } from '@/lib/cn';
 import type { VisorHandle, VisorState } from '@/visor';
 import { useIsTouch } from '@/ui/hooks/useMediaQuery';
 import { MovePad } from './MovePad';
+import { missionFeed } from './missionFeed';
+import { MissionHud } from './MissionHud';
 import { propCaption, sceneProps, standpoint } from './scene';
 
 const TIMES: readonly { label: string; hour: number }[] = [
@@ -46,7 +48,7 @@ function CompassTape({ heading }: { heading: number }) {
 
 /** Everything the overlay shows of the view's state, as one string to compare. */
 function shownKey(s: VisorState): string {
-  return `${s.ready}|${s.loading}|${s.lon.toFixed(5)}|${s.lat.toFixed(5)}|${Math.round(s.elev)}|${s.slopeDeg.toFixed(1)}|${Math.round(s.headingDeg)}|${s.groundSource}|${s.near}`;
+  return `${s.ready}|${s.loading}|${s.lon.toFixed(5)}|${s.lat.toFixed(5)}|${Math.round(s.elev)}|${s.slopeDeg.toFixed(1)}|${Math.round(s.headingDeg)}|${s.groundSource}|${s.near}|${s.camera}`;
 }
 
 const SHADOW = '[text-shadow:0_1px_3px_rgb(0_0_0/0.9),0_0_1px_rgb(0_0_0/0.8)]';
@@ -61,6 +63,7 @@ export default function RoverView() {
   const [state, setState] = useState<VisorState | null>(null);
   const [error, setError] = useState<string | null>(null);
   const touch = useIsTouch();
+  const riding = useApp((s) => s.world?.run != null);
   const lon = at?.lon;
   const lat = at?.lat;
 
@@ -69,19 +72,22 @@ export default function RoverView() {
     if (!canvas || lon === undefined || lat === undefined) return;
     let cancelled = false;
     const app = useApp.getState();
-    // The clock is restored when the view closes.
+    // Riding along with a mission: the mission owns the clock, and the view follows the crew.
+    const mission = missionFeed();
+    // Otherwise the clock is restored when the view closes.
     const saved = { utcMs: app.utcMs, live: app.clockLive, paused: app.clockPaused };
     // A dark spot opens at mid-morning: there is nothing to see at night.
     const t = marsTime(app.utcMs, lon);
-    if (t.ltstH < 6.5 || t.ltstH > 17.8) {
+    if (!mission && (t.ltstH < 6.5 || t.ltstH > 17.8)) {
       app.setClock(nextLtst(app.utcMs, lon, 10), false);
       app.setClockPaused(true);
     }
     // The scene’s rovers and base are worked out first, so the view can open beside one, not inside it.
     void Promise.all([import('@/visor'), sceneProps(app.plan)])
       .then(async ([{ mountVisor }, props]) => {
-        const stand = standpoint(lon, lat, props);
+        const stand = mission ? { lon, lat, headingDeg: 0 } : standpoint(lon, lat, props);
         const handle = await mountVisor(canvas, {
+          ...(mission ? { mission } : {}),
           lon: stand.lon,
           lat: stand.lat,
           headingDeg: stand.headingDeg,
@@ -109,6 +115,7 @@ export default function RoverView() {
       handleRef.current?.dispose();
       handleRef.current = null;
       delete window.__areoVisor;
+      if (mission) return;
       const now = useApp.getState();
       now.setClock(saved.live ? Date.now() : saved.utcMs, saved.live);
       now.setClockPaused(saved.paused);
@@ -156,7 +163,8 @@ export default function RoverView() {
 
       {state?.ready ? (
         <>
-          {touch ? (
+          {riding ? <MissionHud camera={state.camera} onCamera={(mode) => handleRef.current?.setCamera(mode)} /> : null}
+          {touch && !riding ? (
             <div className="absolute bottom-[max(1.25rem,env(safe-area-inset-bottom))] left-5">
               <MovePad onMove={(right, forward, fast) => handleRef.current?.setMove(right, forward, fast)} />
             </div>
@@ -165,22 +173,28 @@ export default function RoverView() {
           <dl
             className={cn(
               'figure pointer-events-none absolute grid gap-1 text-[12.5px] leading-tight font-medium text-white/95',
-              touch ? 'right-3 bottom-[max(1.25rem,env(safe-area-inset-bottom))] left-[152px] text-[11.5px]' : 'bottom-4 left-4 max-w-[300px]',
+              riding ? 'top-16 left-4 max-w-[260px] max-md:hidden' : touch ? 'right-3 bottom-[max(1.25rem,env(safe-area-inset-bottom))] left-[152px] text-[11.5px]' : 'bottom-4 left-4 max-w-[300px]',
               SHADOW,
             )}
           >
-            <div>{fmtLatLon(state.lat, state.lon)}</div>
-            <div>
-              {fmtElevation(state.elev)}, slope {fmtDeg(state.slopeDeg, state.slopeDeg < 10 ? 1 : 0)}, heading {fmtDeg(state.headingDeg)}
+            {riding ? null : (
+              <>
+                <div>{fmtLatLon(state.lat, state.lon)}</div>
+                <div>
+                  {fmtElevation(state.elev)}, slope {fmtDeg(state.slopeDeg, state.slopeDeg < 10 ? 1 : 0)}, heading {fmtDeg(state.headingDeg)}
+                </div>
+                <div>
+                  {fmtClock(time.ltstH)} LTST{toSunset > 0 && toSunset < 14 * 3600 ? `, sunset in ${fmtDuration(toSunset)}` : ''}
+                </div>
+              </>
+            )}
+            <div className="font-sans text-white/75">
+              Ground from the {state.groundSource}. Rocks and fine texture are drawn in, not measured.{riding ? ' The crew and its route are simulated.' : ''}
             </div>
-            <div>
-              {fmtClock(time.ltstH)} LTST{toSunset > 0 && toSunset < 14 * 3600 ? `, sunset in ${fmtDuration(toSunset)}` : ''}
-            </div>
-            <div className="font-sans text-white/75">Ground from the {state.groundSource}. Rocks and fine texture are drawn in, not measured.</div>
-            {state.near ? <div className="font-sans text-white/75">{propCaption(state.near)}</div> : null}
+            {state.near && !riding ? <div className="font-sans text-white/75">{propCaption(state.near)}</div> : null}
           </dl>
 
-          <div className={cn('pointer-events-auto absolute left-1/2 flex -translate-x-1/2 flex-col items-center gap-2', touch ? 'top-[4.25rem]' : 'bottom-4')}>
+          <div className={cn('pointer-events-auto absolute left-1/2 flex -translate-x-1/2 flex-col items-center gap-2', touch ? 'top-[4.25rem]' : 'bottom-4', riding && 'hidden')}>
             <div role="radiogroup" aria-label="Time of day" className="panel flex gap-0.5 p-0.5">
               {TIMES.map((t) => {
                 const checked = Math.abs(time.ltstH - t.hour) < 0.1;
