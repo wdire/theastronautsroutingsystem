@@ -1,10 +1,11 @@
 import { useEffect } from 'react';
-import { ArrowLeft } from 'lucide-react';
 import { MapView } from '@/map/MapView';
-import { getMap, whenMapReady } from '@/map/instance';
+import { whenMapReady } from '@/map/instance';
 import { addGlobeMarker } from '@/map/globeMarker';
-import { flyOut } from '@/map/camera';
 import { Intro } from '@/ui/intro/Intro';
+import { Chrome } from '@/ui/shell/Chrome';
+import { TooltipProvider } from '@/ui/components/ui/tooltip';
+import { Toaster } from '@/ui/components/ui/sonner';
 import { useApp } from '@/store';
 import { cn } from '@/lib/cn';
 
@@ -40,6 +41,7 @@ export function App() {
   const inMap = mode === 'map';
 
   return (
+    <TooltipProvider delayDuration={350} skipDelayDuration={200}>
     <div className="space absolute inset-0 overflow-hidden">
       <MapView />
       <div className={cn('transition-opacity duration-500', mode === 'globe' ? 'opacity-100' : 'opacity-0')}>
@@ -55,20 +57,10 @@ export function App() {
         )}
         inert={!inMap}
       >
-        <div className="pointer-events-none absolute inset-0">
-          <button
-            type="button"
-            onClick={() => {
-              const map = getMap();
-              if (map) flyOut(map);
-            }}
-            className="panel pointer-events-auto absolute top-3 left-3 inline-flex h-10 items-center gap-2 px-3 text-sm font-medium hover:bg-secondary"
-          >
-            <ArrowLeft className="size-4" aria-hidden />
-            Planet
-          </button>
-        </div>
+        <Chrome />
       </div>
+      <Toaster position="bottom-center" />
     </div>
+    </TooltipProvider>
   );
 }
