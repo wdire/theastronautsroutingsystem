@@ -124,3 +124,29 @@ test('riding along shows the crew in 3D from three cameras, each above the groun
   await expect(page.getByRole('region', { name: 'Mission', exact: true })).toBeVisible();
   expect(await page.evaluate(() => window.__areo?.getState().clockLive)).toBe(false);
 });
+
+test('ending a mission while a way round is being worked out leaves nothing stuck for the next one', async ({ page }) => {
+  await start(page);
+  await page.evaluate(() => window.__areoSim?.speed(5));
+  await page.waitForTimeout(1200);
+  await page.evaluate(() => window.__areoSim?.force('dustDevil'));
+  const alert = page.getByRole('status', { name: /Caution: Dust devil ahead/ });
+  await alert.getByRole('button', { name: 'Route around it' }).click();
+  // End the mission before the router has answered.
+  const panel = page.getByRole('region', { name: 'Mission', exact: true });
+  await panel.getByRole('button', { name: 'End the mission' }).click();
+  await expect(panel.getByRole('button', { name: 'Back to planning' })).toBeVisible();
+  // The late answer is dropped: no proposal is left on a mission that is over.
+  await page.waitForFunction(() => window.__areo?.getState().routingAlertId === null, undefined, { timeout: 60_000 });
+  await page.waitForTimeout(1500);
+  expect(await page.evaluate(() => window.__areo?.getState().proposed)).toBeNull();
+
+  await panel.getByRole('button', { name: 'Back to planning' }).click();
+  await page.getByRole('button', { name: 'Open the mission plan' }).click();
+  await page.getByRole('region', { name: 'Mission plan' }).getByRole('button', { name: 'Start the mission' }).click();
+  // The new mission's clock runs.
+  const t0 = await page.evaluate(() => window.__areo?.getState().world?.utcMs ?? 0);
+  await page.evaluate(() => window.__areoSim?.speed(20));
+  await expect.poll(() => page.evaluate(() => window.__areo?.getState().world?.utcMs ?? 0), { timeout: 30_000 }).toBeGreaterThan(t0 + 60_000);
+  expect(await page.evaluate(() => window.__areo?.getState().proposed)).toBeNull();
+});

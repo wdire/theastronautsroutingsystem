@@ -13,7 +13,8 @@ function exportInput(alt: RouteAlternative, hasBudget: boolean): ExportInput {
     path: [...alt.path],
     stopIndices: [...alt.stopIndices],
     trip: hasBudget ? alt.trip : null,
-    departUtcMs: s.departUtcMs ?? s.utcMs,
+    // The departure the budget was worked out for, which may be a later morning than now.
+    departUtcMs: s.route.status === 'ready' ? s.route.departUtcMs : (s.departUtcMs ?? s.utcMs),
   };
 }
 

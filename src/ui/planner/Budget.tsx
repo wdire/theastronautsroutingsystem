@@ -10,6 +10,7 @@ import { cmesDuring } from '@/engines/spaceWeather';
 import { useSpaceWeather } from '@/ui/hooks/useSpaceWeather';
 import { fmtClock, fmtDeg, fmtDistance, fmtDuration, fmtNumber, fmtPercent, fmtUtc } from '@/lib/format';
 import { cn } from '@/lib/cn';
+import { useApp } from '@/store';
 import { SEVERITY, SEVERITY_ORDER } from '@/ui/alerts/severity';
 import { Section } from '@/ui/shell/Section';
 import { Profile } from './Profile';
@@ -41,12 +42,12 @@ function byWorst(warnings: readonly TripWarning[]): TripWarning[] {
 }
 
 /** The one sentence a visitor needs first: does this plan work. */
-function Verdict({ trip }: { trip: TripResult }) {
+function Verdict({ trip, roundTrip }: { trip: TripResult; roundTrip: boolean }) {
   const worst = byWorst(trip.warnings)[0];
   if (trip.feasible) {
     const t = trip.totals;
     const margin =
-      t.minO2Frac !== null ? `The crew is back with ${fmtPercent(t.minO2Frac)} of its oxygen.` : t.minBatteryFrac !== null ? `The battery never drops below ${fmtPercent(t.minBatteryFrac)}.` : '';
+      t.minO2Frac !== null ? `The crew ${roundTrip ? 'is back' : 'arrives'} with ${fmtPercent(t.minO2Frac)} of its oxygen.` : t.minBatteryFrac !== null ? `The battery never drops below ${fmtPercent(t.minBatteryFrac)}.` : '';
     return (
       <p className="flex items-start gap-2 text-[13px] leading-relaxed">
         <CircleCheck className="mt-0.5 size-4 shrink-0 text-ok" aria-hidden />
@@ -146,13 +147,14 @@ export function Budget({ alt, vehicle }: { alt: RouteAlternative; vehicle: Vehic
   const end = alt.path[alt.path.length - 1];
   const arrive = end ? marsTime(t.arriveUtcMs, end[0]).ltstH : null;
   const powered = t.minBatteryFrac !== null;
+  const roundTrip = useApp((s) => s.plan.roundTrip);
   return (
     <div>
-      <Verdict trip={trip} />
+      <Verdict trip={trip} roundTrip={roundTrip} />
       <dl className="mt-3.5 grid grid-cols-3 items-start gap-x-3 gap-y-5">
         <Tile label="Time" value={fmtDuration(t.durationS)} note={t.workS > 0 ? `${fmtDuration(t.workS)} at work` : undefined} />
         <Tile label="Distance" value={fmtDistance(t.distM)} />
-        <Tile label="Back at" value={arrive === null ? 'n/a' : fmtClock(arrive)} note="solar time" />
+        <Tile label={roundTrip ? 'Back at' : 'Arrives'} value={arrive === null ? 'n/a' : fmtClock(arrive)} note="solar time" />
         {t.minO2Frac !== null ? <Tile label="Oxygen" value={`${fmtNumber(t.o2Kg, 2)} kg`} note={`${fmtPercent(Math.max(0, t.minO2Frac))} left`} /> : null}
         {powered ? <Tile label="Energy" value={`${fmtNumber(t.energyKWh, t.energyKWh < 10 ? 1 : 0)} kWh`} note={`${fmtPercent(Math.max(0, t.minBatteryFrac ?? 0))} left at worst`} /> : <Tile label="Climb" value={`${fmtNumber(t.climbM)} m`} />}
         <Tile label="Steepest" value={fmtDeg(t.maxGradeDeg, 1)} />

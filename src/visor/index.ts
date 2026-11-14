@@ -229,6 +229,7 @@ export async function mountVisor(canvas: HTMLCanvasElement, options: VisorOption
   const party = mission ? createParty(scene, mission.vehicle, heightAt) : null;
   const guides = mission ? createGuides(scene, heightAt) : null;
   let lastGuides = -1e9;
+  let loweredForSpeed = false;
   // The chase camera swings round behind the party at its own pace, so a turn does not whip the view.
   let chaseAngle = Number.NaN;
   let orbitAngle = 0;
@@ -446,10 +447,20 @@ export async function mountVisor(canvas: HTMLCanvasElement, options: VisorOption
       state.loading = null;
       eyeY = heightAt(pos.x, pos.z) + eyeAbove;
     }
-    if (quality === 'auto' && state.ready && mission?.fast() && effective === 'high') {
-      // At 5x and faster the ground streams past: detail nobody can see is not drawn.
-      effective = 'low';
-      applyQuality();
+    if (quality === 'auto' && state.ready && mission) {
+      const fast = mission.fast();
+      if (fast && effective === 'high') {
+        // At 5x and faster the ground streams past: detail nobody can see is not drawn.
+        effective = 'low';
+        loweredForSpeed = true;
+        applyQuality();
+      } else if (!fast && loweredForSpeed) {
+        // Back at walking pace the detail returns; a slow machine drops it again by frame rate.
+        loweredForSpeed = false;
+        slowSince = 0;
+        effective = 'high';
+        applyQuality();
+      }
     }
     if (quality === 'auto' && state.ready) {
       if (fpsSmooth < 24 && effective === 'high') {

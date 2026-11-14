@@ -19,7 +19,8 @@ export interface Departure {
 }
 
 /**
- * The planned departure if a trip of durationS seconds leaving then ends in daylight. Otherwise the first
+ * The planned departure if a trip of durationS seconds leaving then starts and ends in the same day's
+ * light, with 15 minutes in hand before sunset. Otherwise the first
  * start 30 minutes after a sunrise from which the trip ends 15 minutes before that day's sunset. If no
  * day ahead is long enough (or the sun does not rise), the start 30 minutes after the next sunrise, with
  * fits false.
@@ -28,7 +29,11 @@ export function daylightDeparture(plannedUtcMs: number, durationS: number, lat: 
   const planned = Number.isFinite(plannedUtcMs) ? plannedUtcMs : 0;
   const tripMs = Number.isFinite(durationS) && durationS > 0 ? durationS * 1000 : 0;
 
-  if (sunPosition(planned + tripMs, lat, lon).elevDeg > 0) {
+  // Left alone only if the whole trip is in one day's light: the sun is up at the start, still up at
+  // the end with the margin in hand, and no night falls in between.
+  const lightMs = sunriseSunset(planned, lat, lon).dayLengthS * 1000;
+  const inOneDay = tripMs + BEFORE_SUNSET_MS < lightMs;
+  if (inOneDay && sunPosition(planned, lat, lon).elevDeg > 0 && sunPosition(planned + tripMs + BEFORE_SUNSET_MS, lat, lon).elevDeg > 0) {
     return { departUtcMs: planned, fits: true, moved: false };
   }
 

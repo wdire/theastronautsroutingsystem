@@ -129,6 +129,7 @@ function RouteResult() {
   const vehicle = useApp((s) => VEHICLES[s.plan.vehicle]);
   const stopCount = useApp((s) => s.plan.stops.length);
   const hasStart = useApp((s) => s.plan.start !== null);
+  const missionRunning = useApp((s) => s.world?.run?.status === 'running');
 
   if (route.status === 'idle') {
     return (
@@ -215,7 +216,7 @@ function RouteResult() {
         </>
       )}
       <div className="mt-4 flex flex-wrap gap-2">
-        {route.hasBudget ? (
+        {route.hasBudget && !missionRunning ? (
           <button
             type="button"
             onClick={() => startMission()}

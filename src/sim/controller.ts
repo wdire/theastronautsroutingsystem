@@ -17,6 +17,8 @@ const TICK_MS = 100;
 let timer = 0;
 let lastTick = 0;
 let spoken = new Set<string>();
+// Counts missions started: a reply to a route asked for one mission must never land on the next.
+let missionSerial = 0;
 
 const world = (): World | null => useApp.getState().world;
 function put(next: World | null): void {
@@ -38,6 +40,9 @@ function loop(): void {
   lastTick = now;
   const w = world();
   if (!w?.run) return stopTimer();
+  // A proposal whose alert has gone (answered, expired, another mission) must not hold the clock for ever.
+  const pending = useApp.getState().proposed;
+  if (pending && (w.run.status !== 'running' || !w.alerts.some((a) => a.id === pending.alertId && !a.resolved))) useApp.setState({ proposed: null });
   // While a new route is being worked out or weighed, the crew waits where it is.
   // So does it while a warning that asks for a decision is unanswered: at 100x it would be past before it was read.
   const held = useApp.getState().routingAlertId !== null || useApp.getState().proposed !== null || w.alerts.some((a) => !a.resolved && a.severity === 'warning' && a.action);
@@ -55,6 +60,8 @@ function stopTimer(): void {
 /** Starts the selected route as a mission. The app clock follows the mission from here. */
 export function startMission(): boolean {
   const s = useApp.getState();
+  // One mission at a time: a running one is ended by its own controls, never replaced by a stray Start.
+  if (s.world?.run?.status === 'running') return false;
   if (s.route.status !== 'ready' || !s.plan.start) return false;
   const { alternatives, selected, departUtcMs } = s.route;
   const route = alternatives.find((a) => a.id === selected) ?? alternatives[0];
@@ -65,6 +72,7 @@ export function startMission(): boolean {
   const started = startRun(createWorld(departUtcMs, seed), { name, plan: s.plan, path: [...route.path], stopIndices: [...route.stopIndices], trip: route.trip, scenario: s.scenario }, departUtcMs);
   if (!started.run) return false;
   spoken = new Set();
+  missionSerial += 1;
   useApp.setState({ world: started, utcMs: started.utcMs, clockLive: false, clockPaused: true, proposed: null, routingAlertId: null, plannerOpen: false, placeId: null, picking: null });
   lastTick = performance.now();
   stopTimer();
@@ -75,12 +83,16 @@ export function startMission(): boolean {
 /** Ends the mission, if one is running, and gives the clock back to real time. */
 export function closeMission(): void {
   stopTimer();
+  missionSerial += 1;
   useApp.setState({ world: null, proposed: null, routingAlertId: null, utcMs: Date.now(), clockLive: true, clockPaused: false });
 }
 
 export function abortRun(): void {
   const w = world();
-  if (w) put(abortMission(w));
+  if (!w) return;
+  // A new route for a mission that is over is nobody's to take.
+  useApp.setState({ proposed: null, routingAlertId: null });
+  put(abortMission(w));
 }
 
 export function setRunSpeed(speed: Speed): void {
@@ -125,6 +137,7 @@ export async function apply(alertId: string): Promise<void> {
   const ask = proposal(w, alertId);
   if (!ask || ask.via.length === 0) return put(ignoreAlert(w, alertId));
   useApp.setState({ routingAlertId: alertId });
+  const serial = missionSerial;
   try {
     const run = w.run;
     const path: PathPoint[] = [];
@@ -147,7 +160,8 @@ export async function apply(alertId: string): Promise<void> {
       from = [via.lon, via.lat];
     }
     const now = world();
-    if (!now?.run || now.run.id !== run.id) return;
+    // The mission may have ended, or another begun, while the router worked.
+    if (serial !== missionSerial || !now?.run || now.run.status !== 'running' || !now.alerts.some((a) => a.id === alertId && !a.resolved)) return;
     const trip = computeTrip(path, { vehicle: ask.vehicle, departUtcMs: now.utcMs, scenario: run.scenario, style: run.plan.style, stops, campAtNight: run.plan.campAtNight });
     // What the change costs, against what was left of the old route.
     const crew = crewAt(run, now.utcMs);
@@ -157,7 +171,7 @@ export async function apply(alertId: string): Promise<void> {
   } catch {
     toast('The new route could not be worked out', { description: 'The crew stays on the route it has.' });
   } finally {
-    useApp.setState({ routingAlertId: null });
+    if (serial === missionSerial) useApp.setState({ routingAlertId: null });
     lastTick = performance.now();
   }
 }

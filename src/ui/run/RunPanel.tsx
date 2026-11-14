@@ -159,7 +159,8 @@ export function RunPanel() {
   const prog = progress(run, world.utcMs);
   const ltst = marsTime(world.utcMs, crew.lon).ltstH;
   const running = run.status === 'running';
-  const stops = run.stopIndices.slice(1, -1).map((i) => (run.trip.samples[i]?.tS ?? 0) / Math.max(1, run.trip.totals.durationS));
+  // On the whole mission's clock, like the bar itself: after a reroute the time already spent comes first.
+  const stops = run.stopIndices.slice(1, -1).map((i) => (run.carry.timeS + (run.trip.samples[i]?.tS ?? 0)) / Math.max(1, run.carry.timeS + run.trip.totals.durationS));
 
   return (
     <section

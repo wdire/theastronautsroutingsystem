@@ -156,6 +156,8 @@ export function addRouteLayers(map: MapLibreMap): () => void {
   };
   const drawMarks = (route: RouteAlternative) => {
     clearMarks();
+    // While a mission runs the plan's lines are hidden; marks left behind would sit on a route nobody is on.
+    if (useApp.getState().world?.run) return;
     const add = (index: number | null, kind: 'no-return' | 'o2-out' | 'walkback', text: string) => {
       const p = index === null ? undefined : route.path[index];
       if (!p) return;
@@ -208,10 +210,12 @@ export function addRouteLayers(map: MapLibreMap): () => void {
   drawRoutes();
   const offPlan = useApp.subscribe((s) => s.plan, drawPins);
   const offRoute = useApp.subscribe((s) => s.route, drawRoutes);
+  const offRun = useApp.subscribe((s) => s.world?.run != null, drawRoutes);
 
   return () => {
     offPlan();
     offRoute();
+    offRun();
     map.off('click', 'route-line', onRouteClick);
     map.off('mouseenter', 'route-line', pointer);
     map.off('mouseleave', 'route-line', noPointer);

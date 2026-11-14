@@ -37,6 +37,8 @@ export function missionFeed(): MissionFeed | null {
       const { path, stopIndices } = w.run;
       const c = crewAt(w.run, w.utcMs);
       const a = alongOf(path);
+      // At the end of the route, or once the mission is over, there is nowhere left to point.
+      if (w.run.status !== 'running' || c.distM >= (a[a.length - 1] ?? 0) - 0.5) return { path: [], objective: null };
       // The first route point still ahead of the crew.
       let i = 0;
       let lo = 0;

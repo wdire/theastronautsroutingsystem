@@ -52,7 +52,7 @@ export function Alerts({ inVisor = false }: { inVisor?: boolean }) {
       {proposed ? (
         <div className="mt-3 border-t pt-3">
           <p className="text-[13px] leading-relaxed">
-            A new route, the dashed green line: {change(proposed.addedM, fmtDistance, 'longer', 'shorter', 'the same length')}
+            {inVisor ? 'A new route' : 'A new route, the dashed green line'}: {change(proposed.addedM, fmtDistance, 'longer', 'shorter', 'the same length')}
             {proposed.addedS !== 0 ? `, ${change(proposed.addedS, fmtDuration, 'more', 'less', 'the same time')}` : ''}.
           </p>
           <div className="mt-2.5 flex flex-wrap gap-2">
