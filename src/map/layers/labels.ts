@@ -16,9 +16,11 @@ function labelElement(text: string, kind: 'feature' | 'place' | 'sample', key: s
   el.className = `map-label map-label-${kind}`;
   el.textContent = text;
   el.addEventListener('click', (e) => {
-    e.stopPropagation();
     const s = useApp.getState();
-    if (s.mode === 'map' && !s.picking) s.openPlace(key);
+    // While the planner or Rover View waits for a point, a click on a label is a click on the map.
+    if (s.mode !== 'map' || s.picking) return;
+    e.stopPropagation();
+    s.openPlace(key);
   });
   return el;
 }

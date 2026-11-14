@@ -64,9 +64,10 @@ export function App() {
       {/* The map chrome fades in once, after the first landing, and never waits again. */}
       <div
         className={cn(
-          'absolute inset-0 z-20 transition-opacity',
+          // The layer itself never takes the pointer: the map below must stay draggable between the panels.
+          'pointer-events-none absolute inset-0 z-20 transition-opacity',
           landed ? 'duration-700' : 'duration-0',
-          inMap ? 'opacity-100' : 'pointer-events-none opacity-0',
+          inMap ? 'opacity-100' : 'opacity-0',
         )}
         inert={!inMap}
       >

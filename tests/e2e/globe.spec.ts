@@ -23,7 +23,7 @@ test('opens on the planet, flies in and back out on one canvas', async ({ page }
 
   await page.keyboard.press('Enter');
   await page.waitForFunction(() => window.__areo?.getState().mode === 'map', undefined, { timeout: 30_000 });
-  await expect(page.getByRole('button', { name: 'Planet' })).toBeVisible();
+  await expect(page.getByRole('combobox', { name: 'Search places or coordinates' })).toBeVisible();
   await expect(page.getByRole('heading', { name: 'Plan a walk on Mars' })).toBeHidden();
 
   const state = await page.evaluate(() => ({
@@ -40,7 +40,8 @@ test('opens on the planet, flies in and back out on one canvas', async ({ page }
   expect(state.center[1]).toBeCloseTo(18.4, 1);
   expect(state.landed).toBe(true);
 
-  await page.getByRole('button', { name: 'Planet' }).click();
+  await page.getByRole('button', { name: 'Menu' }).click();
+  await page.getByRole('menuitem', { name: 'Back to the planet' }).click();
   await page.waitForFunction(() => window.__areo?.getState().mode === 'globe' && !window.__areo.getState().flying, undefined, {
     timeout: 30_000,
   });

@@ -14,6 +14,17 @@ interface RawFrame {
   camera: string;
 }
 
+/** A link from the feed is used only if it is an https address on a nasa.gov host. */
+function nasaUrl(value: string | undefined): string | null {
+  if (!value) return null;
+  try {
+    const url = new URL(value);
+    return url.protocol === 'https:' && (url.hostname === 'nasa.gov' || url.hostname.endsWith('.nasa.gov')) ? url.href : null;
+  } catch {
+    return null;
+  }
+}
+
 /** Up to four Navcam frames the rover took on a sol, asked of NASA's raw-images feed when wanted. */
 async function framesOn(sol: number, signal: AbortSignal): Promise<RawFrame[]> {
   const q = new URLSearchParams({
@@ -31,13 +42,16 @@ async function framesOn(sol: number, signal: AbortSignal): Promise<RawFrame[]> {
   const res = await fetch(`https://mars.nasa.gov/rss/api/?${q.toString()}`, { signal });
   if (!res.ok) throw new Error(`The feed answered ${res.status}`);
   const body = (await res.json()) as { images?: { image_files?: { medium?: string; small?: string; large?: string }; sample_type?: string; camera?: { instrument?: string } }[] };
-  const full = (body.images ?? []).filter((i) => i.sample_type === 'Full' && i.image_files?.medium);
+  const frames: RawFrame[] = [];
+  for (const image of body.images ?? []) {
+    if (image.sample_type !== 'Full') continue;
+    const src = nasaUrl(image.image_files?.medium);
+    if (!src) continue;
+    frames.push({ src, full: nasaUrl(image.image_files?.large) ?? src, camera: 'Navcam' });
+  }
   // Spread the picks across the sol rather than taking four frames of the same minute.
-  const step = Math.max(1, Math.floor(full.length / 4));
-  return full
-    .filter((_, i) => i % step === 0)
-    .slice(0, 4)
-    .map((i) => ({ src: i.image_files?.medium ?? '', full: i.image_files?.large ?? i.image_files?.medium ?? '', camera: i.camera?.instrument ?? 'Navcam' }));
+  const step = Math.max(1, Math.floor(frames.length / 4));
+  return frames.filter((_, i) => i % step === 0).slice(0, 4);
 }
 
 function FollowPerseverance({ traverse, places }: { traverse: Traverse; places: Place[] }) {

@@ -27,3 +27,7 @@ Plan: docs/superpowers/plans/2026-11-14-areo.md. One line per task, then rulings
   them either; the team decides how (new session or another model). Tasks 6, 7 and the exports in 10 wait on them.
 - Map night dimming floors at 0.6 (lighting model says 0.4) and the base image gets contrast +0.28: Jezero is dark basalt and a visitor arriving at Martian night must still read the map. A Full daylight switch is in Layers. Cost if wrong: one constant in src/map/terrain.ts.
 - Base and Crew dock tabs are left out until the simulation exists (they would be empty). Rover track content lives in Discover. Cost if wrong: two entries in src/ui/dock/tabs.ts.
+- E2E (Playwright, 12 tests, all pass): globe in and out on one canvas; marker and off-region click; search to
+  Cheyava Falls card with photo; typed coordinates; pointer readout; far side imagery at zoom 5; offline ground at
+  zoom 12; layers panel by keyboard; two-leg mission routes; mission editor (tasks, keyboard reorder, undo, pick on
+  map); out-of-region stop explains itself; Rover View (ground, walk, quality, clock restored).

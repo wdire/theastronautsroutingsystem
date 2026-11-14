@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { DndContext, KeyboardSensor, PointerSensor, closestCenter, useSensor, useSensors, type DragEndEvent } from '@dnd-kit/core';
+import { DndContext, KeyboardSensor, MeasuringStrategy, PointerSensor, closestCenter, useSensor, useSensors, type DragEndEvent } from '@dnd-kit/core';
 import { SortableContext, sortableKeyboardCoordinates, useSortable, verticalListSortingStrategy } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
 import { Camera, ChevronDown, FlaskConical, GripVertical, Pencil, Plus, Ruler, ScanSearch, Trash2, X } from 'lucide-react';
@@ -176,7 +176,15 @@ export function StopList() {
 
   if (stops.length === 0) return null;
   return (
-    <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={onDragEnd}>
+    // A stop closes while it is carried, and the list is measured again, so an open stop full of
+    // tasks moves as easily as a closed one, by pointer or by keyboard.
+    <DndContext
+      sensors={sensors}
+      collisionDetection={closestCenter}
+      measuring={{ droppable: { strategy: MeasuringStrategy.Always } }}
+      onDragStart={() => setOpenId(null)}
+      onDragEnd={onDragEnd}
+    >
       <SortableContext items={stops.map((s) => s.id)} strategy={verticalListSortingStrategy}>
         <ol className="flex flex-col gap-1.5" aria-label="Stops">
           {stops.map((stop, i) => (
