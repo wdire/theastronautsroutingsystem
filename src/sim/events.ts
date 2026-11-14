@@ -55,6 +55,47 @@ function pointAt(path: readonly PathPoint[], along: Float64Array, distM: number)
   return { lon: a[0] + (b[0] - a[0]) * f, lat: a[1] + (b[1] - a[1]) * f, heading: bearingDeg(a[0], a[1], b[0], b[1]) };
 }
 
+/** Clear ground kept between a devil's edge and any stop, the base or the route's ends, m. */
+export const DEVIL_CLEARANCE_M = 120;
+
+/** The places a devil must never cover: every stop, home, and both ends of the path. */
+function keepClear(run: MissionRun): [number, number][] {
+  const pts: [number, number][] = [[run.home[0], run.home[1]]];
+  for (const ls of run.legStops) {
+    const p = run.path[ls.index];
+    if (p) pts.push([p[0], p[1]]);
+  }
+  const first = run.path[0];
+  const last = run.path[run.path.length - 1];
+  if (first) pts.push([first[0], first[1]]);
+  if (last) pts.push([last[0], last[1]]);
+  return pts;
+}
+
+function covers(ev: ScheduledEvent, pts: readonly [number, number][]): boolean {
+  if (ev.lon === undefined || ev.lat === undefined || ev.radiusM === undefined) return false;
+  const reach = ev.radiusM + DEVIL_CLEARANCE_M;
+  return pts.some(([lon, lat]) => distanceM(lon, lat, ev.lon!, ev.lat!) < reach);
+}
+
+/**
+ * A devil near a distance along the route that leaves every stop and the base clear: a devil sitting on a stop
+ * cannot be routed around, and a real crew would wait for it to pass instead. Tries the distance first, then
+ * steps either way and shrinks the devil; null if the route has no clear stretch for one.
+ */
+function clearDevilNear(run: MissionRun, distM: number, minM: number, maxM: number, r: readonly number[], id: string): ScheduledEvent | null {
+  const pts = keepClear(run);
+  for (const shrink of [1, 0.7, 0.45]) {
+    for (const step of [0, 1, -1, 2, -2, 3, -3, 4, -4, 6, -6, 8, -8]) {
+      const d = distM + step * 150;
+      if (d < minM || d > maxM) continue;
+      const ev = devilAt(run, d, [(r[0] ?? 0.5) * shrink, r[1] ?? 0.5], id);
+      if (!covers(ev, pts)) return ev;
+    }
+  }
+  return null;
+}
+
 /** A devil on the route at a distance, nudged sideways a little but still across the line. */
 function devilAt(run: MissionRun, distM: number, r: readonly number[], id: string): ScheduledEvent {
   const tl = timelineOf(run);
@@ -82,7 +123,8 @@ export function scheduleEvents(run: MissionRun, rng: number): { events: Schedule
   const outM = outboundM(run);
   if ((r[0] ?? 1) < DUST_DEVIL_CHANCE && outM >= 500) {
     const d = (0.3 + (r[1] ?? 0.5) * 0.35) * outM;
-    events.push(devilAt(run, d, [r[2] ?? 0.5, r[3] ?? 0.5], `dust:${run.id}`));
+    const ev = clearDevilNear(run, d, 0.2 * outM, 0.8 * outM, [r[2] ?? 0.5, r[3] ?? 0.5], `dust:${run.id}`);
+    if (ev) events.push(ev);
   }
   if (run.scenario.dust === 'regionalStorm' && run.scenario.storm) {
     const s = run.scenario.storm;
@@ -198,7 +240,10 @@ export function forceEvent(world: World, kind: EventKind): World {
     const tl = timelineOf(run);
     const left = (tl.along[tl.along.length - 1] ?? 0) - crew.distM;
     if (left < 50) return world;
-    ev = devilAt(run, crew.distM + Math.min(DEVIL_WARNING_M, left * 0.6), [r[0] ?? 0.5, r[1] ?? 0.5], id);
+    const near = crew.distM + Math.min(DEVIL_WARNING_M, left * 0.6);
+    const clear = clearDevilNear(run, near, crew.distM + 100, crew.distM + left - 50, [r[0] ?? 0.5, r[1] ?? 0.5], id);
+    if (!clear) return world;
+    ev = clear;
   } else if (kind === 'storm') {
     const s = run.scenario.storm;
     if (s) ev = { id, kind, atUtcMs: world.utcMs, lon: s.lon, lat: s.lat, radiusM: s.radiusKm * 1000 };

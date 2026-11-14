@@ -274,7 +274,8 @@ describe('route changes', () => {
     expect(p.via[0]?.stopId).toBe('s1');
     expect(p.via[0]?.name).toBe('Delta front');
     expect(distanceM(p.via[1]!.lon, p.via[1]!.lat, PATH[20]![0], PATH[20]![1])).toBeLessThan(1);
-    expect(p.hazards).toEqual(w.hazards);
+    // The forced devil is routed around; one already over the crew or a stop would only block the router.
+    expect(p.hazards.map((h) => h.id)).toContain(hazard!.id);
 
     // The router's answer, made by hand: on to the stop, then a 400 m dog-leg east around the devil.
     const path: PathPoint[] = [[crew.lon, crew.lat, crew.elev], ...line(700, 1000)];

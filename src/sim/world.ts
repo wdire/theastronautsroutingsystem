@@ -759,12 +759,16 @@ export function proposal(world: World, alertId: string): RouteProposal | null {
     if (homeIsAhead) via.push(home);
     else if (end && (!last || distanceM(last.lon, last.lat, end[0], end[1]) > 5)) via.push({ lon: end[0], lat: end[1] });
   }
+  // A zone over the crew or over a place it must reach cannot be routed around, only waited out: the router
+  // would refuse the whole route. Such a zone is left to the crew's judgement instead of blocking the way home.
+  const ends: [number, number][] = [[crew.lon, crew.lat], ...via.map((v): [number, number] => [v.lon, v.lat])];
+  const hazards = world.hazards.filter((h) => !ends.some(([lon, lat]) => distanceM(lon, lat, h.lon, h.lat) <= h.radiusM + 30));
   return {
     alertId,
     action: kind,
     from: [crew.lon, crew.lat],
     via,
-    hazards: world.hazards,
+    hazards,
     vehicle: run.vehicle,
     departUtcMs: world.utcMs,
     homeIsAhead,

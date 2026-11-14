@@ -2,7 +2,8 @@ import { describe, expect, it } from 'vitest';
 import type { MissionPlan, PathPoint, Scenario, TripResult, TripSample, VehicleId } from '@/engines/types';
 import { VEHICLES } from '@/engines/vehicles';
 import { pathStats, shapeOnlyTrip } from '@/planner/geometry';
-import { DUST_DEVIL_CHANCE, forceEvent, rngNext, scheduleEvents } from './events';
+import { DEVIL_CLEARANCE_M, DUST_DEVIL_CHANCE, forceEvent, rngNext, scheduleEvents } from './events';
+import { distanceM } from '@/lib/geo';
 import type { World } from './types';
 import { createWorld, crewAt, startMission, tick } from './world';
 
@@ -72,7 +73,7 @@ describe('scheduleEvents', () => {
     expect(scheduleEvents(run, 1234)).toEqual(scheduleEvents(run, 1234));
   });
 
-  it('puts at most one dust devil between 30% and 65% of the way out, 150 to 300 m across in radius', () => {
+  it('puts at most one dust devil between 20% and 80% of the way out, 150 to 300 m in radius, clear of every stop and both ends', () => {
     let devils = 0;
     for (let seed = 1; seed <= 200; seed++) {
       const run = started(seed).run!;
@@ -83,8 +84,11 @@ describe('scheduleEvents', () => {
       if (!d) continue;
       devils++;
       const alongM = (d.lat! - LAT0) * M_PER_DEG;
-      expect(alongM).toBeGreaterThanOrEqual(0.3 * 2000 - 1);
-      expect(alongM).toBeLessThanOrEqual(0.65 * 2000 + 1);
+      expect(alongM).toBeGreaterThanOrEqual(0.2 * 2000 - 1);
+      expect(alongM).toBeLessThanOrEqual(0.8 * 2000 + 1);
+      // A devil over a stop or an end could not be routed around.
+      const keep = [run.home, ...run.legStops.map((ls) => run.path[ls.index]!), run.path[0]!, run.path[run.path.length - 1]!];
+      for (const p of keep) expect(distanceM(p[0], p[1], d.lon!, d.lat!)).toBeGreaterThan(d.radiusM! + DEVIL_CLEARANCE_M - 1);
       expect(d.radiusM!).toBeGreaterThanOrEqual(150);
       expect(d.radiusM!).toBeLessThanOrEqual(300);
       expect(d.atUtcMs).toBeGreaterThanOrEqual(run.legStartUtcMs);
