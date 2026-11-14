@@ -1,7 +1,7 @@
 import { BufferAttribute, BufferGeometry, CanvasTexture, LinearMipmapLinearFilter, Mesh, MeshStandardMaterial, NoColorSpace, RepeatWrapping, SRGBColorSpace, Vector2, type Texture } from 'three';
 import { loadGrid } from '@/data/dem';
 import { getCoverage, hasTile, nearestTile, tileUrl } from '@/data/coverage';
-import { boxTouchesHirise, loadHiriseHeights, loadHiriseImage, type HiriseHeights, type HiriseImage } from '@/data/hirise';
+import { boxTouchesHirise, loadEsriHiriseImage, loadHiriseHeights, loadHiriseImage, type HiriseHeights, type HiriseImage } from '@/data/hirise';
 import { makeGrid } from '@/engines/terrain';
 import { gradePixels } from '@/engines/grading';
 import { latToPx, lonToPx, smoothstep } from '@/lib/geo';
@@ -21,8 +21,12 @@ export interface PatchSpec {
   imgZoom: number;
   /** Finest package elevation zoom to use. */
   demZoom: number;
-  /** Inside the Jezero HiRISE mosaic: the levels of its elevation model (0 is 1 m) and image (0 is 25 cm). */
-  hirise?: { dtm: number; ortho: number };
+  /**
+   * Inside the Jezero HiRISE mosaic: the level of USGS's elevation model (0 is 1 m) and of the image,
+   * from USGS's 25 cm mosaic (0 is 25 cm) or Esri's tiled HiRISE layer (14 is about 1.3 m). `priority`
+   * orders the USGS requests: lower goes first.
+   */
+  hirise?: { dtm: number; ortho: number; image: 'usgs' | 'esri'; priority: number };
   /**
    * How this layer meets the coarser one around it: over the ring from `fromM` to `toM` inside its
    * edge its heights turn into the coarser layer’s and end `sinkM` under them, so the coarser layer
@@ -41,11 +45,11 @@ export const NEAR: PatchSpec = {
   samples: 501,
   imgZoom: 14,
   demZoom: 14,
-  hirise: { dtm: 2, ortho: 3 },
+  hirise: { dtm: 2, ortho: 14, image: 'esri', priority: 3 },
   blend: { demZoom: MID.demZoom, fromM: 330, toM: 140, sinkM: 0.8 },
 };
 /** Under the viewer’s feet: half-metre triangles on the 1 m model, the 25 cm image on top. */
-export const CLOSE: PatchSpec = { kind: 'close', sizeM: 256, samples: 513, imgZoom: 14, demZoom: 14, hirise: { dtm: 0, ortho: 0 }, blend: { fromM: 44, toM: 16, sinkM: 0.12 } };
+export const CLOSE: PatchSpec = { kind: 'close', sizeM: 256, samples: 513, imgZoom: 14, demZoom: 14, hirise: { dtm: 0, ortho: 0, image: 'usgs', priority: 0 }, blend: { fromM: 44, toM: 16, sinkM: 0.12 } };
 
 /** How far inside a layer’s edge the coarser layer’s hole stops, m. Inside the ring where the two agree. */
 export const HOLE_INSET_M = { mid: 700, near: 110, close: 20 } as const;
@@ -188,8 +192,10 @@ export async function buildPatch(frame: Frame, cx: number, cz: number, spec: Pat
     loadGrid(box, 2_400_000, spec.demZoom),
     blend?.demZoom !== undefined ? loadGrid(box, 600_000, blend.demZoom).catch(() => null) : null,
     imagery(west, south, east, north, spec.imgZoom, spec.kind === 'near' || spec.kind === 'close'),
-    useHirise && spec.hirise ? loadHiriseHeights(box, spec.hirise.dtm, opts.signal).catch(() => null) : null,
-    useHirise && spec.hirise ? loadHiriseImage(box, spec.hirise.ortho, opts.signal).catch(() => null) : null,
+    useHirise && spec.hirise ? loadHiriseHeights(box, spec.hirise.dtm, opts.signal, spec.hirise.priority).catch(() => null) : null,
+    useHirise && spec.hirise
+      ? (spec.hirise.image === 'esri' ? loadEsriHiriseImage(box, spec.hirise.ortho, opts.signal) : loadHiriseImage(box, spec.hirise.ortho, opts.signal, spec.hirise.priority + 1)).catch(() => null)
+      : null,
   ]);
   const grid = makeGrid(loaded.spec);
   const coarseGrid = coarse ? makeGrid(coarse.spec) : null;

@@ -36,15 +36,21 @@ function devApi(env: Record<string, string>): Plugin {
           const mod = (await server.ssrLoadModule(file)) as { GET?: (r: Request) => Promise<Response>; default?: (r: Request) => Promise<Response> };
           const handler = mod.GET ?? mod.default;
           if (!handler) return next();
-          const response = await handler(new Request(url, { method: req.method ?? 'GET' }));
+          // A closed connection aborts the request, so a function can stop work nobody will read.
+          const abort = new AbortController();
+          res.on('close', () => {
+            if (!res.writableFinished) abort.abort();
+          });
+          const response = await handler(new Request(url, { method: req.method ?? 'GET', signal: abort.signal }));
           const body = Buffer.from(await response.arrayBuffer());
           const headers: Record<string, string> = {};
           response.headers.forEach((value, k) => (headers[k] = value));
-          if ((headers['cache-control'] ?? '').includes('immutable')) {
+          if (response.status === 200 && (headers['cache-control'] ?? '').includes('immutable')) {
             mkdirSync(DEV_CACHE, { recursive: true });
             writeFileSync(cached, body);
             writeFileSync(`${cached}.json`, JSON.stringify({ status: response.status, headers }));
           }
+          if (abort.signal.aborted) return;
           res.statusCode = response.status;
           for (const [k, v] of Object.entries(headers)) res.setHeader(k, v);
           res.end(body);

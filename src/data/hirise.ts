@@ -1,6 +1,10 @@
 import { decodeTerrarium } from './terrarium';
 import { HIRISE_TILE, insideHirise, levelRes, lonLatToSource, tileUrlFor, type HiriseLayer } from './hiriseGrid';
 
+const ESRI_HIRISE = 'https://astro.arcgis.com/arcgis/rest/services/OnMars/HiRISE/MapServer/tile';
+/** Degrees per pixel of Esri's global HiRISE layer at level 0; 512 px tiles from 180 W, 90 N. */
+const ESRI_BASE_RES = 0.3515625;
+
 /**
  * The HiRISE mosaics of Jezero, streamed tile by tile from /api/hirise, which cuts them from USGS.
  * A mosaic is a rectangle of whole tiles at one level; pixels outside the image are empty.
@@ -38,8 +42,43 @@ type Tile = ImageData | null;
 const tiles = new Map<string, Promise<Tile>>();
 const TILES_MAX = 96;
 
-async function fetchTile(layer: HiriseLayer, level: number, x: number, y: number, signal?: AbortSignal): Promise<Tile> {
-  const res = await fetch(tileUrlFor(layer, level, x, y), signal ? { signal } : undefined);
+/**
+ * At most this many tile requests at once. A cold tile takes seconds to cut, and the browser opens only six
+ * connections to the app's own server: the rest must stay free for the package tiles the view opens on.
+ */
+const MAX_IN_FLIGHT = 3;
+let inFlight = 0;
+const waiting: { priority: number; start: () => void }[] = [];
+
+function nextWaiting(): void {
+  while (inFlight < MAX_IN_FLIGHT && waiting.length > 0) {
+    // Lowest number first: the ground under the viewer before the ground a kilometre off.
+    waiting.sort((a, b) => a.priority - b.priority);
+    waiting.shift()?.start();
+  }
+}
+
+function slot<T>(priority: number, job: () => Promise<T>): Promise<T> {
+  return new Promise<T>((resolve, reject) => {
+    waiting.push({
+      priority,
+      start: () => {
+        inFlight += 1;
+        job()
+          .then(resolve, reject)
+          .finally(() => {
+            inFlight -= 1;
+            nextWaiting();
+          });
+      },
+    });
+    nextWaiting();
+  });
+}
+
+async function decodeTile(url: string, signal?: AbortSignal): Promise<Tile> {
+  if (signal?.aborted) throw new DOMException('aborted', 'AbortError');
+  const res = await fetch(url, signal ? { signal } : undefined);
   if (res.status === 204) return null;
   if (!res.ok || !(res.headers.get('content-type') ?? '').startsWith('image/')) throw new Error(`HiRISE tile answered ${res.status}`);
   // The bytes are heights for the elevation model: no colour management, no premultiplied alpha.
@@ -52,7 +91,7 @@ async function fetchTile(layer: HiriseLayer, level: number, x: number, y: number
   return ctx.getImageData(0, 0, HIRISE_TILE, HIRISE_TILE);
 }
 
-function tile(layer: HiriseLayer, level: number, x: number, y: number, signal?: AbortSignal): Promise<Tile> {
+function tile(layer: HiriseLayer | 'esri', level: number, x: number, y: number, signal?: AbortSignal, priority = 5): Promise<Tile> {
   const key = `${layer}/${level}/${x}/${y}`;
   let hit = tiles.get(key);
   if (hit) {
@@ -60,7 +99,8 @@ function tile(layer: HiriseLayer, level: number, x: number, y: number, signal?: 
     tiles.set(key, hit);
     return hit;
   }
-  hit = fetchTile(layer, level, x, y, signal);
+  // Esri's tiles come from a CDN and do not hold up the app's own server: no queue for them.
+  hit = layer === 'esri' ? decodeTile(`${ESRI_HIRISE}/${level}/${y}/${x}`, signal) : slot(priority, () => decodeTile(tileUrlFor(layer, level, x, y), signal));
   // A failure is forgotten, so the next view asks again.
   hit.catch(() => tiles.delete(key));
   tiles.set(key, hit);
@@ -93,15 +133,20 @@ async function mosaic(
   box: readonly [number, number, number, number],
   each: (tile: ImageData, dx: number, dy: number) => void,
   signal?: AbortSignal,
+  priority = 5,
 ): Promise<Omit<HiriseMosaic, 'filled'> & { tilesWithData: number; tiles: number }> {
   const [west, south, east, north] = box;
   const r = tileRange(layer, level, west, south, east, north);
   const jobs: Promise<void>[] = [];
   let tilesWithData = 0;
+  const mid = lonLatToSource(layer, (west + east) / 2, (south + north) / 2);
+  const span = HIRISE_TILE * 2 ** level;
   for (let ty = r.y0; ty <= r.y1; ty += 1) {
     for (let tx = r.x0; tx <= r.x1; tx += 1) {
+      // The tile under the middle of the box first, then outward.
+      const away = Math.hypot((tx + 0.5) * span - mid.col, (ty + 0.5) * span - mid.row) / span;
       jobs.push(
-        tile(layer, level, tx, ty, signal).then((t) => {
+        tile(layer, level, tx, ty, signal, priority + away * 0.1).then((t) => {
           if (!t) return;
           tilesWithData += 1;
           each(t, (tx - r.x0) * HIRISE_TILE, (ty - r.y0) * HIRISE_TILE);
@@ -124,7 +169,7 @@ async function mosaic(
 }
 
 /** The elevation model over a box at a level (0 is 1 m, each level doubles it). */
-export async function loadHiriseHeights(box: readonly [number, number, number, number], level: number, signal?: AbortSignal): Promise<HiriseHeights> {
+export async function loadHiriseHeights(box: readonly [number, number, number, number], level: number, signal?: AbortSignal, priority = 5): Promise<HiriseHeights> {
   const r = tileRange('dtm', level, box[0], box[1], box[2], box[3]);
   const width = (r.x1 - r.x0 + 1) * HIRISE_TILE;
   const height = (r.y1 - r.y0 + 1) * HIRISE_TILE;
@@ -147,6 +192,7 @@ export async function loadHiriseHeights(box: readonly [number, number, number, n
       }
     },
     signal,
+    priority,
   );
   const scale = 2 ** level;
   const heightAt = (lon: number, lat: number): number | null => {
@@ -170,7 +216,7 @@ export async function loadHiriseHeights(box: readonly [number, number, number, n
 }
 
 /** The 25 cm image over a box at a level (0 is 25 cm, each level doubles it), as a canvas. */
-export async function loadHiriseImage(box: readonly [number, number, number, number], level: number, signal?: AbortSignal): Promise<HiriseImage> {
+export async function loadHiriseImage(box: readonly [number, number, number, number], level: number, signal?: AbortSignal, priority = 5): Promise<HiriseImage> {
   const r = tileRange('ortho', level, box[0], box[1], box[2], box[3]);
   const canvas = document.createElement('canvas');
   canvas.width = (r.x1 - r.x0 + 1) * HIRISE_TILE;
@@ -197,6 +243,7 @@ export async function loadHiriseImage(box: readonly [number, number, number, num
       ctx.putImageData(rgba, dx, dy);
     },
     signal,
+    priority,
   );
   const scale = 2 ** level;
   const uvOf = (lon: number, lat: number): [number, number] => {
@@ -204,4 +251,46 @@ export async function loadHiriseImage(box: readonly [number, number, number, num
     return [(s.col / scale - m.col0) / m.width, 1 - (s.row / scale - m.row0) / m.height];
   };
   return { ...m, canvas, uvOf, filled: filledPx / (m.width * m.height) };
+}
+
+/**
+ * Esri's global HiRISE layer over a box (grey, transparent where no image), on its own simple
+ * cylindrical grid: level 14 is about 1.3 m a pixel. Tiled on a CDN, so it costs the app's server
+ * nothing; used for the ground beyond the close patch.
+ */
+export async function loadEsriHiriseImage(box: readonly [number, number, number, number], level: number, signal?: AbortSignal): Promise<HiriseImage> {
+  const [west, south, east, north] = box;
+  const res = ESRI_BASE_RES / 2 ** level;
+  const span = HIRISE_TILE * res;
+  const x0 = Math.floor((west + 180) / span);
+  const x1 = Math.floor((east + 180) / span);
+  const y0 = Math.floor((90 - north) / span);
+  const y1 = Math.floor((90 - south) / span);
+  const canvas = document.createElement('canvas');
+  canvas.width = (x1 - x0 + 1) * HIRISE_TILE;
+  canvas.height = (y1 - y0 + 1) * HIRISE_TILE;
+  const ctx = canvas.getContext('2d');
+  if (!ctx) throw new Error('no 2d context');
+  let filledPx = 0;
+  const jobs: Promise<void>[] = [];
+  for (let ty = y0; ty <= y1; ty += 1) {
+    for (let tx = x0; tx <= x1; tx += 1) {
+      jobs.push(
+        tile('esri', level, tx, ty, signal)
+          .then((t) => {
+            if (!t) return;
+            for (let i = 0; i < t.data.length; i += 4) if ((t.data[i + 3] ?? 0) > 127) filledPx += 1;
+            ctx.putImageData(t, (tx - x0) * HIRISE_TILE, (ty - y0) * HIRISE_TILE);
+          })
+          // A missing tile leaves a hole the shader fills from the orbital colour.
+          .catch(() => undefined),
+      );
+    }
+  }
+  await Promise.all(jobs);
+  const width = canvas.width;
+  const height = canvas.height;
+  const uvOf = (lon: number, lat: number): [number, number] => [((lon + 180) / res - x0 * HIRISE_TILE) / width, 1 - ((90 - lat) / res - y0 * HIRISE_TILE) / height];
+  const metres = (res * Math.PI * 3_396_190) / 180;
+  return { layer: 'ortho', level, col0: x0 * HIRISE_TILE, row0: y0 * HIRISE_TILE, width, height, res: metres, filled: filledPx / (width * height), canvas, uvOf };
 }

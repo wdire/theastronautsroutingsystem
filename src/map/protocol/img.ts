@@ -1,7 +1,7 @@
 import { getCoverage, loadCoverage, nearestTile, tileUrl, type Coverage, type TileRef } from '@/data/coverage';
 import { flatTile, MARS_FLAT, type TileData } from './index';
 import { blendDetail, highPassRadius, luminance, type DetailLayer } from './detail';
-import { CTX, HIRISE, USGS_HIRISE, VIKING, warpToTile, type EquirectSource } from './live';
+import { CTX, HIRISE, VIKING, warpToTile, type EquirectSource } from './live';
 import { insideHirise } from '@/data/hiriseGrid';
 import { pxToLat, pxToLon } from '@/lib/geo';
 
@@ -123,9 +123,8 @@ export async function imgTile(_rest: string[], z: number, x: number, y: number, 
     wanted.push(detailLayer(VIKING, z, x, y, pad, highPassRadius(z, ref.z), 0.9, false));
   }
   if (z >= HIRISE_FROM) {
-    // Over Jezero's own HiRISE mosaic, its 25 cm; elsewhere the sparser global HiRISE layer.
-    const onJezero = tileTouchesHirise(z, x, y);
-    wanted.push(detailLayer(onJezero ? USGS_HIRISE : HIRISE, z, x, y, pad, highPassRadius(z, Math.max(ref.z, CTX_NATIVE)), onJezero ? 1.2 : 1.1, true));
+    // Esri's tiled HiRISE layer: served from a CDN, so the map never waits on the slower USGS cut.
+    wanted.push(detailLayer(HIRISE, z, x, y, pad, highPassRadius(z, Math.max(ref.z, CTX_NATIVE)), 1.25, true));
   }
   if (wanted.length === 0 || (typeof navigator !== 'undefined' && navigator.onLine === false)) return canvas.transferToImageBitmap();
 

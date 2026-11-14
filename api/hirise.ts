@@ -19,7 +19,7 @@ interface Strips {
 const strips = new Map<HiriseLayer, Promise<Strips>>();
 
 /** Ranges in flight across every tile this instance is cutting: enough to fill the pipe, not to flood it. */
-const MAX_IN_FLIGHT = 96;
+const MAX_IN_FLIGHT = 256;
 let inFlight = 0;
 const queue: (() => void)[] = [];
 
@@ -162,7 +162,7 @@ export async function cutTile(layer: HiriseLayer, level: number, tx: number, ty:
   const channels = layer === 'ortho' ? 2 : 4;
   const out = new Uint8Array(n * n * channels);
   let any = false;
-  await pool(n, 64, async (r) => {
+  await pool(n, 128, async (r) => {
     const srcRow = win.row0 + r * step + (step >> 1);
     if (srcRow >= spec.height) return;
     const c0 = win.col0;
@@ -221,7 +221,13 @@ export async function GET(request: Request): Promise<Response> {
   // clock for giving up starts when its turn comes.
   if (cutting >= MAX_TILES) await new Promise<void>((resolve) => waitingTiles.push(resolve));
   cutting += 1;
-  const signal = AbortSignal.timeout(50_000);
+  // Whoever asked may have gone (the view moved on): then the tile is not cut at all.
+  const signal = AbortSignal.any([request.signal, AbortSignal.timeout(50_000)]);
+  if (signal.aborted) {
+    cutting -= 1;
+    waitingTiles.shift()?.();
+    return answer(null, 499, 'no-store');
+  }
   try {
     const tile = await cutTile(layer, level, tx, ty, signal);
     // Outside the mosaic, or wholly in its empty corners: say so, and let that be cached too.
