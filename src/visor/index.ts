@@ -16,7 +16,7 @@ import { sunPosition } from '@/engines/marsTime';
 import { tauAt, visibilityKm } from '@/engines/environment';
 import { groundAt } from '@/data/dem';
 import { bearingOf, toLonLat, type Frame } from './frame';
-import { buildPatch, FAR, MID, NEAR, type Patch, type PatchSpec } from './patch';
+import { buildPatch, FAR, HOLE_INSET_M, MID, NEAR, type Patch, type PatchSpec } from './patch';
 import { fieldSlopeAt } from './heightfield';
 import { groundQuality } from './groundShader';
 import { createSky } from './sky';
@@ -161,8 +161,8 @@ export async function mountVisor(canvas: HTMLCanvasElement, options: VisorOption
   const updateHoles = () => {
     const { far, mid, near } = layers;
     // The hole stops a little inside the finer patch, so the two overlap rather than leave a crack.
-    if (far.patch) far.patch.setHole(mid.patch?.cx ?? 1e9, mid.patch?.cz ?? 1e9, mid.patch ? MID.sizeM / 2 - 700 : 0);
-    if (mid.patch) mid.patch.setHole(near.patch?.cx ?? 1e9, near.patch?.cz ?? 1e9, near.patch ? NEAR.sizeM / 2 - 110 : 0);
+    if (far.patch) far.patch.setHole(mid.patch?.cx ?? 1e9, mid.patch?.cz ?? 1e9, mid.patch ? MID.sizeM / 2 - HOLE_INSET_M.mid : 0);
+    if (mid.patch) mid.patch.setHole(near.patch?.cx ?? 1e9, near.patch?.cz ?? 1e9, near.patch ? NEAR.sizeM / 2 - HOLE_INSET_M.near : 0);
   };
 
   const ensure = (kind: PatchSpec['kind'], x: number, z: number) => {

@@ -19,12 +19,21 @@ export interface PatchSpec {
   imgZoom: number;
   /** Finest elevation zoom to use. */
   demZoom: number;
+  /**
+   * How this layer meets the coarser one around it: over `ringM` inside its edge its heights turn into
+   * the coarser layer's (read at `demZoom`), and end `sinkM` under them so the coarser layer draws on top.
+   * Without this the two surfaces part wherever their data disagree, and the sky shows through the gap.
+   */
+  blend?: { demZoom: number; fromM: number; toM: number; sinkM: number };
 }
 
 /** The three ground layers, coarse to fine. Each finer one cuts a hole in the one before it. */
 export const FAR: PatchSpec = { kind: 'far', sizeM: 85_000, samples: 257, imgZoom: 10, demZoom: 9 };
-export const MID: PatchSpec = { kind: 'mid', sizeM: 40_000, samples: 401, imgZoom: 12, demZoom: 10 };
-export const NEAR: PatchSpec = { kind: 'near', sizeM: 2_000, samples: 335, imgZoom: 14, demZoom: 14 };
+export const MID: PatchSpec = { kind: 'mid', sizeM: 40_000, samples: 401, imgZoom: 12, demZoom: 10, blend: { demZoom: FAR.demZoom, fromM: 4_000, toM: 1_000, sinkM: 10 } };
+export const NEAR: PatchSpec = { kind: 'near', sizeM: 2_000, samples: 335, imgZoom: 14, demZoom: 14, blend: { demZoom: MID.demZoom, fromM: 330, toM: 140, sinkM: 0.8 } };
+
+/** How far inside a layer's edge the coarser layer's hole stops, m. Inside the ring where the two agree. */
+export const HOLE_INSET_M = { mid: 700, near: 110 } as const;
 
 export interface Patch {
   spec: PatchSpec;
@@ -112,11 +121,15 @@ export async function buildPatch(frame: Frame, cx: number, cz: number, spec: Pat
   const padLon = (east - west) * 0.02;
   const padLat = (north - south) * 0.02;
 
-  const [loaded, tex] = await Promise.all([
-    loadGrid([west - padLon, south - padLat, east + padLon, north + padLat], 2_400_000, spec.demZoom),
+  const box: [number, number, number, number] = [west - padLon, south - padLat, east + padLon, north + padLat];
+  const [loaded, coarse, tex] = await Promise.all([
+    loadGrid(box, 2_400_000, spec.demZoom),
+    spec.blend ? loadGrid(box, 600_000, spec.blend.demZoom).catch(() => null) : null,
     imagery(west, south, east, north, spec.imgZoom, spec.kind === 'near'),
   ]);
   const grid = makeGrid(loaded.spec);
+  const coarseGrid = coarse ? makeGrid(coarse.spec) : null;
+  const blend = spec.blend;
 
   const n = spec.samples;
   const step = spec.sizeM / (n - 1);
@@ -130,7 +143,16 @@ export async function buildPatch(frame: Frame, cx: number, cz: number, spec: Pat
       const [lon, lat] = toLonLat(frame, x, z);
       const i = iz * n + ix;
       // Heights are relative to the origin, less the fall of the planet's curve away from it.
-      const y = grid.elevation(lat, lon) - frame.base - curvatureDrop(x, z);
+      let elevation = grid.elevation(lat, lon);
+      if (blend && coarseGrid) {
+        const inside = half - Math.max(Math.abs(x - cx), Math.abs(z - cz));
+        if (inside < blend.fromM) {
+          const t = Math.min(1, (blend.fromM - inside) / (blend.fromM - blend.toM));
+          const w = t * t * (3 - 2 * t);
+          elevation += (coarseGrid.elevation(lat, lon) - elevation) * w - blend.sinkM * w;
+        }
+      }
+      const y = elevation - frame.base - curvatureDrop(x, z);
       heights[i] = y;
       positions[i * 3] = x;
       positions[i * 3 + 1] = y;
