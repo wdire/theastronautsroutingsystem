@@ -11,6 +11,7 @@ import { loadGeology } from '@/data/datasets';
 import { finestZoomAt, groundAt, type GroundSample } from '@/data/dem';
 import { getCoverage } from '@/data/coverage';
 import { unitAt, type GeoUnit } from '@/engines/geology';
+import { distanceM } from '@/lib/geo';
 import { conditionsAt } from '@/engines/environment';
 import { marsTime } from '@/engines/marsTime';
 import { REGION, inBox } from '@/lib/constants';
@@ -18,6 +19,7 @@ import { fmtClock, fmtDeg, fmtDistance, fmtElevation, fmtLatLon, fmtNumber, fmtT
 import { Button } from '@/ui/components/ui/button';
 import { Row, Section } from '@/ui/shell/Section';
 import { Photos } from './Photos';
+import { NasaImages } from './NasaImages';
 
 type Loaded<T> = { state: 'loading' } | { state: 'ready'; value: T } | { state: 'missing' };
 
@@ -161,6 +163,7 @@ export function PlaceCard() {
   const cond = ground ? conditionsAt(v.lat, v.lon, ground.elev, utcMs, scenario) : null;
   const time = marsTime(utcMs, v.lon);
   const inRegion = inBox(REGION, v.lon, v.lat);
+  const base = useApp.getState().base;
   const cov = getCoverage();
   const sourceZoom = cov ? finestZoomAt(cov, v.lon, v.lat) : 0;
   const [elevValue, elevUnit] = ground ? split(fmtElevation(ground.elev)) : ['…', ''];
@@ -212,6 +215,7 @@ export function PlaceCard() {
           </div>
         ) : null}
         {v.detail ? <p className="px-4 pt-2 text-[13px] leading-relaxed text-muted-foreground">{v.detail}</p> : null}
+        {v.kind === 'point' ? null : <NasaImages name={v.name} />}
 
         <div className="flex flex-wrap gap-1.5 px-4 pt-4">
           <Button onClick={routeHere} disabled={!inRegion} className="h-9 px-3.5 text-[13px] font-semibold">
@@ -238,7 +242,10 @@ export function PlaceCard() {
           </ActionButton>
         </div>
         {!inRegion ? (
-          <p className="px-4 pt-2 text-xs text-muted-foreground">Routes are planned only in the Jezero and Nili Fossae region.</p>
+          <p className="px-4 pt-2 text-xs leading-relaxed text-muted-foreground">
+            Outside the mapped region, {fmtDistance(distanceM(base.lon, base.lat, v.lon, v.lat))} from {base.name}. You can look from orbit; routes, a base and Rover View need
+            the terrain of Jezero and Nili Fossae.
+          </p>
         ) : null}
 
         <dl className="mt-4 grid grid-cols-2 gap-x-4 gap-y-3 border-t px-4 py-4">

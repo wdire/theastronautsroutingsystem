@@ -49,7 +49,7 @@ export function Hints() {
   const verb = touch ? 'Tap' : 'Click';
   const text = [
     `${verb} anywhere on the map, or search, to see what is there.`,
-    'Plan a mission: choose a start, then add the places you want to work at.',
+    'Plan a mission: it leaves your base, visits the places you add and comes home before the air runs low.',
     'Start the mission and watch it run, or fly along the route to see the ground it crosses.',
   ][shown];
 

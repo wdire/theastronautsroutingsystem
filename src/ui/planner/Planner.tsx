@@ -17,9 +17,11 @@ import { stopLabel } from '@/planner/labels';
 import { planLocked, useCrew } from '@/net/state';
 import { NET_ENABLED } from '@/net/config';
 import { startsAtBase } from '@/planner/base';
+import { useIsPhone } from '@/ui/hooks/useMediaQuery';
 
 // Who goes: loaded with the crew code, only when there is a crew server.
 const PlannerCrew = lazy(() => import('@/ui/crew/PlannerCrew'));
+const JoinList = lazy(() => import('@/ui/crew/JoinList'));
 
 const VEHICLE_ICON = { foot: Footprints, openRover: Car, pressRover: Caravan, robotRover: Bot, heli: Helicopter } as const;
 const VEHICLE_ORDER: readonly VehicleId[] = ['foot', 'openRover', 'pressRover', 'robotRover', 'heli'];
@@ -263,6 +265,7 @@ export function Planner() {
   const start = useApp((s) => s.plan.start);
   const stops = useApp((s) => s.plan.stops);
   const base = useApp((s) => s.base);
+  const phone = useIsPhone();
   const running = useApp((s) => s.world?.run?.status === 'running');
   const atMyBase = start !== null && startsAtBase({ start, stops, roundTrip: true, vehicle: 'foot', style: 'safest', campAtNight: false }, base);
   const openPlanner = useApp((s) => s.openPlanner);
@@ -340,6 +343,12 @@ export function Planner() {
           <h3 className="mb-2 text-xs font-medium text-muted-foreground">Route</h3>
           <RouteResult />
         </div>
+        {/* A phone has no left column: missions to join show under an empty plan instead. */}
+        {phone && NET_ENABLED && stops.length === 0 && !running ? (
+          <Suspense fallback={null}>
+            <JoinList />
+          </Suspense>
+        ) : null}
       </div>
 
       {stops.length > 0 && !locked ? (

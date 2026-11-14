@@ -132,6 +132,8 @@ function load<T>(path: string): Promise<T> {
 }
 
 export const loadNames = () => load<NamedFeature[]>('/data/names.json');
+/** Every IAU-approved landform on Mars (no minZoom: these are for search, not map labels). Loaded when search is used. */
+export const loadMarsNames = () => load<Omit<NamedFeature, 'minZoom'>[]>('/data/mars-names.json');
 export const loadPlaces = () => load<Place[]>('/data/places.json');
 export const loadSamples = () => load<SampleCore[]>('/data/samples.json');
 /**

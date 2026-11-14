@@ -1,4 +1,5 @@
-"""IAU Gazetteer names in and near the region -> public/data/names.json
+"""IAU Gazetteer names -> public/data/names.json (in and near the region, labelled on the map)
+and public/data/mars-names.json (every approved landform on Mars, for search)
 
 Source: the Gazetteer of Planetary Nomenclature (USGS / IAU), Mars centre
 points shapefile. Longitudes there are east-positive 0..360; over this region
@@ -112,6 +113,24 @@ def main() -> int:
         )
     out.sort(key=lambda f: (f["minZoom"], -f["diameterKm"], f["name"]))
     write_json(DATA / "names.json", out)
+
+    # The whole planet, for search: a visitor may look anywhere, even where routes cannot go.
+    world, seen_w = [], set()
+    for r in rows:
+        if "Adopted" not in r.get("approval", "") or r["type"].startswith("Albedo"):
+            continue
+        try:
+            lon, lat, dia = float(r["center_lon"]), float(r["center_lat"]), float(r["diameter"] or 0)
+        except ValueError:
+            continue
+        fid = slug(r.get("clean_name") or r["name"])
+        if fid in seen_w:
+            fid += "-" + r["link"].rstrip("/").split("/")[-1]
+        seen_w.add(fid)
+        world.append({"id": fid, "name": r["name"], "type": r["type"].split(",")[0].strip(), "lon": round(to_east(lon), 3), "lat": round(lat, 3), "diameterKm": round(dia, 1)})
+    world.sort(key=lambda f: (-f["diameterKm"], f["name"]))
+    write_json(DATA / "mars-names.json", world)
+    print(f"{len(world)} names on the whole planet")
     print(f"{len(out)} names; by minZoom: " + ", ".join(
         f"z{zz}: {sum(1 for f in out if f['minZoom'] == zz)}" for zz in sorted({f['minZoom'] for f in out})))
     add_source(

@@ -1,6 +1,7 @@
 import { useEffect, useId, useMemo, useRef, useState, type ReactNode } from 'react';
 import { Camera, FlaskConical, MapPin, Mountain, Rocket, Search, X } from 'lucide-react';
-import { loadNames, loadPlaces, loadSamples, loadSites } from '@/data/datasets';
+import { loadMarsNames, loadNames, loadPlaces, loadSamples, loadSites } from '@/data/datasets';
+import { inBox, REGION } from '@/lib/constants';
 import { searchItems, type SearchItem } from '@/data/search';
 import { getMap } from '@/map/instance';
 import { useApp } from '@/store';
@@ -13,13 +14,61 @@ function featureZoom(diameterKm: number): number {
   return Math.max(4, Math.min(13, 15.2 - Math.log2(diameterKm * 2.2)));
 }
 
-/** Builds the search list from whatever data has loaded; a file that fails only leaves its entries out. */
-function useSearchIndex(): SearchItem[] {
+/** Feature types people search for by name. */
+const LANDMARK = /^(Mons|Montes|Planitia|Planum|Vallis|Valles|Crater|Chasma|Tholus|Patera)$/;
+
+function sizeHint(type: string, km: number): string {
+  return km > 0 ? `${type}, ${km >= 10 ? Math.round(km) : km.toFixed(1)} km across` : type;
+}
+
+/**
+ * Builds the search list from whatever data has loaded; a file that fails only leaves its entries out. The
+ * planet's other names come in once the visitor starts typing (`wide`), marked when they lie outside the region.
+ */
+function useSearchIndex(wide: boolean): SearchItem[] {
   const [items, setItems] = useState<SearchItem[]>([]);
+  useEffect(() => {
+    if (!wide) return;
+    let cancelled = false;
+    loadMarsNames()
+      .then((names) => {
+        if (cancelled) return;
+        setItems((prev) => {
+          const have = new Set(prev.map((i) => i.key));
+          const more: SearchItem[] = [];
+          for (const n of names) {
+            const key = `feature:${n.id}`;
+            if (have.has(key)) continue;
+            const inside = inBox(REGION, n.lon, n.lat);
+            more.push({
+              key,
+              kind: 'feature',
+              name: n.name,
+              hint: inside ? sizeHint(n.type, n.diameterKm) : `${sizeHint(n.type, n.diameterKm)} · outside the mapped region`,
+              lon: n.lon,
+              lat: n.lat,
+              zoom: featureZoom(n.diameterKm),
+              // Below the region's own names when they tie, so a search near home finds home first; the planet's
+              // landmarks (mountains, plains, canyons, craters) above scarps and spots of the same name.
+              weight: n.diameterKm * (inside ? 1 : 0.5) * (LANDMARK.test(n.type) ? 4 : 1),
+            });
+          }
+          return prev.concat(more);
+        });
+      })
+      .catch(() => undefined);
+    return () => {
+      cancelled = true;
+    };
+  }, [wide]);
   useEffect(() => {
     let cancelled = false;
     const add = (more: SearchItem[]) => {
-      if (!cancelled && more.length) setItems((prev) => prev.concat(more));
+      if (!cancelled && more.length)
+        setItems((prev) => {
+          const have = new Set(prev.map((i) => i.key));
+          return prev.concat(more.filter((m) => !have.has(m.key)));
+        });
     };
     loadPlaces()
       .then((places) =>
@@ -60,7 +109,7 @@ function useSearchIndex(): SearchItem[] {
             key: `feature:${n.id}`,
             kind: 'feature',
             name: n.name,
-            hint: n.diameterKm > 0 ? `${n.type}, ${n.diameterKm >= 10 ? Math.round(n.diameterKm) : n.diameterKm.toFixed(1)} km across` : n.type,
+            hint: sizeHint(n.type, n.diameterKm),
             lon: n.lon,
             lat: n.lat,
             zoom: featureZoom(n.diameterKm),
@@ -94,8 +143,8 @@ function useSearchIndex(): SearchItem[] {
 
 /** `leading` is the control at the left end of the box: the main menu. */
 export function SearchBox({ leading }: { leading: ReactNode }) {
-  const index = useSearchIndex();
   const [text, setText] = useState('');
+  const index = useSearchIndex(text.trim().length > 0);
   const [open, setOpen] = useState(false);
   const [active, setActive] = useState(0);
   const inputRef = useRef<HTMLInputElement>(null);
@@ -136,7 +185,8 @@ export function SearchBox({ leading }: { leading: ReactNode }) {
     const map = getMap();
     if (map) {
       const far = Math.abs(map.getCenter().lng - item.lon) > 3 || Math.abs(map.getCenter().lat - item.lat) > 3;
-      map.flyTo({ center: [item.lon, item.lat], zoom: Math.max(item.zoom, Math.min(map.getZoom(), 15)), duration: far ? 3200 : 1600 });
+      // Far away, frame the whole feature; nearby, keep at least the zoom the visitor was at.
+      map.flyTo({ center: [item.lon, item.lat], zoom: far ? item.zoom : Math.max(item.zoom, Math.min(map.getZoom(), 15)), duration: far ? 3200 : 1600 });
     }
     openPlace(item.kind === 'coordinates' ? `@${item.lat.toFixed(5)},${item.lon.toFixed(5)}` : item.key);
   };

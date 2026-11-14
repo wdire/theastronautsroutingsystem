@@ -1,6 +1,6 @@
 import { distanceM, bearingDeg } from '@/lib/geo';
 import { fmtLatLon } from '@/lib/format';
-import { loadNames, loadPlaces, loadSamples, loadSites, type NamedFeature, type Place, type PlacePhoto, type SampleCore } from './datasets';
+import { loadMarsNames, loadNames, loadPlaces, loadSamples, loadSites, type NamedFeature, type Place, type PlacePhoto, type SampleCore } from './datasets';
 
 /** Everything the place card needs about one spot, whatever kind of thing it is. */
 export interface PlaceView {
@@ -62,7 +62,7 @@ function sizeText(km: number): string {
   return `${km.toFixed(1)} km`;
 }
 
-function fromFeature(f: NamedFeature): PlaceView {
+function fromFeature(f: Omit<NamedFeature, 'minZoom'>): PlaceView {
   const word = typeWord(f.type);
   const size = sizeText(f.diameterKm);
   const article = /^[aeiou]/.test(word) ? 'an' : 'a';
@@ -138,7 +138,7 @@ export async function resolvePlace(key: string): Promise<PlaceView | null> {
       return s ? fromSample(s) : null;
     }
     if (type === 'feature') {
-      const f = (await loadNames()).find((x) => x.id === id);
+      const f = (await loadNames()).find((x) => x.id === id) ?? (await loadMarsNames()).find((x) => x.id === id);
       return f ? fromFeature(f) : null;
     }
     if (type === 'site') {
