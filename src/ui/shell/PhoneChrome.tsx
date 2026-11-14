@@ -9,16 +9,16 @@ import { ClockMenu } from '@/ui/clock/ClockMenu';
 import { cn } from '@/lib/cn';
 import { MainMenu } from './MainMenu';
 import { Sheet } from './Sheet';
-import type { SheetStop } from './sheetStops';
 
 type Content = 'place' | 'dock' | 'planner';
 
 const SHEET_LABEL: Record<Content, string> = { place: 'Place', dock: 'Panel', planner: 'Mission plan' };
 
-function NavButton({ label, active, onClick, children }: { label: string; active: boolean; onClick: () => void; children: ReactNode }) {
+function NavButton({ id, label, active, onClick, children }: { id?: string; label: string; active: boolean; onClick: () => void; children: ReactNode }) {
   return (
     <button
       type="button"
+      id={id}
       aria-pressed={active}
       onClick={onClick}
       className={cn(
@@ -41,14 +41,11 @@ export function PhoneChrome({ place, planner, dockPanel }: { place: ReactNode; p
   const placeOpen = useApp((s) => s.placeId !== null);
   const plannerOpen = useApp((s) => s.plannerOpen);
   const dock = useApp((s) => s.dock);
-  const picking = useApp((s) => s.picking !== null);
+  // Choosing a point, or watching the camera fly the route: either way the map is what matters.
+  const stepAside = useApp((s) => s.picking !== null || s.flyover !== null);
   const content: Content | null = placeOpen ? 'place' : dock ? 'dock' : plannerOpen ? 'planner' : null;
-  // Each thing that opens starts at half height; the choice lasts while it stays open.
-  const [stops, setStops] = useState<{ key: string; stop: SheetStop }>({ key: '', stop: 'half' });
+  // Each thing that opens gets its own sheet, starting at half height.
   const key = content === 'dock' ? `dock:${dock}` : (content ?? '');
-  const chosen = stops.key === key ? stops.stop : 'half';
-  // While the visitor is choosing a point, the sheet steps aside so the map can be tapped.
-  const stop: SheetStop = picking ? 'peek' : chosen;
 
   const topRef = useRef<HTMLDivElement>(null);
   const navRef = useRef<HTMLElement>(null);
@@ -93,7 +90,7 @@ export function PhoneChrome({ place, planner, dockPanel }: { place: ReactNode; p
       </div>
 
       {content ? (
-        <Sheet key={key} stop={stop} onStop={(next) => setStops({ key, stop: next })} label={SHEET_LABEL[content]} topClear={clear.top} bottomClear={clear.bottom}>
+        <Sheet key={key} forcePeek={stepAside} label={SHEET_LABEL[content]} topClear={clear.top} bottomClear={clear.bottom}>
           {content === 'place' ? place : content === 'dock' ? dockPanel : planner}
         </Sheet>
       ) : null}
@@ -105,7 +102,7 @@ export function PhoneChrome({ place, planner, dockPanel }: { place: ReactNode; p
         {DOCK_TABS.map((tab) => {
           const Icon = tab.icon;
           return (
-            <NavButton key={tab.id} label={tab.label} active={content === 'dock' && dock === tab.id} onClick={() => toggleDock(tab.id)}>
+            <NavButton key={tab.id} id={`dock-tab-${tab.id}`} label={tab.label} active={content === 'dock' && dock === tab.id} onClick={() => toggleDock(tab.id)}>
               <Icon aria-hidden />
             </NavButton>
           );

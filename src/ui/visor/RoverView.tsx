@@ -5,7 +5,7 @@ import { nextLtst, marsTime, sunriseSunset } from '@/engines/marsTime';
 import { fmtClock, fmtDeg, fmtDuration, fmtElevation, fmtLatLon } from '@/lib/format';
 import { cn } from '@/lib/cn';
 import type { VisorHandle, VisorState } from '@/visor';
-import { useMediaQuery } from '@/ui/hooks/useMediaQuery';
+import { useIsTouch } from '@/ui/hooks/useMediaQuery';
 import { MovePad } from './MovePad';
 import { propCaption, sceneProps, standpoint } from './scene';
 
@@ -44,6 +44,11 @@ function CompassTape({ heading }: { heading: number }) {
   );
 }
 
+/** Everything the overlay shows of the view's state, as one string to compare. */
+function shownKey(s: VisorState): string {
+  return `${s.ready}|${s.loading}|${s.lon.toFixed(5)}|${s.lat.toFixed(5)}|${Math.round(s.elev)}|${s.slopeDeg.toFixed(1)}|${Math.round(s.headingDeg)}|${s.groundSource}|${s.near}`;
+}
+
 const SHADOW = '[text-shadow:0_1px_3px_rgb(0_0_0/0.9),0_0_1px_rgb(0_0_0/0.8)]';
 
 /** The ground at eye level: your own eyes, no crew and no route. */
@@ -55,9 +60,7 @@ export default function RoverView() {
   const handleRef = useRef<VisorHandle | null>(null);
   const [state, setState] = useState<VisorState | null>(null);
   const [error, setError] = useState<string | null>(null);
-  /** The thing the viewer is standing near, if any. */
-  const [nearId, setNearId] = useState<string | null>(null);
-  const touch = useMediaQuery('(pointer: coarse)');
+  const touch = useIsTouch();
   const lon = at?.lon;
   const lat = at?.lat;
 
@@ -84,21 +87,13 @@ export default function RoverView() {
           headingDeg: stand.headingDeg,
           utcMs: () => useApp.getState().utcMs,
           scenario: () => useApp.getState().scenario,
-          onState: (s) => {
+          props,
+          onState: (next) => {
             if (cancelled) return;
-            setState(s);
-            const handle = handleRef.current;
-            if (!handle) return;
-            const me = handle.position();
-            let best: { id: string; d: number } | null = null;
-            for (const p of handle.props()) {
-              const d = Math.hypot(p.x - me.x, p.z - me.z);
-              if (p.seated && d < 60 && (!best || d < best.d)) best = { id: p.id, d };
-            }
-            setNearId(best?.id ?? null);
+            // The view reports five times a second; redraw the overlay only when something it shows has changed.
+            setState((prev) => (prev && shownKey(prev) === shownKey(next) ? prev : next));
           },
         });
-        handle.setProps(props);
         return handle;
       })
       .then((handle) => {
@@ -182,7 +177,7 @@ export default function RoverView() {
               {fmtClock(time.ltstH)} LTST{toSunset > 0 && toSunset < 14 * 3600 ? `, sunset in ${fmtDuration(toSunset)}` : ''}
             </div>
             <div className="font-sans text-white/75">Ground from the {state.groundSource}. Rocks and fine texture are drawn in, not measured.</div>
-            {nearId ? <div className="font-sans text-white/75">{propCaption(nearId)}</div> : null}
+            {state.near ? <div className="font-sans text-white/75">{propCaption(state.near)}</div> : null}
           </dl>
 
           <div className={cn('pointer-events-auto absolute left-1/2 flex -translate-x-1/2 flex-col items-center gap-2', touch ? 'top-[4.25rem]' : 'bottom-4')}>

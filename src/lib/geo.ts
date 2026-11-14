@@ -70,3 +70,9 @@ export function lerp(a: number, b: number, t: number): number {
 export function angleDiff(a: number, b: number): number {
   return ((b - a + 540) % 360) - 180;
 }
+
+/** 0 below `lo`, 1 above `hi`, and an S-shaped ease between. */
+export function smoothstep(lo: number, hi: number, x: number): number {
+  const t = clamp((x - lo) / (hi - lo), 0, 1);
+  return t * t * (3 - 2 * t);
+}

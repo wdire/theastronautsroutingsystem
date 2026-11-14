@@ -55,7 +55,6 @@ describe('summarizeSpaceWeather on the DONKI fixture', () => {
   it('names the strongest M or X flare', () => {
     const sw = summarizeSpaceWeather(feed, at('2026-11-14T13:00Z'));
     expect(sw.strongestFlare?.classType).toBe('M1.7');
-    expect(sw.strongestFlare?.region).toBe(14566);
   });
 
   it('says which feeds did not answer and still summarises the rest', () => {

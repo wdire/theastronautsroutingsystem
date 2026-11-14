@@ -1,6 +1,9 @@
 /** A phone bottom sheet rests at one of three heights. */
 export type SheetStop = 'peek' | 'half' | 'full';
 
+/** Fired on window when a panel that covers the map has moved without the store changing. */
+export const COVER_CHANGED = 'areo:cover-changed';
+
 export const STOPS: readonly SheetStop[] = ['peek', 'half', 'full'];
 export const STOP_WORD: Record<SheetStop, string> = { peek: 'small', half: 'half height', full: 'full height' };
 

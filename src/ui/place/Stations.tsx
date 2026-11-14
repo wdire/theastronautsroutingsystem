@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
-import { loadWeather, type WeatherSol } from '@/data/datasets';
+import { loadWeather, tryFetchJson, type WeatherSol } from '@/data/datasets';
 import type { Station, StationReport } from '@/data/stationFeed';
-import { fmtNumber, fmtTemp } from '@/lib/format';
+import { fmtDay, fmtNumber, fmtTemp } from '@/lib/format';
 
 interface Reading {
   sol: WeatherSol;
@@ -13,17 +13,22 @@ const STATIONS: readonly { id: Station; rover: string; where: string }[] = [
   { id: 'rems', rover: 'Curiosity', where: 'in Gale crater, 3,700 km away' },
 ];
 
-const DATE = new Intl.DateTimeFormat('en-GB', { day: 'numeric', month: 'short', year: 'numeric', timeZone: 'UTC' });
+/** The live answer is the same for every place: asked once an hour, however many cards open. */
+const live = new Map<Station, { at: number; sol: Promise<WeatherSol | null> }>();
+const LIVE_FOR_MS = 60 * 60_000;
 
-async function liveReport(station: Station, signal: AbortSignal): Promise<WeatherSol | null> {
-  try {
-    const response = await fetch(`/api/weather?station=${station}`, { signal });
-    if (!response.ok || !(response.headers.get('content-type') ?? '').includes('json')) return null;
-    const report = (await response.json()) as Partial<StationReport>;
-    return Array.isArray(report.sols) ? (report.sols.at(-1) ?? null) : null;
-  } catch {
-    return null;
-  }
+function liveReport(station: Station): Promise<WeatherSol | null> {
+  const hit = live.get(station);
+  if (hit && performance.now() - hit.at < LIVE_FOR_MS) return hit.sol;
+  const sol = tryFetchJson(`/api/weather?station=${station}`).then((report) => {
+    const sols = (report as Partial<StationReport> | null)?.sols;
+    const last = Array.isArray(sols) ? (sols.at(-1) ?? null) : null;
+    // A miss is not kept: the next card asks again.
+    if (!last) live.delete(station);
+    return last;
+  });
+  live.set(station, { at: performance.now(), sol });
+  return sol;
 }
 
 /** What the rovers' own weather stations last reported: measured, unlike the modelled rows above it. */
@@ -49,24 +54,25 @@ export function StationReadings() {
       })
       .catch(() => undefined);
     for (const { id } of STATIONS) {
-      void liveReport(id, controller.signal).then((sol) => {
+      void liveReport(id).then((sol) => {
         if (sol && !controller.signal.aborted) setReadings((r) => ({ ...r, [id]: { sol, live: true } }));
       });
     }
     return () => controller.abort();
   }, []);
 
-  const shown = STATIONS.filter((s) => readings[s.id]);
+  const shown = STATIONS.flatMap((station) => {
+    const reading = readings[station.id];
+    return reading ? [{ station, reading }] : [];
+  });
   if (shown.length === 0) return null;
-  const anyBundled = shown.some((s) => !readings[s.id]?.live);
+  const anyBundled = shown.some(({ reading }) => !reading.live);
 
   return (
     <div className="mt-4 border-t pt-3">
       <h4 className="text-xs font-medium text-muted-foreground">Measured by the rovers</h4>
       <ul className="mt-2 flex flex-col gap-2.5">
-        {shown.map((s) => {
-          const reading = readings[s.id];
-          if (!reading) return null;
+        {shown.map(({ station: s, reading }) => {
           const { sol } = reading;
           return (
             <li key={s.id} className="text-[13px] leading-snug">
@@ -78,7 +84,7 @@ export function StationReadings() {
                 {sol.pressurePa !== null ? `, ${fmtNumber(sol.pressurePa)} Pa` : ''}
               </span>
               <span className="block text-xs text-faint">
-                Sol {fmtNumber(sol.sol)}, {DATE.format(new Date(`${sol.earthDate}T00:00:00Z`))}. {reading.live ? 'Live from mars.nasa.gov.' : 'From the copy kept with the app.'}
+                Sol {fmtNumber(sol.sol)}, {fmtDay(sol.earthDate)}. {reading.live ? 'Live from mars.nasa.gov.' : 'From the copy kept with the app.'}
               </span>
             </li>
           );

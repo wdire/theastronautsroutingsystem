@@ -1,7 +1,7 @@
 import { loadTraverse } from '@/data/datasets';
 import type { MissionPlan } from '@/engines/types';
 import { bearingDeg, destination, distanceM } from '@/lib/geo';
-import type { PropSpec } from '@/visor';
+import { MODELS, type PropSpec } from '@/visor/modelSpecs';
 
 /** Ingenuity’s last landing, after flight 72 on sol 1036 (Valinor Hills Station). From the flight log in public/data. */
 const INGENUITY_REST = { lon: 77.322534, lat: 18.497269 };
@@ -65,11 +65,10 @@ export async function sceneProps(plan: MissionPlan): Promise<PropSpec[]> {
  */
 export function standpoint(lon: number, lat: number, props: readonly PropSpec[]): Standpoint {
   for (const p of props) {
-    if (distanceM(lon, lat, p.lon, p.lat) > 6) continue;
-    const backM = p.model === 'ingenuity' ? 4 : p.model === 'habitat' ? 18 : 9;
-    // From ahead and to one side, so the front and a flank both show.
-    const from = p.headingDeg + 35;
-    const [vlon, vlat] = destination(p.lon, p.lat, from, backM);
+    const { clearM } = MODELS[p.model];
+    if (distanceM(lon, lat, p.lon, p.lat) > clearM + 3) continue;
+    // Far enough back to take the whole of it in, from ahead and to one side so the front and a flank both show.
+    const [vlon, vlat] = destination(p.lon, p.lat, p.headingDeg + 35, clearM * 2.2 + 2);
     return { lon: vlon, lat: vlat, headingDeg: bearingDeg(vlon, vlat, p.lon, p.lat) };
   }
   return { lon, lat, headingDeg: 0 };

@@ -22,9 +22,11 @@ import { groundQuality } from './groundShader';
 import { createSky } from './sky';
 import { createRocks } from './rocks';
 import { skyState } from './skyModel';
-import { createProps, type PropSpec } from './props';
+import { createProps, keepOutside } from './props';
+import { disposeModels } from './models';
+import type { PropSpec } from './modelSpecs';
 
-export type { PropSpec } from './props';
+export type { PropSpec } from './modelSpecs';
 
 export type Quality = 'auto' | 'high' | 'low';
 
@@ -35,6 +37,8 @@ export interface VisorOptions {
   /** The app clock. */
   utcMs: () => number;
   scenario: () => Scenario;
+  /** The rovers, base and vehicles standing in the scene. */
+  props?: readonly PropSpec[];
   onState?: (state: VisorState) => void;
 }
 
@@ -53,6 +57,8 @@ export interface VisorState {
   groundSource: string;
   quality: 'high' | 'low';
   sunElevDeg: number;
+  /** The id of the prop the viewer stands near, or null. */
+  near: string | null;
 }
 
 export interface VisorHandle {
@@ -62,9 +68,7 @@ export interface VisorHandle {
   setQuality(q: Quality): void;
   resize(): void;
   getState(): VisorState;
-  /** The rovers, base and vehicles standing in the scene. Replaces what was there. */
-  setProps(specs: readonly PropSpec[]): void;
-  /** Where each prop stands, in scene metres; for the nearby card and for tests. */
+  /** Where each prop stands, in scene metres; for tests. */
   props(): { id: string; x: number; z: number; y: number; seated: boolean; real: boolean }[];
   /** The viewer’s place in scene metres (x east, z south). */
   position(): { x: number; y: number; z: number };
@@ -149,6 +153,7 @@ export async function mountVisor(canvas: HTMLCanvasElement, options: VisorOption
     groundSource: groundSourceName(base.zoom),
     quality: 'high',
     sunElevDeg: 0,
+    near: null,
   };
 
   /* ---- ground layers ---- */
@@ -190,15 +195,11 @@ export async function mountVisor(canvas: HTMLCanvasElement, options: VisorOption
 
   const heightAt = (x: number, z: number): number => layers.near.patch?.heightAt(x, z) ?? layers.mid.patch?.heightAt(x, z) ?? layers.far.patch?.heightAt(x, z) ?? 0;
 
+  const nearHeight = (x: number, z: number) => layers.near.patch?.heightAt(x, z) ?? null;
+  const props = createProps(scene, frame, options.props ?? [], nearHeight);
   // Rocks stand on the near patch only: beyond it they would be smaller than a pixel.
-  const rocks = createRocks(
-    scene,
-    (x, z) => layers.near.patch?.heightAt(x, z) ?? null,
-    (x, z) => (layers.near.patch ? fieldSlopeAt(layers.near.patch.field, x, z) : 0),
-  );
+  const rocks = createRocks(scene, nearHeight, (x, z) => (layers.near.patch ? fieldSlopeAt(layers.near.patch.field, x, z) : 0), props.clearings);
   let rocksPatch: Patch | null = null;
-  const props = createProps(scene, frame, (x, z) => layers.near.patch?.heightAt(x, z) ?? null);
-  let clearingsChanged = false;
 
   /* ---- viewer ---- */
   const pos = new Vector3(0, EYE_M, 0);
@@ -322,8 +323,10 @@ export async function mountVisor(canvas: HTMLCanvasElement, options: VisorOption
       const sin = Math.sin(yaw);
       const cos = Math.cos(yaw);
       // Facing direction for yaw 0 is north (-z); positive yaw turns toward the east.
-      pos.x += ((fwd * sin + right * cos) / len) * speed * dt;
-      pos.z += ((-fwd * cos + right * sin) / len) * speed * dt;
+      const nx = pos.x + ((fwd * sin + right * cos) / len) * speed * dt;
+      const nz = pos.z + ((-fwd * cos + right * sin) / len) * speed * dt;
+      // Nobody walks through a rover: a step into one ends at its side.
+      [pos.x, pos.z] = keepOutside(nx, nz, props.clearings, 0.75);
     }
 
     ensure('far', pos.x, pos.z);
@@ -343,9 +346,8 @@ export async function mountVisor(canvas: HTMLCanvasElement, options: VisorOption
 
     // A new near patch means new ground under every rock.
     const groundChanged = rocksPatch !== layers.near.patch;
-    rocks.update(pos.x, pos.z, groundChanged || clearingsChanged);
+    rocks.update(pos.x, pos.z, groundChanged);
     props.update(pos.x, pos.z, groundChanged);
-    clearingsChanged = false;
     rocksPatch = layers.near.patch;
 
     updateLight(now);
@@ -384,6 +386,7 @@ export async function mountVisor(canvas: HTMLCanvasElement, options: VisorOption
       state.pitchDeg = (-pitch * 180) / Math.PI;
       state.fps = Math.round(fpsSmooth);
       if (near) state.groundSource = groundSourceName(near.demSourceZoom);
+      state.near = props.nearest(pos.x, pos.z, 60);
       options.onState?.({ ...state });
     }
   };
@@ -422,11 +425,6 @@ export async function mountVisor(canvas: HTMLCanvasElement, options: VisorOption
     },
     resize,
     getState: () => ({ ...state }),
-    setProps(specs) {
-      props.set(specs);
-      rocks.setClearings(props.clearings());
-      clearingsChanged = true;
-    },
     props: () => props.list(),
     position: () => ({ x: pos.x, y: pos.y, z: pos.z }),
     stats: () => ({ triangles: renderer.info.render.triangles, calls: renderer.info.render.calls, rocks: rocks.count() }),
@@ -446,6 +444,7 @@ export async function mountVisor(canvas: HTMLCanvasElement, options: VisorOption
       for (const layer of Object.values(layers)) layer.patch?.dispose();
       rocks.dispose();
       props.dispose();
+      disposeModels();
       sky.dispose();
       renderer.dispose();
     },

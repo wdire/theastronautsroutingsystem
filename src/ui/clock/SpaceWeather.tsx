@@ -3,7 +3,7 @@ import { ExternalLink } from 'lucide-react';
 import { relativeTime, type FeedName, type SpaceWeather } from '@/engines/spaceWeather';
 import { useApp } from '@/store';
 import { refreshSpaceWeather, useSpaceWeather } from '@/ui/hooks/useSpaceWeather';
-import { fmtNumber, fmtUtc } from '@/lib/format';
+import { fmtNumber, fmtUtc, joinWords } from '@/lib/format';
 import { cn } from '@/lib/cn';
 import { STATUS_DOT, STATUS_LABEL } from './status';
 
@@ -12,9 +12,7 @@ const FEED_WORDS: Record<FeedName, string> = { enlil: 'the forecast for Mars', s
 
 function missingLine(missing: FeedName[]): string | null {
   if (missing.length === 0) return null;
-  const words = missing.map((m) => FEED_WORDS[m]);
-  const joined = words.length === 1 ? words[0] : `${words.slice(0, -1).join(', ')} and ${words.at(-1)}`;
-  return `NASA did not answer for ${joined}.`;
+  return `NASA did not answer for ${joinWords(missing.map((m) => FEED_WORDS[m]))}.`;
 }
 
 function Details({ sw }: { sw: SpaceWeather }) {

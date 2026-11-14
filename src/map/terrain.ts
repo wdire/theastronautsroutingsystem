@@ -61,8 +61,10 @@ export function addTerrain(map: MapLibreMap): () => void {
     const c = map.getCenter();
     const app = useApp.getState();
     const sun = sunPosition(app.utcMs, c.lat, c.lng);
-    // "Full daylight" in the Layers panel lights the map from the north-west at mid-morning height.
-    const light = app.layers.daylight ? mapLighting(42, 315) : mapLighting(sun.elevDeg, sun.azDeg);
+    // The map is lit from the north-west at mid-morning height so it always reads. The real Sun lights it
+    // when the visitor asks for that in Layers, or has picked an hour on the Mars clock to see its light.
+    const realSun = app.layers.followSun || !app.clockLive;
+    const light = realSun ? mapLighting(sun.elevDeg, sun.azDeg) : mapLighting(42, 315);
     // On the globe the planet is shown fully lit: night would hide the place the visitor came to see.
     const zoomedIn = map.getZoom() >= 6;
     map.setPaintProperty('hillshade', 'hillshade-illumination-direction', light.direction);
@@ -93,7 +95,7 @@ export function addTerrain(map: MapLibreMap): () => void {
   map.on('moveend', applyLight);
   // The clock moves every second; the sun does not move visibly that fast.
   const offClock = useApp.subscribe((s) => Math.floor(s.utcMs / 60_000), applyLight);
-  const offDaylight = useApp.subscribe((s) => s.layers.daylight, applyLight);
+  const offDaylight = useApp.subscribe((s) => s.layers.followSun || !s.clockLive, applyLight);
   const unsubscribe = () => {
     offClock();
     offDaylight();

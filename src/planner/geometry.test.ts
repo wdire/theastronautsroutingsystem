@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { gradesAlong, pathStats, shapeOnlyTrip } from './geometry';
+import { flyoverEase, flyoverSeconds, gradesAlong, pathStats, pointAlong, shapeOnlyTrip } from './geometry';
 import type { PathPoint } from '@/engines/types';
 
 // One degree of latitude on Mars is 59,274.7 m.
@@ -38,5 +38,53 @@ describe('path geometry', () => {
     expect(s.distM).toBe(0);
     expect(Number.isFinite(s.maxGradeDeg)).toBe(true);
     expect(shapeOnlyTrip([]).totals.distM).toBe(0);
+  });
+});
+
+describe('pointAlong', () => {
+  const path: PathPoint[] = [
+    [77.4, 18.4, 0],
+    [77.41, 18.4, 10],
+    [77.41, 18.41, 30],
+  ];
+  const { along, distM } = pathStats(path);
+  it('gives the ends at and beyond the ends', () => {
+    expect(pointAlong(path, along, 0)).toEqual(path[0]);
+    expect(pointAlong(path, along, -5)).toEqual(path[0]);
+    expect(pointAlong(path, along, distM + 100)).toEqual(path[2]);
+  });
+  it('interpolates position and height inside a segment', () => {
+    const half = pointAlong(path, along, (along[1] ?? 0) / 2);
+    expect(half[0]).toBeCloseTo(77.405, 6);
+    expect(half[1]).toBeCloseTo(18.4, 6);
+    expect(half[2]).toBeCloseTo(5, 6);
+    const later = pointAlong(path, along, (along[1] ?? 0) + ((along[2] ?? 0) - (along[1] ?? 0)) / 4);
+    expect(later[0]).toBeCloseTo(77.41, 6);
+    expect(later[1]).toBeCloseTo(18.4025, 6);
+    expect(later[2]).toBeCloseTo(15, 6);
+  });
+  it('survives an empty path', () => {
+    expect(pointAlong([], new Float64Array(0), 10)).toEqual([0, 0, 0]);
+  });
+});
+
+describe('flyover timing', () => {
+  it('takes 2 s per km between 14 and 45 s', () => {
+    expect(flyoverSeconds(500)).toBe(14);
+    expect(flyoverSeconds(10_000)).toBe(20);
+    expect(flyoverSeconds(400_000)).toBe(45);
+  });
+  it('eases away and in, never backwards, from 0 to 1', () => {
+    expect(flyoverEase(0)).toBe(0);
+    expect(flyoverEase(1)).toBeCloseTo(1, 9);
+    expect(flyoverEase(0.5)).toBeCloseTo(0.5, 9);
+    let last = 0;
+    for (let t = 0; t <= 1.0001; t += 0.01) {
+      const v = flyoverEase(t);
+      expect(v).toBeGreaterThanOrEqual(last - 1e-12);
+      last = v;
+    }
+    // Slower at the ends than in the middle.
+    expect(flyoverEase(0.1) - flyoverEase(0)).toBeLessThan(flyoverEase(0.55) - flyoverEase(0.45));
   });
 });

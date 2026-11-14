@@ -1,3 +1,5 @@
+import { nasaUrl } from '@/lib/nasa';
+
 /**
  * Live space weather for Mars, summarised from NASA’s DONKI database (Space Weather Database Of
  * Notifications, Knowledge, Information): coronal mass ejections that the WSA-ENLIL model sends to Mars,
@@ -22,7 +24,6 @@ export interface CmeAtMars {
   arrivalUtcMs: number;
   /** The model has the cloud’s flank, not its centre, reaching Mars. */
   glancing: boolean;
-  minor: boolean;
   /** Speed of the fastest ejection in the run, km/s. */
   speedKms: number | null;
   link: string | null;
@@ -30,15 +31,11 @@ export interface CmeAtMars {
 
 export interface ParticleEvent {
   utcMs: number;
-  instruments: string[];
-  link: string | null;
 }
 
 export interface Flare {
   peakUtcMs: number;
   classType: string;
-  region: number | null;
-  link: string | null;
 }
 
 export interface SpaceWeather {
@@ -81,18 +78,6 @@ function time(v: unknown): number | null {
   return Number.isFinite(t) ? t : null;
 }
 
-/** Only links back to NASA are kept; anything else in the feed is dropped. */
-function nasaLink(v: unknown): string | null {
-  const s = str(v);
-  if (!s) return null;
-  try {
-    const u = new URL(s);
-    return u.protocol === 'https:' && (u.hostname === 'nasa.gov' || u.hostname.endsWith('.nasa.gov')) ? u.href : null;
-  } catch {
-    return null;
-  }
-}
-
 /** A number that orders flare classes: C9 < M1 < M2 < X1. Zero for anything unreadable. */
 export function flareStrength(classType: string): number {
   const m = /^([ABCMX])(\d+(?:\.\d+)?)?/.exec(classType.trim().toUpperCase());
@@ -124,7 +109,7 @@ function cmesAtMars(enlil: unknown[], nowMs: number): CmeAtMars[] {
       if (seen && seen.modelled >= modelled) continue;
       byHour.set(hour, {
         modelled,
-        cme: { arrivalUtcMs, glancing: impact.isGlancingBlow === true, minor: impact.isMinorImpact === true, speedKms: speed, link: nasaLink(run.link) },
+        cme: { arrivalUtcMs, glancing: impact.isGlancingBlow === true, speedKms: speed, link: nasaUrl(run.link) },
       });
     }
   }
@@ -141,7 +126,7 @@ function particles(sep: unknown[], nowMs: number): { atMars: ParticleEvent[]; el
     const instruments = list(event.instruments)
       .map((i) => str(rec(i)?.displayName))
       .filter((n): n is string => n !== null);
-    if (instruments.some((n) => AT_MARS.test(n))) atMars.push({ utcMs, instruments, link: nasaLink(event.link) });
+    if (instruments.some((n) => AT_MARS.test(n))) atMars.push({ utcMs });
     else elsewhere += 1;
   }
   atMars.sort((a, b) => b.utcMs - a.utcMs);
@@ -159,7 +144,7 @@ function strongestFlare(flr: unknown[]): Flare | null {
     const strength = flareStrength(classType);
     if (strength <= bestStrength) continue;
     bestStrength = strength;
-    best = { peakUtcMs, classType, region: num(flare.activeRegionNum), link: nasaLink(flare.link) };
+    best = { peakUtcMs, classType };
   }
   return best;
 }

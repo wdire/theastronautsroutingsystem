@@ -143,7 +143,13 @@ const LOD: Record<RockClass['name'], { near: number; far: number; withinM: numbe
  * The rocks around the viewer, as instanced meshes. `update` re-places them when the viewer has
  * crossed into a new cell; it is cheap enough to call every frame.
  */
-export function createRocks(scene: Scene, heightAt: (x: number, z: number) => number | null, slopeAt: (x: number, z: number) => number) {
+export function createRocks(
+  scene: Scene,
+  heightAt: (x: number, z: number) => number | null,
+  slopeAt: (x: number, z: number) => number,
+  /** Discs kept free of rocks: under vehicles and buildings. */
+  clearings: readonly { x: number; z: number; r: number }[] = [],
+) {
   const material = rockMaterial();
   const layout: [RockClass['name'], Shape, number, number][] = [
     ['pebble', 'lumpy', 0, 0.6],
@@ -182,13 +188,14 @@ export function createRocks(scene: Scene, heightAt: (x: number, z: number) => nu
   const tint = new Color();
   const UP = new Vector3(0, 1, 0);
   let lowQuality = false;
-  let clearings: readonly { x: number; z: number; r: number }[] = [];
 
   const place = (cls: RockClass, cx: number, cz: number) => {
     const mine = batches.filter((b) => b.cls === cls);
     const nearCount = mine.map(() => 0);
     const farCount = mine.map(() => 0);
     const within = LOD[cls.name].withinM;
+    // Only the clearings this class's disc can reach, so most rocks are tested against none.
+    const blocked = clearings.filter((c) => Math.hypot(c.x - cx, c.z - cz) < cls.radiusM + c.r + 4);
     const span = Math.ceil(cls.radiusM / cls.cellM);
     const ix0 = Math.floor(cx / cls.cellM);
     const iz0 = Math.floor(cz / cls.cellM);
@@ -201,7 +208,7 @@ export function createRocks(scene: Scene, heightAt: (x: number, z: number) => nu
         const mz = (iz + 0.5) * cls.cellM;
         if (heightAt(mx, mz) === null) continue;
         for (const rock of rocksInCell(cls, ix, iz, slopeAt(mx, mz))) {
-          if (clearings.some((c) => Math.hypot(rock.x - c.x, rock.z - c.z) < c.r + rock.size / 2)) continue;
+          if (blocked.length > 0 && blocked.some((c) => (rock.x - c.x) ** 2 + (rock.z - c.z) ** 2 < (c.r + rock.size / 2) ** 2)) continue;
           const y = heightAt(rock.x, rock.z);
           if (y === null) continue;
           const b = mine.findIndex((batch) => rock.variant >= batch.from && rock.variant < batch.to);
@@ -227,8 +234,15 @@ export function createRocks(scene: Scene, heightAt: (x: number, z: number) => nu
     mine.forEach((batch, i) => {
       for (const [mesh, count] of [[batch.near, nearCount[i] ?? 0], [batch.far, farCount[i] ?? 0]] as const) {
         mesh.count = count;
+        // Upload only the rocks in use, not the whole reserved buffer.
+        mesh.instanceMatrix.clearUpdateRanges();
+        mesh.instanceMatrix.addUpdateRange(0, count * 16);
         mesh.instanceMatrix.needsUpdate = true;
-        if (mesh.instanceColor) mesh.instanceColor.needsUpdate = true;
+        if (mesh.instanceColor) {
+          mesh.instanceColor.clearUpdateRanges();
+          mesh.instanceColor.addUpdateRange(0, count * 3);
+          mesh.instanceColor.needsUpdate = true;
+        }
       }
     });
   };
@@ -243,10 +257,6 @@ export function createRocks(scene: Scene, heightAt: (x: number, z: number) => nu
         lastCell.set(cls.name, key);
         place(cls, x, z);
       }
-    },
-    /** Discs kept free of rocks: under vehicles and buildings. Takes effect at the next forced update. */
-    setClearings(list: readonly { x: number; z: number; r: number }[]) {
-      clearings = list;
     },
     count: () => batches.reduce((n, b) => n + (b.near.visible ? b.near.count + b.far.count : 0), 0),
     setLowQuality(low: boolean) {

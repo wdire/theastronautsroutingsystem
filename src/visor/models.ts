@@ -1,30 +1,7 @@
-import { Box3, BoxGeometry, Color, CylinderGeometry, Group, Mesh, MeshPhysicalMaterial, MeshStandardMaterial, SphereGeometry, Vector3, type Material, type Object3D } from 'three';
+import { Box3, BoxGeometry, Color, CylinderGeometry, Group, Mesh, MeshPhysicalMaterial, MeshStandardMaterial, SphereGeometry, Texture, Vector3, type Material, type Object3D } from 'three';
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
 import { MeshoptDecoder } from 'three/examples/jsm/libs/meshopt_decoder.module.js';
-
-export type ModelName = 'perseverance' | 'ingenuity' | 'sev' | 'habitat' | 'z2';
-
-interface ModelSpec {
-  url: string;
-  /** The file’s units to metres. */
-  scale: number;
-  /** Turn about the vertical so the model’s front faces north (-z) before any heading is applied. */
-  yawDeg: number;
-  /** Wheel track and wheelbase in metres for vehicles that rest on wheels; null for things that stand level. */
-  stance: { width: number; length: number } | null;
-  /** How far around its centre rocks are kept away, m. */
-  clearM: number;
-}
-
-/** NASA 3D Resources models, optimised by tools/build_models.py. Sizes checked against the real hardware. */
-export const MODELS: Record<ModelName, ModelSpec> = {
-  perseverance: { url: '/models/perseverance.glb', scale: 1, yawDeg: 180, stance: { width: 2.4, length: 2.6 }, clearM: 3.2 },
-  ingenuity: { url: '/models/ingenuity.glb', scale: 1, yawDeg: 0, stance: null, clearM: 1.2 },
-  sev: { url: '/models/sev.glb', scale: 1, yawDeg: 180, stance: { width: 3.2, length: 3.6 }, clearM: 5 },
-  // Modelled in centimetres.
-  habitat: { url: '/models/habitat.glb', scale: 0.03, yawDeg: 0, stance: null, clearM: 8 },
-  z2: { url: '/models/z2.glb', scale: 1, yawDeg: 180, stance: null, clearM: 0.8 },
-};
+import { MODELS, type ModelName } from './modelSpecs';
 
 const loader = new GLTFLoader();
 loader.setMeshoptDecoder(MeshoptDecoder);
@@ -133,11 +110,38 @@ export function standIn(name: ModelName): Group {
   return g;
 }
 
-/** Frees a clone’s own resources. The cached original is shared and stays. */
+/** Frees a stand-in's geometry. Clones of a loaded model share its buffers, which `disposeModels` frees. */
 export function disposeObject(root: Object3D): void {
   root.traverse((o) => {
     const mesh = o as Mesh;
-    if (!mesh.isMesh) return;
-    if (mesh.material === standInMaterial || mesh.material === darkMaterial) mesh.geometry.dispose();
+    if (mesh.isMesh && (mesh.material === standInMaterial || mesh.material === darkMaterial)) mesh.geometry.dispose();
   });
+}
+
+/**
+ * Frees every loaded model: about 100 MB of decoded textures that would otherwise outlive the 3D view.
+ * The files stay in the browser's cache, so the next visit decodes them again without a download.
+ */
+export function disposeModels(): void {
+  for (const pending of cache.values()) {
+    void pending
+      .then((root) => {
+        root.traverse((o) => {
+          const mesh = o as Mesh;
+          if (!mesh.isMesh) return;
+          mesh.geometry.dispose();
+          for (const m of Array.isArray(mesh.material) ? mesh.material : [mesh.material]) {
+            for (const value of Object.values(m)) {
+              if (value instanceof Texture) {
+                (value.image as { close?: () => void } | null)?.close?.();
+                value.dispose();
+              }
+            }
+            m.dispose();
+          }
+        });
+      })
+      .catch(() => undefined);
+  }
+  cache.clear();
 }

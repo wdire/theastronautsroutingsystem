@@ -81,3 +81,24 @@ test('a stop outside the region explains itself instead of hanging', async ({ pa
   await expect(plan.getByRole('alert')).toContainText(/Leg 1 has no route/);
   expect(await page.evaluate(() => window.__areo?.getState().route.status)).toBe('failed');
 });
+
+test('the camera flies the route, names the next stop, and gives the view back', async ({ page }) => {
+  await page.goto(`/${PLAN}`);
+  const plan = page.getByRole('region', { name: 'Mission plan' });
+  await page.waitForFunction(() => window.__areo?.getState().route.status === 'ready', undefined, { timeout: 60_000 });
+  const before = await page.evaluate(() => ({ pitch: window.__areoMap?.getPitch() ?? -1, zoom: window.__areoMap?.getZoom() ?? -1 }));
+
+  await plan.getByRole('button', { name: 'Fly along the route' }).click();
+  const bar = page.getByRole('status').filter({ hasText: 'Next' });
+  // Stops are named after what the visitor called them; this plan's stops have no names.
+  await expect(bar).toContainText(/Next (stop 1|Base)/);
+  await expect.poll(() => page.evaluate(() => window.__areoMap?.getPitch() ?? 0), { timeout: 20_000 }).toBeGreaterThan(55);
+  // It moves: the distance to the next stop falls.
+  const first = await page.evaluate(() => window.__areo?.getState().flyover?.remainingM ?? 0);
+  await expect.poll(() => page.evaluate(() => window.__areo?.getState().flyover?.remainingM ?? 0), { timeout: 30_000 }).toBeLessThan(first - 20);
+
+  await bar.getByRole('button', { name: 'Stop' }).click();
+  await expect(bar).toHaveCount(0);
+  await expect.poll(() => page.evaluate(() => window.__areoMap?.getPitch() ?? 99), { timeout: 20_000 }).toBeLessThan(before.pitch + 1);
+  await expect.poll(() => page.evaluate(() => window.__areoMap?.getZoom() ?? 0)).toBeCloseTo(before.zoom, 1);
+});

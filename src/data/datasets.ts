@@ -91,6 +91,19 @@ export interface SourceEntry {
   retrieved: string;
 }
 
+/**
+ * One try at a JSON answer; null for anything else. A static host answers a missing path with its
+ * index page and a 200, so the content type is checked as well as the status.
+ */
+export async function tryFetchJson(url: string, signal?: AbortSignal): Promise<unknown> {
+  try {
+    const res = await fetch(url, signal ? { signal } : undefined);
+    return res.ok && (res.headers.get('content-type') ?? '').includes('json') ? ((await res.json()) as unknown) : null;
+  } catch {
+    return null;
+  }
+}
+
 const cache = new Map<string, Promise<unknown>>();
 
 async function fetchJson(path: string): Promise<unknown> {

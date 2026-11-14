@@ -1,6 +1,6 @@
 import { mapToneAmount, mapToneLut } from '@/engines/grading';
 import { imgTile } from './img';
-import type { TileData, TileHandler } from './index';
+import { toBitmap, type TileData, type TileHandler } from './index';
 
 const luts = new Map<number, Uint8ClampedArray>();
 
@@ -16,22 +16,26 @@ function lutFor(zoom: number): Uint8ClampedArray | null {
   return lut;
 }
 
+// One scratch canvas for every tile: drawing and reading back happen in one go, with no await between.
+let scratch: OffscreenCanvas | null = null;
+
 async function toned(data: TileData, lut: Uint8ClampedArray): Promise<ImageBitmap> {
-  const bitmap = data instanceof ArrayBuffer ? await createImageBitmap(new Blob([data])) : data;
-  const canvas = new OffscreenCanvas(bitmap.width, bitmap.height);
-  const ctx = canvas.getContext('2d', { willReadFrequently: true });
+  const bitmap = await toBitmap(data);
+  const { width, height } = bitmap;
+  if (!scratch || scratch.width !== width || scratch.height !== height) scratch = new OffscreenCanvas(width, height);
+  const ctx = scratch.getContext('2d', { willReadFrequently: true });
   if (!ctx) return bitmap;
+  ctx.globalCompositeOperation = 'copy';
   ctx.drawImage(bitmap, 0, 0);
   bitmap.close();
-  const image = ctx.getImageData(0, 0, canvas.width, canvas.height);
+  const image = ctx.getImageData(0, 0, width, height);
   const px = image.data;
   for (let i = 0; i < px.length; i += 4) {
     px[i] = lut[px[i] ?? 0] ?? 0;
     px[i + 1] = lut[px[i + 1] ?? 0] ?? 0;
     px[i + 2] = lut[px[i + 2] ?? 0] ?? 0;
   }
-  ctx.putImageData(image, 0, 0);
-  return canvas.transferToImageBitmap();
+  return createImageBitmap(image);
 }
 
 /**
@@ -41,7 +45,8 @@ async function toned(data: TileData, lut: Uint8ClampedArray): Promise<ImageBitma
 export const mapImgTile: TileHandler = async (rest, z, x, y, signal) => {
   const data = await imgTile(rest, z, x, y, signal);
   const lut = lutFor(z);
-  if (!lut) return data;
+  // A tile the map has stopped waiting for is not worth toning.
+  if (!lut || signal.aborted) return data;
   try {
     return await toned(data, lut);
   } catch {

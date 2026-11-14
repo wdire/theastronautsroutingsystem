@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState, useSyncExternalStore, type PointerEvent as ReactPointerEvent, type ReactNode } from 'react';
 import { cn } from '@/lib/cn';
-import { STOP_WORD, settle, sheetHeights, type SheetStop } from './sheetStops';
+import { COVER_CHANGED, STOP_WORD, settle, sheetHeights, type SheetStop } from './sheetStops';
 
 function subscribeResize(onChange: () => void): () => void {
   window.addEventListener('resize', onChange);
@@ -12,8 +12,8 @@ function subscribeResize(onChange: () => void): () => void {
 }
 
 interface SheetProps {
-  stop: SheetStop;
-  onStop: (stop: SheetStop) => void;
+  /** Holds the sheet at its small stop, whatever the visitor chose: the map needs the room. */
+  forcePeek?: boolean;
   /** What the sheet holds, for the handle’s label: "Mission plan". */
   label: string;
   /** Space kept clear above the sheet at full height and below it, px. */
@@ -26,7 +26,9 @@ interface SheetProps {
  * A phone bottom sheet with three stops. It does not block the map behind it. Drag the handle, or
  * activate it to step through the stops.
  */
-export function Sheet({ stop, onStop, label, topClear, bottomClear, children }: SheetProps) {
+export function Sheet({ forcePeek = false, label, topClear, bottomClear, children }: SheetProps) {
+  const [chosen, setChosen] = useState<SheetStop>('half');
+  const stop: SheetStop = forcePeek ? 'peek' : chosen;
   const viewportH = useSyncExternalStore(subscribeResize, () => window.visualViewport?.height ?? window.innerHeight);
   const heights = sheetHeights(viewportH, topClear, bottomClear);
   const [dragH, setDragH] = useState<number | null>(null);
@@ -37,12 +39,17 @@ export function Sheet({ stop, onStop, label, topClear, bottomClear, children }: 
   useEffect(() => {
     // Once the slide is over the content takes the height of the stop. A timer, not transitionend:
     // a sheet let go exactly on its stop does not move, so no transition ever ends.
-    const id = window.setTimeout(() => setLaidOut(stop), 240);
+    const id = window.setTimeout(() => {
+      setLaidOut(stop);
+      // What the sheet covers has changed: the map's labels look again.
+      window.dispatchEvent(new Event(COVER_CHANGED));
+    }, 240);
     return () => window.clearTimeout(id);
   }, [stop]);
 
   const visible = dragH ?? heights[stop];
-  const contentH = Math.max(heights[laidOut], heights[stop], dragH ?? 0);
+  // While a finger drags it the content is laid out once, at full height, so the drag is a transform only.
+  const contentH = dragH !== null ? heights.full : Math.max(heights[laidOut], heights[stop]);
 
   const onPointerDown = (e: ReactPointerEvent<HTMLButtonElement>) => {
     e.currentTarget.setPointerCapture(e.pointerId);
@@ -65,13 +72,13 @@ export function Sheet({ stop, onStop, label, topClear, bottomClear, children }: 
     drag.current = null;
     if (e.currentTarget.hasPointerCapture(e.pointerId)) e.currentTarget.releasePointerCapture(e.pointerId);
     if (!d?.moved) return;
-    onStop(settle(dragH ?? d.startH, d.velocity, heights));
+    setChosen(settle(dragH ?? d.startH, d.velocity, heights));
     setDragH(null);
   };
   const step = () => {
     // A tap, or Enter: up one stop, and from the top back to half.
     if (drag.current?.moved) return;
-    onStop(stop === 'peek' ? 'half' : stop === 'half' ? 'full' : 'half');
+    setChosen(stop === 'peek' ? 'half' : stop === 'half' ? 'full' : 'half');
   };
 
   return (
@@ -92,7 +99,7 @@ export function Sheet({ stop, onStop, label, topClear, bottomClear, children }: 
         <span className="h-1 w-9 rounded-full bg-foreground/25" aria-hidden />
       </button>
       <div
-        className="flex min-h-0 flex-col [&>*]:min-h-0 [&>*]:w-full! [&>*]:max-w-none! [&>*]:flex-1 [&>*]:rounded-none! [&>*]:border-0! [&>*]:bg-transparent! [&>*]:shadow-none!"
+        className="sheet-body flex min-h-0 flex-col [&>*]:min-h-0 [&>*]:flex-1"
         style={{ height: contentH - 24 }}
       >
         {children}

@@ -92,3 +92,41 @@ export function shapeOnlyTrip(path: readonly PathPoint[]): TripResult {
     nightStops: [],
   };
 }
+
+/** The point a distance along a path, between its recorded points. Clamped to the path's ends. */
+export function pointAlong(path: readonly PathPoint[], along: Float64Array, distM: number): PathPoint {
+  const first = path[0];
+  const last = path[path.length - 1];
+  if (!first || !last) return [0, 0, 0];
+  if (!(distM > 0)) return first;
+  if (distM >= (along[path.length - 1] ?? 0)) return last;
+  // Binary search for the segment that holds the distance.
+  let lo = 0;
+  let hi = path.length - 1;
+  while (hi - lo > 1) {
+    const mid = (lo + hi) >> 1;
+    if ((along[mid] ?? 0) <= distM) lo = mid;
+    else hi = mid;
+  }
+  const a = path[lo] ?? first;
+  const b = path[hi] ?? last;
+  const span = (along[hi] ?? 0) - (along[lo] ?? 0);
+  const t = span > 0 ? (distM - (along[lo] ?? 0)) / span : 0;
+  return [a[0] + (b[0] - a[0]) * t, a[1] + (b[1] - a[1]) * t, a[2] + (b[2] - a[2]) * t];
+}
+
+/** A flight along a route takes about 2 s per km, never under 14 s or over 45 s. */
+export function flyoverSeconds(distM: number): number {
+  return Math.max(14, Math.min(45, (distM / 1000) * 2));
+}
+
+/** How far along a flight the camera is at a share of its time: slow away, steady, slow in. */
+export function flyoverEase(t: number): number {
+  const x = Math.max(0, Math.min(1, t));
+  // A quarter of the time to get up to speed and a quarter to slow down.
+  const ramp = 0.25;
+  const cruise = 1 / (1 - ramp);
+  if (x < ramp) return (cruise * x * x) / (2 * ramp);
+  if (x > 1 - ramp) return 1 - (cruise * (1 - x) * (1 - x)) / (2 * ramp);
+  return cruise * (x - ramp / 2);
+}

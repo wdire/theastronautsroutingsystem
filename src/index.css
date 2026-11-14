@@ -169,12 +169,21 @@
   font-feature-settings: 'tnum' 1, 'lnum' 1;
 }
 
+/* A floating surface over the map. Inside a phone sheet the sheet is the surface, so a panel there
+   draws no frame of its own: the sheet's body sets these variables for what it holds. */
 @utility panel {
-  background: var(--background);
+  background: var(--panel-bg, var(--background));
   color: var(--foreground);
-  border: 1px solid var(--border);
-  border-radius: var(--radius-lg);
-  box-shadow: var(--shadow-panel);
+  border: var(--panel-border, 1px solid var(--border));
+  border-radius: var(--panel-radius, var(--radius-lg));
+  box-shadow: var(--panel-shadow, var(--shadow-panel));
+}
+
+.sheet-body {
+  --panel-bg: transparent;
+  --panel-border: 0 solid transparent;
+  --panel-radius: 0;
+  --panel-shadow: none;
 }
 
 @utility scroll-quiet {

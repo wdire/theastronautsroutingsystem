@@ -74,3 +74,11 @@ const UTC_STAMP_YEAR = new Intl.DateTimeFormat('en-GB', { day: 'numeric', month:
 export function fmtUtc(utcMs: number, withYear = false): string {
   return `${(withYear ? UTC_STAMP_YEAR : UTC_STAMP).format(utcMs)} UTC`;
 }
+
+const UTC_DAY = new Intl.DateTimeFormat('en-GB', { day: 'numeric', month: 'short', year: 'numeric', timeZone: 'UTC' });
+
+/** "27 Apr 2024" from a calendar day written as 2024-04-27. */
+export function fmtDay(isoDay: string): string {
+  const t = Date.parse(`${isoDay}T00:00:00Z`);
+  return Number.isFinite(t) ? UTC_DAY.format(t) : isoDay;
+}

@@ -3,7 +3,8 @@ import { loadGrid } from '@/data/dem';
 import { getCoverage, hasTile, nearestTile, tileUrl } from '@/data/coverage';
 import { makeGrid } from '@/engines/terrain';
 import { gradePixels } from '@/engines/grading';
-import { latToPx, lonToPx } from '@/lib/geo';
+import { latToPx, lonToPx, smoothstep } from '@/lib/geo';
+import { toBitmap } from '@/map/protocol';
 import { imgTile } from '@/map/protocol/img';
 import { curvatureDrop, toLonLat, type Frame } from './frame';
 import { fieldHeightAt, fieldIndices, type HeightField } from './heightfield';
@@ -48,10 +49,6 @@ export interface Patch {
   /** Tells this patch’s shader where the next finer patch sits, so it leaves that square undrawn. */
   setHole(cx: number, cz: number, half: number): void;
   dispose(): void;
-}
-
-async function toBitmap(data: ArrayBuffer | ImageBitmap): Promise<ImageBitmap> {
-  return data instanceof ArrayBuffer ? createImageBitmap(new Blob([data])) : data;
 }
 
 /** The imagery over a lon/lat box at one zoom, graded for eye level, as a canvas and its pixel origin. */
@@ -147,8 +144,7 @@ export async function buildPatch(frame: Frame, cx: number, cz: number, spec: Pat
       if (blend && coarseGrid) {
         const inside = half - Math.max(Math.abs(x - cx), Math.abs(z - cz));
         if (inside < blend.fromM) {
-          const t = Math.min(1, (blend.fromM - inside) / (blend.fromM - blend.toM));
-          const w = t * t * (3 - 2 * t);
+          const w = 1 - smoothstep(blend.toM, blend.fromM, inside);
           elevation += (coarseGrid.elevation(lat, lon) - elevation) * w - blend.sinkM * w;
         }
       }

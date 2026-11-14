@@ -1,3 +1,4 @@
+import { COVER_CHANGED } from '@/ui/shell/sheetStops';
 import { Marker, type Map as MapLibreMap } from 'maplibre-gl';
 import { loadNames, loadPlaces, loadSamples } from '@/data/datasets';
 import { useApp } from '@/store';
@@ -96,7 +97,8 @@ export function addLabels(map: MapLibreMap): () => void {
   map.on('moveend', declutter);
   const offLayers = useApp.subscribe((s) => s.layers, sync);
   const offMode = useApp.subscribe((s) => s.mode, sync);
-  // A panel that opens or closes changes what is covered; look again once it has been drawn.
+  // A panel that opens, closes or (on a phone) slides changes what is covered; look again once it has been drawn.
+  window.addEventListener(COVER_CHANGED, declutter);
   const offPanels = useApp.subscribe(
     (s) => `${s.placeId}|${s.plannerOpen}|${s.dock}`,
     () => requestAnimationFrame(() => requestAnimationFrame(declutter)),
@@ -108,6 +110,7 @@ export function addLabels(map: MapLibreMap): () => void {
     offLayers();
     offMode();
     offPanels();
+    window.removeEventListener(COVER_CHANGED, declutter);
     for (const l of labels) l.marker.remove();
   };
 }

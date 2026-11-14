@@ -157,9 +157,9 @@ export function LayersPanel() {
       <h3 className="mt-3 border-t pt-4 pb-1 text-xs font-medium text-muted-foreground">Light</h3>
       <Toggle
         label="Follow the real sun"
-        hint="Light the map by the Sun at Jezero for the time on the Mars clock: long shadows at dawn, dark at night. Off: lit as at mid-morning, so it always reads."
-        checked={!layers.daylight}
-        onChange={(sun) => setLayers({ daylight: !sun })}
+        hint="Light the map by the Sun at Jezero right now: long shadows at dawn, dark at night. Off: lit as at mid-morning, so it always reads. An hour picked on the Mars clock always shows its own light."
+        checked={layers.followSun}
+        onChange={(followSun) => setLayers({ followSun })}
       />
     </div>
   );

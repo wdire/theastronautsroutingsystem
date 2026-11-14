@@ -11,6 +11,11 @@ import { addProtocol, type GetResourceResponse } from 'maplibre-gl';
 export type TileData = ArrayBuffer | ImageBitmap;
 export type TileHandler = (rest: string[], z: number, x: number, y: number, signal: AbortSignal) => Promise<TileData>;
 
+/** A tile as a bitmap, whichever way its handler delivered it. */
+export function toBitmap(data: TileData): Promise<ImageBitmap> {
+  return data instanceof ArrayBuffer ? createImageBitmap(new Blob([data])) : Promise.resolve(data);
+}
+
 const handlers = new Map<string, TileHandler>();
 let registered = false;
 

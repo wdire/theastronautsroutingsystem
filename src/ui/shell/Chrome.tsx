@@ -14,8 +14,9 @@ import { DiscoverPanel } from '@/ui/panels/DiscoverPanel';
 import { MissionsPanel } from '@/ui/panels/MissionsPanel';
 import { HowPanel } from '@/ui/panels/HowPanel';
 import { Route } from 'lucide-react';
-import { useIsPhone, useMediaQuery } from '@/ui/hooks/useMediaQuery';
+import { useIsPhone, useIsTouch } from '@/ui/hooks/useMediaQuery';
 import { PhoneChrome } from './PhoneChrome';
+import { FlyoverBar } from '@/ui/mapctl/FlyoverBar';
 
 function DockContent() {
   const dock = useApp((s) => s.dock);
@@ -49,7 +50,7 @@ function LeftPanel() {
 
 function PickingHint() {
   const picking = useApp((s) => s.picking);
-  const touch = useMediaQuery('(pointer: coarse)');
+  const touch = useIsTouch();
   if (!picking) return null;
   const verb = touch ? 'Tap' : 'Click';
   return (
@@ -69,6 +70,7 @@ export function Chrome() {
       <>
         <PhoneChrome place={<PlaceCard />} planner={<Planner />} dockPanel={<DockContent />} />
         <PickingHint />
+        <FlyoverBar />
       </>
     );
   }
@@ -80,6 +82,7 @@ export function Chrome() {
         <LeftPanel />
       </div>
       <PickingHint />
+      <FlyoverBar />
 
       <div className="pointer-events-auto absolute top-3 right-3">
         <DockRail />

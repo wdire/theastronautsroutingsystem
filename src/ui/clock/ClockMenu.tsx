@@ -122,12 +122,7 @@ export function ClockMenu() {
                   type="button"
                   role="radio"
                   aria-checked={checked}
-                  onClick={() => {
-                    if (time.hour === null) return setClock(Date.now(), true);
-                    setClock(nextLtst(Date.now(), LON, time.hour), false);
-                    // Asking for an hour is asking to see its light.
-                    useApp.getState().setLayers({ daylight: false });
-                  }}
+                  onClick={() => (time.hour === null ? setClock(Date.now(), true) : setClock(nextLtst(Date.now(), LON, time.hour), false))}
                   className={cn(
                     'h-8 rounded-md border px-2.5 text-[13px] font-medium transition-colors',
                     checked ? 'border-primary/60 bg-primary/15 text-foreground' : 'text-muted-foreground hover:bg-secondary hover:text-foreground',

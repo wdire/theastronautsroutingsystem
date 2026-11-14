@@ -1,4 +1,5 @@
-import { Bot, Car, Caravan, Check, ChevronDown, Flag, Footprints, Helicopter, MousePointerClick, Plus, TriangleAlert, X } from 'lucide-react';
+import { Bot, Car, Caravan, Check, ChevronDown, Flag, Footprints, Helicopter, MousePointerClick, Plus, TriangleAlert, X, Plane } from 'lucide-react';
+import { flySelectedRoute } from '@/map/flyover';
 import { toast } from 'sonner';
 import type { RouteAlternative, VehicleId } from '@/engines/types';
 import { VEHICLES } from '@/engines/vehicles';
@@ -200,6 +201,14 @@ function RouteResult() {
           </span>
         </p>
       ) : null}
+      <button
+        type="button"
+        onClick={flySelectedRoute}
+        className="mt-3 inline-flex h-9 items-center gap-2 rounded-md border px-3 text-[13px] font-medium transition-colors hover:bg-secondary pointer-coarse:h-11"
+      >
+        <Plane className="size-4 text-muted-foreground" aria-hidden />
+        Fly along the route
+      </button>
       {!route.hasBudget ? (
         <p className="mt-3 text-xs leading-relaxed text-faint">
           The route follows the real terrain at {fmtNumber(route.cellM)} m detail. Time, oxygen, power and radiation for it are not part of this build yet.

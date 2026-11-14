@@ -54,7 +54,8 @@ export interface LayerState {
   /** One coloured overlay at a time. */
   overlay: Overlay;
   /** Light the map as at midday whatever the hour, so the ground is always readable. */
-  daylight: boolean;
+  /** Light the map by the real Sun at Jezero. Off: lit as at mid-morning, so it always reads. */
+  followSun: boolean;
 }
 
 export type RouteState =
@@ -84,6 +85,8 @@ export interface AppState {
   /** NASA’s space weather feeds as last fetched; null until they arrive. `spaceWeatherFailed` when nothing answered. */
   spaceWeather: DonkiFeed | null;
   spaceWeatherFailed: boolean;
+  /** A camera flight along the route, while it runs: the next waypoint and how far it is. */
+  flyover: { next: string; remainingM: number; progress: number } | null;
 
   /* planner */
   plan: MissionPlan;
@@ -118,6 +121,7 @@ export interface AppState {
   setDepartUtcMs(utcMs: number | null): void;
   setScenario(patch: Partial<Scenario>): void;
   setSpaceWeather(feed: DonkiFeed | null): void;
+  setFlyover(flyover: AppState['flyover']): void;
   openDock(tab: DockTab | null): void;
   toggleDock(tab: DockTab): void;
   openPlace(id: string | null): void;
@@ -169,6 +173,7 @@ export const useApp = create<AppState>()(
       scenario: DEFAULT_SCENARIO,
       spaceWeather: null,
       spaceWeatherFailed: false,
+      flyover: null,
 
       plan: EMPTY_PLAN,
       planRev: 0,
@@ -179,7 +184,7 @@ export const useApp = create<AppState>()(
       clockPaused: false,
 
       dock: null,
-      layers: { names: true, rover: true, traverse: true, overlay: 'none', daylight: true },
+      layers: { names: true, rover: true, traverse: true, overlay: 'none', followSun: false },
       placeId: null,
       sections: {},
 
@@ -191,6 +196,7 @@ export const useApp = create<AppState>()(
       setUtcMs: (utcMs) => set({ utcMs }),
       setClock: (utcMs, clockLive) => set({ utcMs, clockLive }),
       setDepartUtcMs: (departUtcMs) => set({ departUtcMs }),
+      setFlyover: (flyover) => set({ flyover }),
       setScenario: (patch) => set((s) => ({ scenario: { ...s.scenario, ...patch } })),
       setSpaceWeather: (feed) => set((s) => (feed ? { spaceWeather: feed, spaceWeatherFailed: false } : { spaceWeatherFailed: s.spaceWeather === null })),
       openDock: (dock) => set({ dock }),

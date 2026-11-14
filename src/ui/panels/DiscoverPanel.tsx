@@ -1,3 +1,4 @@
+import { nasaUrl } from '@/lib/nasa';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { Marker } from 'maplibre-gl';
 import { Binoculars, MapPin } from 'lucide-react';
@@ -12,17 +13,6 @@ interface RawFrame {
   src: string;
   full: string;
   camera: string;
-}
-
-/** A link from the feed is used only if it is an https address on a nasa.gov host. */
-function nasaUrl(value: string | undefined): string | null {
-  if (!value) return null;
-  try {
-    const url = new URL(value);
-    return url.protocol === 'https:' && (url.hostname === 'nasa.gov' || url.hostname.endsWith('.nasa.gov')) ? url.href : null;
-  } catch {
-    return null;
-  }
 }
 
 /** Up to four Navcam frames the rover took on a sol, asked of NASA’s raw-images feed when wanted. */
