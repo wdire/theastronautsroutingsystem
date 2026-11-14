@@ -1,5 +1,6 @@
 import { create } from 'zustand';
 import { subscribeWithSelector } from 'zustand/middleware';
+import type { DonkiFeed } from '@/engines/spaceWeather';
 import type { MissionPlan, RouteAlternative, RouteStyle, Scenario, Stop, Task, TaskKind, VehicleId, Waypoint } from '@/engines/types';
 
 export type Mode = 'globe' | 'map';
@@ -80,6 +81,9 @@ export interface AppState {
   /** A departure chosen by hand, or null to leave now. */
   departUtcMs: number | null;
   scenario: Scenario;
+  /** NASA's space weather feeds as last fetched; null until they arrive. `spaceWeatherFailed` when nothing answered. */
+  spaceWeather: DonkiFeed | null;
+  spaceWeatherFailed: boolean;
 
   /* planner */
   plan: MissionPlan;
@@ -113,6 +117,7 @@ export interface AppState {
   setClock(utcMs: number, live: boolean): void;
   setDepartUtcMs(utcMs: number | null): void;
   setScenario(patch: Partial<Scenario>): void;
+  setSpaceWeather(feed: DonkiFeed | null): void;
   openDock(tab: DockTab | null): void;
   toggleDock(tab: DockTab): void;
   openPlace(id: string | null): void;
@@ -162,6 +167,8 @@ export const useApp = create<AppState>()(
       clockLive: true,
       departUtcMs: null,
       scenario: DEFAULT_SCENARIO,
+      spaceWeather: null,
+      spaceWeatherFailed: false,
 
       plan: EMPTY_PLAN,
       planRev: 0,
@@ -185,6 +192,7 @@ export const useApp = create<AppState>()(
       setClock: (utcMs, clockLive) => set({ utcMs, clockLive }),
       setDepartUtcMs: (departUtcMs) => set({ departUtcMs }),
       setScenario: (patch) => set((s) => ({ scenario: { ...s.scenario, ...patch } })),
+      setSpaceWeather: (feed) => set((s) => (feed ? { spaceWeather: feed, spaceWeatherFailed: false } : { spaceWeatherFailed: s.spaceWeather === null })),
       openDock: (dock) => set({ dock }),
       toggleDock: (tab) => set((s) => ({ dock: s.dock === tab ? null : tab })),
       openPlace: (placeId) => set({ placeId }),

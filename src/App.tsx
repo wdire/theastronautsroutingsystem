@@ -2,6 +2,7 @@ import { lazy, Suspense, useEffect } from 'react';
 import { MapView } from '@/map/MapView';
 import { whenMapReady } from '@/map/instance';
 import { startUrlSync } from '@/store/sync';
+import { useSpaceWeatherFeed } from '@/ui/hooks/useSpaceWeather';
 import { Intro } from '@/ui/intro/Intro';
 import { Chrome } from '@/ui/shell/Chrome';
 import { TooltipProvider } from '@/ui/components/ui/tooltip';
@@ -25,6 +26,8 @@ export function App() {
   const landed = useApp((s) => s.landed);
   const theme = useApp((s) => s.theme);
   const visorOpen = useApp((s) => s.visor !== null);
+
+  useSpaceWeatherFeed();
 
   useEffect(() => {
     document.documentElement.dataset.theme = theme;

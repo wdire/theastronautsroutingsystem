@@ -30,6 +30,16 @@
     "retrieved": "2026-11-14"
   },
   {
+    "id": "donki-space-weather",
+    "name": "Live space weather: CMEs modelled to Mars, particle events, solar flares",
+    "mission": "NASA Community Coordinated Modeling Center (CCMC) and Moon to Mars Space Weather Analysis Office",
+    "product": "DONKI: WSA-ENLIL simulations (impactList), SEP and FLR event lists",
+    "url": "https://ccmc.gsfc.nasa.gov/tools/DONKI/",
+    "licence": "Public domain (NASA).",
+    "notes": "Asked live, at most every 30 minutes, through api/spaceweather.ts (api.nasa.gov, with ccmc.gsfc.nasa.gov as the fallback for each feed) or by the browser from ccmc.gsfc.nasa.gov directly. Not bundled. Arrival times at Mars come from the WSA-ENLIL model and are good to about half a day. A slice retrieved on 2026-11-14 is kept in tests/fixtures/donki-2026-11.json for the unit tests.",
+    "retrieved": "2026-11-14"
+  },
+  {
     "id": "hrsc-mola-blend-dem",
     "name": "Mars HRSC and MOLA blended digital elevation model, 200 m, version 2",
     "mission": "Mars Express (HRSC) and Mars Global Surveyor (MOLA)",

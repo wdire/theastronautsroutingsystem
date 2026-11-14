@@ -65,3 +65,10 @@ export function joinWords(words: string[]): string {
   if (words.length <= 1) return words[0] ?? '';
   return `${words.slice(0, -1).join(', ')} and ${words[words.length - 1]}`;
 }
+
+const UTC_STAMP = new Intl.DateTimeFormat('en-GB', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit', hour12: false, timeZone: 'UTC' });
+
+/** "13 Nov, 12:00 UTC" */
+export function fmtUtc(utcMs: number): string {
+  return `${UTC_STAMP.format(utcMs)} UTC`;
+}

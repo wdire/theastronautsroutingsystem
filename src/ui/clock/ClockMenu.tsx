@@ -7,6 +7,9 @@ import { fmtClock, fmtNumber } from '@/lib/format';
 import { cn } from '@/lib/cn';
 import { Row } from '@/ui/shell/Section';
 import type { Scenario } from '@/engines/types';
+import { useSpaceWeather } from '@/ui/hooks/useSpaceWeather';
+import { SpaceWeatherBlock } from './SpaceWeather';
+import { STATUS_DOT, STATUS_LABEL } from './status';
 
 const [LON, LAT] = LANDING_SITE;
 
@@ -79,16 +82,19 @@ export function ClockMenu() {
   const Icon = night ? Moon : low ? Sunrise : Sun;
   const light = lightTimeS(utcMs);
   const dust = DUST.find((d) => d.id === scenario.dust);
+  const weather = useSpaceWeather();
+  const alert = weather && (weather.status === 'watch' || weather.status === 'warning') ? weather.status : null;
 
   return (
     <Popover>
       <PopoverTrigger asChild>
         <button
           type="button"
-          aria-label={`Local time at Jezero ${fmtClock(t.ltstH)}. Open the Mars clock`}
-          className="panel flex h-12 items-center gap-2.5 pr-3.5 pl-3 transition-colors hover:bg-secondary data-[state=open]:bg-secondary"
+          aria-label={`Local time at Jezero ${fmtClock(t.ltstH)}. ${alert ? `Space weather ${STATUS_LABEL[alert].toLowerCase()}. ` : ''}Open the Mars clock`}
+          className="panel relative flex h-12 items-center gap-2.5 pr-3.5 pl-3 transition-colors hover:bg-secondary data-[state=open]:bg-secondary"
         >
-          <Icon className={cn('size-[18px]', night ? 'text-advisory' : 'text-caution')} aria-hidden />
+          {alert ? <span className={cn('absolute -top-1 -right-1 size-2.5 rounded-full ring-2 ring-background', STATUS_DOT[alert])} aria-hidden /> : null}
+          <Icon className="size-[18px] text-muted-foreground" aria-hidden />
           <span className="flex flex-col items-start leading-none">
             <span className="figure text-[17px] font-semibold tracking-[-0.01em] [font-stretch:92%]">
               {fmtClock(t.ltstH)}
@@ -98,7 +104,7 @@ export function ClockMenu() {
           </span>
         </button>
       </PopoverTrigger>
-      <PopoverContent align="end" sideOffset={8} className="w-[336px] p-0">
+      <PopoverContent align="end" sideOffset={8} className="scroll-quiet max-h-[min(calc(100dvh-6rem),46rem)] w-[336px] overflow-y-auto p-0">
         <div className="px-4 pt-4 pb-3">
           <h2 className="text-[15px] font-semibold">Mars clock</h2>
           <p className="mt-1 text-[13px] leading-relaxed text-muted-foreground">
@@ -152,6 +158,7 @@ export function ClockMenu() {
             />
           </label>
         </div>
+        <SpaceWeatherBlock />
       </PopoverContent>
     </Popover>
   );

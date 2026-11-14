@@ -89,6 +89,20 @@ export function HowPanel() {
         </P>
         <Limits>Dose varies with the solar cycle and with shelter from nearby cliffs, which this model only approximates.</Limits>
       </Section>
+      <Section id="how-spaceweather" title="Space weather" hint="Live from NASA, in the Mars clock">
+        <P>
+          The Sun throws out clouds of charged gas (coronal mass ejections) and bursts of fast particles. NASA models where each cloud will go with
+          WSA-ENLIL and lists the results in its DONKI database. The Mars clock reads that list every half hour and tells you when a cloud is due at Mars.
+        </P>
+        <P>
+          Watch means a cloud is forecast at Mars within a week. Warning means within a day, still passing, or that an instrument at Mars recorded
+          particles in the last two days.
+        </P>
+        <Limits>
+          Modelled arrival times are good to about half a day. Mars has few instruments, so particle events there are often not recorded at all. If
+          NASA does not answer, the clock says so and shows no forecast.
+        </Limits>
+      </Section>
       <Section id="how-geology" title="Geology and minerals" hint="The geologic map and the CRISM overlays">
         <P>The geologic map is the USGS map of the whole planet (Tanaka and others, 2014). Its units are tens of kilometres across.</P>
         <P>

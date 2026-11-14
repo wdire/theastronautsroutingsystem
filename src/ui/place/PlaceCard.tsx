@@ -1,3 +1,4 @@
+import { StationReadings } from './Stations';
 import { useEffect, useState, type ReactNode } from 'react';
 import { Binoculars, ExternalLink, Flag, Link2, MapPinPlus, Navigation, X, ZoomIn } from 'lucide-react';
 import { toast } from 'sonner';
@@ -268,7 +269,7 @@ export function PlaceCard() {
           )}
         </Section>
 
-        <Section id="place-conditions" title="Conditions now" hint="Modelled: temperature, pressure, dust, radiation">
+        <Section id="place-conditions" title="Conditions now" hint="Modelled for this spot, and what the rovers measured">
           {cond && ground ? (
             <>
               <Row label="Air temperature" value={fmtTemp(cond.tempC)} />
@@ -282,6 +283,7 @@ export function PlaceCard() {
                 These numbers are modelled from the season, the hour and the height of the ground, not measured here. How it
                 works explains each model and its limits.
               </p>
+              <StationReadings />
             </>
           ) : (
             <p className="text-[13px] text-muted-foreground">Working out the conditions.</p>
