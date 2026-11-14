@@ -151,11 +151,17 @@ describe('computeTrip on foot', () => {
     expect(a).not.toBeNull();
     expect(b).not.toBeNull();
     if (a === null || b === null) return;
-    // Time out plus time back is the same either way round, so the oxygen for the return decides.
     const backFromClimb = o2KgPerHour(walkingW(toblerKmh(-8), -8)) / toblerKmh(-8);
     const backFromDescent = o2KgPerHour(walkingW(toblerKmh(8), 8)) / toblerKmh(8);
     expect(backFromDescent).toBeGreaterThan(backFromClimb);
-    expect(climbOut.samples[a]?.distM).not.toBeCloseTo(descendOut.samples[b]?.distM ?? 0, -2);
+    // Out and back over the same ground costs the same either way round (one leg up, one down), so both
+    // points of no return sit where an uphill leg plus a downhill leg fill 80% of the scrubbers. Costing the
+    // way back as a repeat of the way out would put them 2.2 km nearer (climb) and 1.6 km farther (descent).
+    const expectedM = 1000 * (6.4 / (1 / toblerKmh(8) + 1 / toblerKmh(-8)));
+    for (const [r, i] of [[climbOut, a], [descendOut, b]] as const) {
+      expect(r.samples[i]?.distM ?? 0).toBeLessThanOrEqual(expectedM + 1);
+      expect(r.samples[i]?.distM ?? 0).toBeGreaterThan(expectedM - 101);
+    }
   });
 
   it('has no point of no return on a short walk or on a loop that fits', () => {
@@ -308,7 +314,8 @@ describe('computeTrip by rover', () => {
   });
 
   it('waits for sunrise where the vehicle needs daylight, and lists the night stop', () => {
-    const path = line(2000, 100);
+    // 1.5 km at 152 m/h is about 10 h, inside one day's light (2 km would take 13 h and a second night).
+    const path = line(1500, 100);
     const night = nextLtst(BASE, START[0], 22);
     const r = computeTrip(path, opts('robotRover', { departUtcMs: night }));
     expect(r.nightStops).toHaveLength(1);
