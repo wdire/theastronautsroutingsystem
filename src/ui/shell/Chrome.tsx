@@ -6,6 +6,8 @@ import { ScaleBar } from '@/ui/mapctl/ScaleBar';
 import { CursorReadout } from '@/ui/mapctl/CursorReadout';
 import { SearchBox } from '@/ui/search/SearchBox';
 import { MainMenu } from './MainMenu';
+import { PlaceCard } from '@/ui/place/PlaceCard';
+import { ReliefChip } from '@/ui/mapctl/ReliefChip';
 import { useIsPhone } from '@/ui/hooks/useMediaQuery';
 
 function EmptyPanel({ children }: { children: ReactNode }) {
@@ -33,7 +35,10 @@ export function Chrome() {
           <SearchBox leading={<MainMenu />} />
         </div>
         <div className="pointer-events-auto absolute right-2.5 bottom-[max(1.5rem,env(safe-area-inset-bottom))]">
-          <MapButtons />
+          <MapButtons withLayers />
+        </div>
+        <div className="pointer-events-auto absolute inset-x-0 bottom-0 flex max-h-[62dvh] flex-col [&>*]:rounded-b-none [&>*]:border-x-0 [&>*]:border-b-0">
+          <PlaceCard />
         </div>
         <div className="pointer-events-auto absolute inset-x-0 bottom-0 flex max-h-[72dvh] justify-center [&>section]:w-full [&>section]:max-w-none [&>section]:rounded-b-none">
           <DockContent />
@@ -46,6 +51,7 @@ export function Chrome() {
     <div className="pointer-events-none absolute inset-0">
       <div className="absolute top-3 bottom-3 left-3 flex w-[372px] flex-col gap-2 [&>*]:pointer-events-auto">
         <SearchBox leading={<MainMenu />} />
+        <PlaceCard />
       </div>
 
       <div className="pointer-events-auto absolute top-3 right-3">
@@ -59,6 +65,7 @@ export function Chrome() {
         <div className="hidden lg:block">
           <CursorReadout />
         </div>
+        <ReliefChip />
         <ScaleBar />
       </div>
       <div className="pointer-events-auto absolute right-3 bottom-3">

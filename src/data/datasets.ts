@@ -1,4 +1,5 @@
 import type { PathPoint } from '@/engines/types';
+import type { GeologyData } from '@/engines/geology';
 
 /** Typed loaders for the JSON under /data. Each file is fetched once and shared. */
 
@@ -125,3 +126,4 @@ export const loadCaves = () => load<PointOfInterest[]>('/data/caves.json');
 export const loadSites = () => load<PointOfInterest[]>('/data/sites.json');
 export const loadWeather = () => load<WeatherData>('/data/weather.json');
 export const loadSources = () => load<SourceEntry[]>('/data/sources.json');
+export const loadGeology = () => load<GeologyData>('/data/geology.json');

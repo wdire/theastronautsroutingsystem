@@ -21,3 +21,7 @@ Plan: docs/superpowers/plans/2026-11-14-areo.md. One line per task, then rulings
 - This file is the ledger (the build spec asks for it and it survives `git clean`). Cost if wrong: none.
 - Subagents write files and never commit; the main session checks and commits. Cost if wrong: a slower commit.
 - Typeface: Archivo (variable, width axis), chosen against IBM Plex Sans, Public Sans and Barlow on a sample place card: its numerals are the most distinct at small sizes and the width axis gives figures a narrower cut without a second family. Cost if wrong: one @font-face swap in src/fonts.css.
+- BLOCKED (2026-11-14): the engines subagent for task 4 batch A was stopped by the model's safeguards after
+  writing marsTime, environment, metabolic and vehicles (72 tests pass). `src/engines/tripComputer.ts` and
+  `src/engines/departure.ts` are not written (a tripComputer.test.ts exists). The main session does not write
+  them either; the team decides how (new session or another model). Tasks 6, 7 and the exports in 10 wait on them.

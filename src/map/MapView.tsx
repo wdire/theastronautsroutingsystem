@@ -1,14 +1,23 @@
 import { useEffect, useRef } from 'react';
 import 'maplibre-gl/dist/maplibre-gl.css';
 import { useApp } from '@/store';
-import { createMap, destroyMap } from './instance';
+import { createMap, destroyMap, whenMapReady } from './instance';
 import { flyIn, isInRegion, startGlobeSpin } from './camera';
 import { setTileHandler } from './protocol';
 import { imgTile } from './protocol/img';
-import { getCoverage, loadCoverage, onCoverage } from '@/data/coverage';
+import { demTile } from './protocol/dem';
+import { addTerrain } from './terrain';
+import { addPlacePicking } from './pick';
+import { addGlobeMarker } from './globeMarker';
+import { setReadoutSampler } from './readout';
 import { SOURCE_BASE } from './style';
+import { getCoverage, loadCoverage, onCoverage } from '@/data/coverage';
+import { groundAtCached } from '@/data/dem';
+import { marsTime } from '@/engines/marsTime';
+import { fmtClock, fmtDeg, fmtElevation } from '@/lib/format';
 
 setTileHandler('img', imgTile);
+setTileHandler('dem', demTile);
 
 /** The one map of the app. Everything else draws over it. */
 export function MapView() {
@@ -19,21 +28,51 @@ export function MapView() {
     const hadCoverage = getCoverage() !== null;
     void loadCoverage();
     const map = createMap(ref.current);
+    const cleanups: (() => void)[] = [];
+    let alive = true;
+
     // If the package index arrives late, the tiles drawn without it are asked for again.
-    const offCoverage = onCoverage(() => {
-      if (hadCoverage) return;
-      const source = map.getSource(SOURCE_BASE);
-      if (source && 'setTiles' in source) (source as { setTiles(t: string[]): void }).setTiles(['mars://img/{z}/{x}/{y}']);
-    });
-    const stopSpin = startGlobeSpin(map);
+    cleanups.push(
+      onCoverage(() => {
+        if (hadCoverage) return;
+        for (const [id, tiles] of [
+          [SOURCE_BASE, 'mars://img/{z}/{x}/{y}'],
+          ['dem', 'mars://dem/{z}/{x}/{y}'],
+          ['dem-shade', 'mars://dem/{z}/{x}/{y}'],
+        ] as const) {
+          const source = map.getSource(id);
+          if (source && 'setTiles' in source) (source as { setTiles(t: string[]): void }).setTiles([tiles]);
+        }
+      }),
+    );
+    cleanups.push(startGlobeSpin(map));
+
     const onClick = (e: { lngLat: { lng: number; lat: number } }) => {
       if (useApp.getState().mode === 'globe' && isInRegion(e.lngLat.lng, e.lngLat.lat)) flyIn(map);
     };
     map.on('click', onClick);
+    cleanups.push(() => map.off('click', onClick));
+
+    whenMapReady((m) => {
+      if (!alive) return;
+      cleanups.push(addTerrain(m), addPlacePicking(m), addGlobeMarker(m));
+    });
+
+    setReadoutSampler((lon, lat) => {
+      const out: string[] = [];
+      const ground = groundAtCached(lon, lat, map.getZoom() + 1);
+      if (ground) {
+        out.push(fmtElevation(ground.elev));
+        out.push(`slope ${fmtDeg(ground.slopeDeg, ground.slopeDeg < 10 ? 1 : 0)}`);
+      }
+      out.push(`${fmtClock(marsTime(useApp.getState().utcMs, lon).ltstH)} LTST`);
+      return out;
+    });
+
     return () => {
-      stopSpin();
-      offCoverage();
-      map.off('click', onClick);
+      alive = false;
+      for (const fn of cleanups) fn();
+      setReadoutSampler(() => []);
       destroyMap();
     };
   }, []);

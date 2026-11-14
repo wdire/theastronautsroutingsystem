@@ -9,7 +9,7 @@ const readBearing = (m: { getBearing(): number }) => Math.round(m.getBearing());
 const readPitch = (m: { getPitch(): number }) => Math.round(m.getPitch());
 
 /** Bottom right: layers, tilt, north, the landing site, and zoom. */
-export function MapButtons() {
+export function MapButtons({ withLayers = false }: { withLayers?: boolean }) {
   const bearing = useMapState(readBearing, 0);
   const pitch = useMapState(readPitch, 0);
   const layersOpen = useApp((s) => s.dock === 'layers');
@@ -19,9 +19,11 @@ export function MapButtons() {
   return (
     <div className="flex flex-col items-end gap-2">
       <div className="panel flex flex-col p-0.5">
-        <IconButton label="Map layers" active={layersOpen} onClick={() => toggleDock('layers')}>
-          <Layers />
-        </IconButton>
+        {withLayers ? (
+          <IconButton label="Map layers" active={layersOpen} onClick={() => toggleDock('layers')}>
+            <Layers />
+          </IconButton>
+        ) : null}
         <IconButton
           label={tilted ? 'Look straight down' : 'Tilt the view'}
           active={tilted}

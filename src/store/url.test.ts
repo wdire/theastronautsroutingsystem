@@ -35,7 +35,7 @@ describe('url state', () => {
   it('writes nothing for an empty state and leaves defaults out', () => {
     expect(encodeUrlState({})).toBe('');
     const hash = encodeUrlState({
-      plan: { start: null, stops: [], roundTrip: false, vehicle: 'foot', style: 'safest', campAtNight: false },
+      plan: { start: null, stops: [], roundTrip: true, vehicle: 'foot', style: 'safest', campAtNight: false },
     });
     expect(hash).toBe('');
   });
@@ -75,7 +75,9 @@ describe('url state', () => {
         campAtNight: false,
       },
     };
-    expect(decodeUrlState(encodeUrlState(state)).plan?.start?.name).toBe('A B C D E F');
+    const back = decodeUrlState(encodeUrlState(state)).plan;
+    expect(back?.start?.name).toBe('A B C D E F');
+    expect(back?.roundTrip).toBe(false);
   });
 
   it('caps the number of stops and tasks', () => {

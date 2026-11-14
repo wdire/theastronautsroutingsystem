@@ -1,7 +1,7 @@
 import { useEffect } from 'react';
 import { MapView } from '@/map/MapView';
 import { whenMapReady } from '@/map/instance';
-import { addGlobeMarker } from '@/map/globeMarker';
+import { startUrlSync } from '@/store/sync';
 import { Intro } from '@/ui/intro/Intro';
 import { Chrome } from '@/ui/shell/Chrome';
 import { TooltipProvider } from '@/ui/components/ui/tooltip';
@@ -27,15 +27,24 @@ export function App() {
   }, [theme]);
 
   useEffect(() => {
-    let remove: (() => void) | undefined;
+    let stop: (() => void) | undefined;
     let cancelled = false;
     whenMapReady((map) => {
-      if (!cancelled) remove = addGlobeMarker(map);
+      if (!cancelled) stop = startUrlSync(map);
     });
     return () => {
       cancelled = true;
-      remove?.();
+      stop?.();
     };
+  }, []);
+
+  // The app clock follows real time, second by second, until a mission takes it over.
+  useEffect(() => {
+    const id = window.setInterval(() => {
+      const s = useApp.getState();
+      s.setUtcMs(s.utcMs + 1000);
+    }, 1000);
+    return () => window.clearInterval(id);
   }, []);
 
   const inMap = mode === 'map';

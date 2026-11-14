@@ -66,6 +66,8 @@ export interface AppState {
   /* ui */
   dock: DockTab | null;
   placeId: string | null;
+  /** Which detail sections the visitor has opened, by id. Kept for the visit. */
+  sections: Record<string, boolean>;
 
   /* actions */
   setMode(mode: Mode): void;
@@ -79,6 +81,7 @@ export interface AppState {
   openDock(tab: DockTab | null): void;
   toggleDock(tab: DockTab): void;
   openPlace(id: string | null): void;
+  toggleSection(id: string): void;
 
   setPlan(plan: MissionPlan): void;
   setStart(start: Waypoint | null): void;
@@ -121,6 +124,7 @@ export const useApp = create<AppState>()(
 
       dock: null,
       placeId: null,
+      sections: {},
 
       setMode: (mode) => set({ mode }),
       setLanded: () => set({ landed: true }),
@@ -133,6 +137,7 @@ export const useApp = create<AppState>()(
       openDock: (dock) => set({ dock }),
       toggleDock: (tab) => set((s) => ({ dock: s.dock === tab ? null : tab })),
       openPlace: (placeId) => set({ placeId }),
+      toggleSection: (id) => set((s) => ({ sections: { ...s.sections, [id]: !s.sections[id] } })),
 
       setPlan: (plan) => editPlan(() => plan),
       setStart: (start) => editPlan((p) => ({ ...p, start })),

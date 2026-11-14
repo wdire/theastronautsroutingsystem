@@ -94,7 +94,8 @@ export function encodeUrlState(state: UrlState): string {
     }
     if (p.vehicle !== 'foot') parts.push(`veh=${p.vehicle}`);
     if (p.style !== 'safest') parts.push(`style=${p.style}`);
-    if (p.roundTrip) parts.push('rt=1');
+    // A round trip is the default, so only a one-way plan is written.
+    if (!p.roundTrip && (p.start || p.stops.length)) parts.push('rt=0');
     if (p.campAtNight) parts.push('camp=1');
   }
   if (state.departUtcMs !== undefined) parts.push(`t=${Math.round(state.departUtcMs / 1000)}`);
@@ -138,13 +139,13 @@ export function decodeUrlState(hash: string): UrlState {
   }
   const vehicle = VEHICLES.find((v) => v === kv.get('veh'));
   const style = STYLES.find((s) => s === kv.get('style'));
-  if (start || stops.length || vehicle || style || kv.has('rt') || kv.has('camp')) {
+  if (start || stops.length || vehicle || style || kv.has('camp')) {
     out.plan = {
       start,
       stops,
       vehicle: vehicle ?? 'foot',
       style: style ?? 'safest',
-      roundTrip: kv.get('rt') === '1',
+      roundTrip: kv.get('rt') !== '0',
       campAtNight: kv.get('camp') === '1',
     };
   }

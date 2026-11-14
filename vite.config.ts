@@ -38,6 +38,10 @@ export default defineConfig(({ mode }) => ({
   plugins: [react(), tailwindcss(), devApi(loadEnv(mode, root, ''))],
   resolve: { alias: { '@': path.join(root, 'src') } },
   worker: { format: 'es' as const },
+  // Named up front so the dev server never re-bundles dependencies in the middle of a session.
+  optimizeDeps: {
+    include: ['react', 'react-dom', 'react-dom/client', 'zustand', 'zustand/middleware', 'radix-ui', 'lucide-react', 'sonner', 'vaul', 'clsx', 'tailwind-merge', 'class-variance-authority', 'maplibre-gl', '@dnd-kit/core', '@dnd-kit/sortable', '@dnd-kit/utilities'],
+  },
   build: { target: 'es2023', chunkSizeWarningLimit: 900 },
   test: {
     environment: 'node',
