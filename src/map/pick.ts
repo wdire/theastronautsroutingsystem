@@ -50,6 +50,10 @@ export function addPlacePicking(map: MapLibreMap): () => void {
     if (s.picking) {
       // The planner asked for a point: the click sets the start or adds a stop, named if it hit a known place.
       const target = s.picking;
+      if (target === 'roverView') {
+        s.openVisor({ lon: e.lngLat.lng, lat: e.lngLat.lat });
+        return;
+      }
       s.setPicking(null);
       void resolvePlace(key).then((view) => {
         const at = view && view.kind !== 'point' ? { lon: view.lon, lat: view.lat, name: view.name, placeId: view.key } : { lon: e.lngLat.lng, lat: e.lngLat.lat };

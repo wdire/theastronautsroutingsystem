@@ -219,7 +219,7 @@ export function PlaceCard() {
           <ActionButton icon={<MapPinPlus aria-hidden />} onClick={addStop} disabled={!inRegion}>
             Add stop
           </ActionButton>
-          <ActionButton icon={<Binoculars aria-hidden />} disabled title="Rover View arrives with the helmet view">
+          <ActionButton icon={<Binoculars aria-hidden />} disabled={!inRegion} onClick={() => useApp.getState().openVisor({ lon: v.lon, lat: v.lat })}>
             Rover View
           </ActionButton>
           <ActionButton

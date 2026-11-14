@@ -1,4 +1,4 @@
-import { useEffect } from 'react';
+import { lazy, Suspense, useEffect } from 'react';
 import { MapView } from '@/map/MapView';
 import { whenMapReady } from '@/map/instance';
 import { startUrlSync } from '@/store/sync';
@@ -8,6 +8,9 @@ import { TooltipProvider } from '@/ui/components/ui/tooltip';
 import { Toaster } from '@/ui/components/ui/sonner';
 import { useApp } from '@/store';
 import { cn } from '@/lib/cn';
+
+// three.js and the 3D view load only when they are first opened.
+const RoverView = lazy(() => import('@/ui/visor/RoverView'));
 
 function Wordmark() {
   return (
@@ -21,6 +24,7 @@ export function App() {
   const mode = useApp((s) => s.mode);
   const landed = useApp((s) => s.landed);
   const theme = useApp((s) => s.theme);
+  const visorOpen = useApp((s) => s.visor !== null);
 
   useEffect(() => {
     document.documentElement.dataset.theme = theme;
@@ -42,7 +46,7 @@ export function App() {
   useEffect(() => {
     const id = window.setInterval(() => {
       const s = useApp.getState();
-      s.setUtcMs(s.clockLive ? Date.now() : s.utcMs + 1000);
+      if (!s.clockPaused) s.setUtcMs(s.clockLive ? Date.now() : s.utcMs + 1000);
     }, 1000);
     return () => window.clearInterval(id);
   }, []);
@@ -68,6 +72,11 @@ export function App() {
       >
         <Chrome />
       </div>
+      {visorOpen ? (
+        <Suspense fallback={null}>
+          <RoverView />
+        </Suspense>
+      ) : null}
       <Toaster position="bottom-center" />
     </div>
     </TooltipProvider>

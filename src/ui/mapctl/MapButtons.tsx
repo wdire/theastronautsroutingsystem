@@ -1,4 +1,4 @@
-import { Layers, LocateFixed, Minus, Navigation2, Plus } from 'lucide-react';
+import { Binoculars, Layers, LocateFixed, Minus, Navigation2, Plus } from 'lucide-react';
 import { getMap } from '@/map/instance';
 import { LANDING_SITE } from '@/lib/constants';
 import { useApp } from '@/store';
@@ -15,6 +15,8 @@ export function MapButtons({ withLayers = false }: { withLayers?: boolean }) {
   const layersOpen = useApp((s) => s.dock === 'layers');
   const toggleDock = useApp((s) => s.toggleDock);
   const tilted = pitch > 5;
+  const pickingView = useApp((s) => s.picking === 'roverView');
+  const setPicking = useApp((s) => s.setPicking);
 
   return (
     <div className="flex flex-col items-end gap-2">
@@ -30,6 +32,9 @@ export function MapButtons({ withLayers = false }: { withLayers?: boolean }) {
           onClick={() => getMap()?.easeTo({ pitch: tilted ? 0 : 55, duration: 500 })}
         >
           <span className="figure text-[13px] font-semibold tracking-tight">{tilted ? '2D' : '3D'}</span>
+        </IconButton>
+        <IconButton label="Rover View: stand on the ground" active={pickingView} onClick={() => setPicking(pickingView ? null : 'roverView')}>
+          <Binoculars />
         </IconButton>
         <IconButton
           label={bearing === 0 ? 'North is up' : 'Turn north up'}

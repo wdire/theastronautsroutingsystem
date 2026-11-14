@@ -73,8 +73,12 @@ export interface AppState {
   /** The planner panel is showing. */
   plannerOpen: boolean;
   /** What the next click on the map sets, if anything. */
-  picking: 'start' | 'stop' | null;
+  picking: 'start' | 'stop' | 'roverView' | null;
   route: RouteState;
+  /** The spot the 3D ground view is open on, or null while the map shows. */
+  visor: { lon: number; lat: number } | null;
+  /** The clock stands still (Rover View's fixed times of day). */
+  clockPaused: boolean;
 
   /* ui */
   dock: DockTab | null;
@@ -100,7 +104,10 @@ export interface AppState {
 
   setPlan(plan: MissionPlan): void;
   openPlanner(open: boolean): void;
-  setPicking(picking: 'start' | 'stop' | null): void;
+  setPicking(picking: 'start' | 'stop' | 'roverView' | null): void;
+  openVisor(at: { lon: number; lat: number }): void;
+  closeVisor(): void;
+  setClockPaused(paused: boolean): void;
   setRoute(route: RouteState): void;
   selectRoute(id: string): void;
   setStart(start: Waypoint | null): void;
@@ -144,6 +151,8 @@ export const useApp = create<AppState>()(
       plannerOpen: false,
       picking: null,
       route: { status: 'idle' },
+      visor: null,
+      clockPaused: false,
 
       dock: null,
       placeId: null,
@@ -166,6 +175,9 @@ export const useApp = create<AppState>()(
       setPlan: (plan) => editPlan(() => plan),
       openPlanner: (plannerOpen) => set(plannerOpen ? { plannerOpen, placeId: null } : { plannerOpen, picking: null }),
       setPicking: (picking) => set({ picking }),
+      openVisor: (visor) => set({ visor, picking: null }),
+      closeVisor: () => set({ visor: null }),
+      setClockPaused: (clockPaused) => set({ clockPaused }),
       setRoute: (route) => set({ route }),
       selectRoute: (id) => set((s) => (s.route.status === 'ready' ? { route: { ...s.route, selected: id } } : {})),
       setStart: (start) => editPlan((p) => ({ ...p, start })),

@@ -9,7 +9,7 @@ Plan: docs/superpowers/plans/2026-11-14-areo.md. One line per task, then rulings
 - [ ] 5 Real protocol, places, search, place card: protocol (package, ancestor upsample, live Viking/CTX/HiRISE detail), DEM grids, search, place card, clock chip done. Left: e2e tests from the plan, check against the final tile package, Rover View button.
 - [ ] 6 Router wiring, route card, mission editor: planner panel (vehicle, start, stops with drag reorder, tasks with minutes, undo, round trip, pick on map), routing per leg in 3 styles with stale-run dropping (unit tested), route and pins on the map, alternatives. Left: budget tiles, timing card, profile strip, briefing (all need tripComputer), templates from missions, click-the-route-to-add-a-stop, draggable pins, e2e tests.
 - [ ] 7 Simulation, alerts, base, run panel
-- [ ] 8 Visor and Rover View
+- [ ] 8 Visor and Rover View: DONE: three ground layers with shader holes and per-variant program keys, eye-level grading, near ground detail shader (sand, ripples, grains, bedded and jointed rock), instanced rocks (stable hash, slope weighted), sky with sun disc, blue sunset aureole and stars, sun shadows, first-person walking, Rover View screen (compass tape, readout, time presets, WebGL failure message), quality tiers. LEFT: crew and vehicles with NASA models and the rigged Z2 suit, chase and orbit cameras, route guides, mission HUD (O2, power, dose, alerts, chat, mini map), contact shadows, dust motes, moons, on-screen pad for touch, photo cards near Perseverance stops, e2e test.
 - [ ] 9 Map look, layers, Discover, flyover
 - [ ] 10 Space weather, exports, validation
 - [ ] 11 Docs, phone pass, full suite

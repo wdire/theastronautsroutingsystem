@@ -52,7 +52,7 @@ function PickingHint() {
   if (!picking) return null;
   return (
     <div role="status" className="panel pointer-events-none absolute top-3 left-1/2 flex h-10 -translate-x-1/2 items-center gap-2 px-3.5 text-[13px] font-medium">
-      {picking === 'start' ? 'Click the map to set the start.' : 'Click the map to add a stop.'}
+      {picking === 'start' ? 'Click the map to set the start.' : picking === 'stop' ? 'Click the map to add a stop.' : 'Click the map where you want to stand.'}
       <span className="text-muted-foreground">Esc cancels</span>
     </div>
   );
