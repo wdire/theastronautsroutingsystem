@@ -1,0 +1,32 @@
+[
+ {
+  "id": "CC0808",
+  "name": "Cave candidate CC0808",
+  "lon": 68.1136,
+  "lat": 23.8443,
+  "note": "Candidate cave entrance seen from orbit: opening in karst-type terrain. Not confirmed as a cave. Catalog comment: Karst in crater floor fill.",
+  "type": "kst",
+  "priority": 0,
+  "inRegion": false
+ },
+ {
+  "id": "CC0897",
+  "name": "Cave candidate CC0897",
+  "lon": 67.0433,
+  "lat": 28.1786,
+  "note": "Candidate cave entrance seen from orbit: irregular opening. Not confirmed as a cave. Catalog comment: Collapse pit/vent at top of mound - Huo Hsing Vallis.",
+  "type": "irr",
+  "priority": 0,
+  "inRegion": false
+ },
+ {
+  "id": "CC0898",
+  "name": "Cave candidate CC0898",
+  "lon": 67.099,
+  "lat": 28.036,
+  "note": "Candidate cave entrance seen from orbit: deep, dark crack or fracture. Not confirmed as a cave. Catalog comment: Huo Hsing vallis - cliff wall fractures.",
+  "type": "crk",
+  "priority": 0,
+  "inRegion": false
+ }
+]

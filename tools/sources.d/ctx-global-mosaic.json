@@ -1,0 +1,10 @@
+{
+  "id": "ctx-global-mosaic",
+  "name": "CTX global mosaic (Murray Lab beta01), about 5 m",
+  "mission": "Mars Reconnaissance Orbiter (CTX)",
+  "product": "Esri OnMars CTX MapServer",
+  "url": "https://astro.arcgis.com/arcgis/rest/services/OnMars/CTX/MapServer",
+  "licence": "NASA/JPL/MSSS/Caltech Murray Lab/Esri; CTX data are public domain, the mosaic is free to use with credit",
+  "notes": "Fine detail of the core imagery at zoom 11 to 13 (high-pass only), and at zoom 14 where the Mars 2020 ortho has no data. The app also reads it live outside the package.",
+  "retrieved": "2026-11-14"
+}

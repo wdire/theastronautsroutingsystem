@@ -1,0 +1,10 @@
+{
+  "id": "weather-rems",
+  "name": "Curiosity REMS daily weather at Gale crater",
+  "mission": "Mars Science Laboratory Curiosity (REMS, Centro de Astrobiologia)",
+  "product": "mars.nasa.gov RSS weather feed, category msl",
+  "url": "https://mars.nasa.gov/rss/api/?feed=weather&category=msl&feedtype=json",
+  "licence": "Public domain (NASA/JPL-Caltech/CAB). Outreach data: for science use the PDS archive.",
+  "notes": "The last 30 sols and the lowest and highest values of the whole feed (sols 1 to 4995, last dated 2026-08-25). Air temperature in C, pressure in Pa. Values outside -140 to 40 C or 500 to 1200 Pa are feed glitches and are dropped. Gale crater is not Jezero: shown as a measured reference beside the modelled values.",
+  "retrieved": "2026-11-14"
+}

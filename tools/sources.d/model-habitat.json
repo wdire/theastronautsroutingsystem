@@ -1,0 +1,10 @@
+{
+  "id": "model-habitat",
+  "name": "Habitat Demonstration Unit (part 1) 3D model",
+  "mission": "NASA 3D Resources",
+  "product": "3D Models/Habitat Demonstration Unit/Habitat Demonstration Unit (part 1).glb",
+  "url": "https://github.com/nasa/NASA-3D-Resources/tree/master/3D%20Models/Habitat%20Demonstration%20Unit",
+  "licence": "NASA media, free to use under NASA's media usage guidelines (not copyrighted in the United States).",
+  "notes": "The base beside the start of a route. Modelled in centimetres: drawn at scale 0.03. Optimised with gltf-transform: meshopt compression, 1024 px WebP textures, meshes simplified by half.",
+  "retrieved": "2026-11-14"
+}

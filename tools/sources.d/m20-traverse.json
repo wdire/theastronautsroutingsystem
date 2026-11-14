@@ -1,0 +1,10 @@
+{
+  "id": "m20-traverse",
+  "name": "Perseverance traverse and localised waypoints",
+  "mission": "Mars 2020 Perseverance",
+  "product": "MMGIS layers M20_traverse.json and M20_waypoints.json",
+  "url": "https://science.nasa.gov/mission/mars-2020-perseverance/location-map/",
+  "licence": "Public domain (NASA/JPL-Caltech).",
+  "notes": "From https://mars.nasa.gov/mmgis-maps/M20/Layers/json/M20_traverse.json and https://mars.nasa.gov/mmgis-maps/M20/Layers/json/M20_waypoints.json. The drive is thinned to one point every 2 m, and segments the source repeats for drives that ran over several sols are kept once, so the drawn line is a little shorter than the rover's odometry in the waypoints. Heights are metres above the Mars areoid. Covers sols 13 to 2022 (45.246 km).",
+  "retrieved": "2026-11-14"
+}

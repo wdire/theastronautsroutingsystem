@@ -1,0 +1,10 @@
+{
+  "id": "usgs-geology",
+  "name": "Geologic Map of Mars (USGS SIM 3292)",
+  "mission": "USGS Astrogeology (Tanaka, Skinner, Dohm, Irwin, Kolb, Fortezzo, Platz, Michael and Hare, 2014)",
+  "product": "SIM3292_Global_Geology feature layer on NASA Mars Trek",
+  "url": "https://pubs.usgs.gov/sim/3292/",
+  "licence": "Public domain (USGS).",
+  "notes": "Queried from https://trek.nasa.gov/mars/trekarcgis/rest/services/SIM3292_Global_Geology/MapServer/0/query for the region envelope, clipped to it, borders simplified to about 1 km. Colours are the USGS map colours from the layer's renderer. The map was made at 1:20,000,000, so unit borders are good to a few kilometres at best. The one-line descriptions, periods and ages in words are plain-English summaries of the map's unit descriptions; ages follow the period boundaries of Michael (2013): Noachian before about 3.7 billion years ago, Hesperian to about 3.4, Amazonian since.",
+  "retrieved": "2026-11-14"
+}

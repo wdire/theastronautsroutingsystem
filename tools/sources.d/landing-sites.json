@@ -1,0 +1,10 @@
+{
+  "id": "landing-sites",
+  "name": "Mars landing sites (curated list)",
+  "mission": "Viking, Mars Pathfinder, Mars Exploration Rovers, Phoenix, Mars Science Laboratory, InSight, Mars 2020, Tianwen-1",
+  "product": "NASA GISS Mars24 Sunclock: Mars Lander Missions (updated 2023-12-09)",
+  "url": "https://www.giss.nasa.gov/tools/mars24/help/landers.html",
+  "licence": "Public domain (NASA). Curated by hand for this app.",
+  "notes": "The ten landers and rovers that landed and worked on Mars, with landing date (UTC), place and a one-line note taken from the NASA GISS list. Missions that failed on landing are left out, as is Mars 3, which fell silent about 20 seconds after landing. Coordinates are from the same list, except: Viking 2 (47.64 N, 134.29 E) and Mars Pathfinder (19.13 N, 326.78 E) use planetocentric values, because the list gives planetographic latitudes for them; Perseverance uses its first localisation in JPL's MMGIS waypoints. Most sites lie outside the app's region on purpose.",
+  "retrieved": "2026-11-14"
+}

@@ -1,0 +1,10 @@
+{
+  "id": "themis-day-ir",
+  "name": "THEMIS daytime infrared global mosaic, 100 m, version 2",
+  "mission": "2001 Mars Odyssey (THEMIS)",
+  "product": "THEMIS_DayIR_ControlledMosaics_100m_v2_oct2018 (NASA Mars Trek WMTS)",
+  "url": "https://trek.nasa.gov/tiles/Mars/EQ/THEMIS_DayIR_ControlledMosaics_100m_v2_oct2018/1.0.0/WMTSCapabilities.xml",
+  "licence": "Public domain (NASA / USGS); credit the instrument teams named (NASA/JPL/ASU; Edwards et al. 2011), served by NASA Mars Trek",
+  "notes": "Fine detail of the region imagery at zoom 9 and 10: only its high-pass is used, on Viking colour.",
+  "retrieved": "2026-11-14"
+}

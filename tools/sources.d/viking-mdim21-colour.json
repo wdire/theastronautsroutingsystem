@@ -1,0 +1,10 @@
+{
+  "id": "viking-mdim21-colour",
+  "name": "Viking MDIM 2.1 colour mosaic, 232 m",
+  "mission": "Viking Orbiters 1 and 2",
+  "product": "Mars_Viking_MDIM21_ClrMosaic_global_232m (NASA Mars Trek WMTS)",
+  "url": "https://trek.nasa.gov/tiles/Mars/EQ/Mars_Viking_MDIM21_ClrMosaic_global_232m/1.0.0/WMTSCapabilities.xml",
+  "licence": "Public domain (NASA / USGS); credit the instrument teams named (NASA/JPL/USGS), served by NASA Mars Trek",
+  "notes": "Planet imagery, zoom 0 to 4, and the colour of the region, zoom 5 to 8. In the region the hue is pulled toward ochre and the luminance is kept; that grading is ours, not the product's.",
+  "retrieved": "2026-11-14"
+}

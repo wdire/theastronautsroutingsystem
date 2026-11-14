@@ -1,0 +1,112 @@
+[
+ {
+  "id": "viking-1",
+  "name": "Viking 1",
+  "mission": "Viking Lander 1",
+  "agency": "NASA",
+  "date": "1976-07-20",
+  "lon": -47.95,
+  "lat": 22.27,
+  "place": "Chryse Planitia",
+  "note": "The first fully successful landing on Mars. The lander worked until November 1982."
+ },
+ {
+  "id": "viking-2",
+  "name": "Viking 2",
+  "mission": "Viking Lander 2",
+  "agency": "NASA",
+  "date": "1976-09-03",
+  "lon": 134.29,
+  "lat": 47.64,
+  "place": "Utopia Planitia",
+  "note": "The second Viking lander. It worked on the northern plains until April 1980."
+ },
+ {
+  "id": "pathfinder",
+  "name": "Mars Pathfinder",
+  "mission": "Mars Pathfinder and the Sojourner rover",
+  "agency": "NASA",
+  "date": "1997-07-04",
+  "lon": -33.22,
+  "lat": 19.13,
+  "place": "Ares Vallis",
+  "note": "A lander with Sojourner, the first rover on Mars, which drove about 100 m."
+ },
+ {
+  "id": "spirit",
+  "name": "Spirit",
+  "mission": "Mars Exploration Rover A",
+  "agency": "NASA",
+  "date": "2004-01-04",
+  "lon": 175.48,
+  "lat": -14.57,
+  "place": "Gusev crater",
+  "note": "A rover planned for 90 sols that worked for six years and drove about 7.7 km."
+ },
+ {
+  "id": "opportunity",
+  "name": "Opportunity",
+  "mission": "Mars Exploration Rover B",
+  "agency": "NASA",
+  "date": "2004-01-25",
+  "lon": -5.53,
+  "lat": -1.95,
+  "place": "Meridiani Planum",
+  "note": "A rover planned for 90 sols that worked for 14 years and drove about 45 km."
+ },
+ {
+  "id": "phoenix",
+  "name": "Phoenix",
+  "mission": "Mars Phoenix",
+  "agency": "NASA",
+  "date": "2008-05-25",
+  "lon": -125.75,
+  "lat": 68.22,
+  "place": "Vastitas Borealis",
+  "note": "A lander on the arctic plains. It worked for about five months, until the polar winter."
+ },
+ {
+  "id": "curiosity",
+  "name": "Curiosity",
+  "mission": "Mars Science Laboratory",
+  "agency": "NASA",
+  "date": "2012-08-06",
+  "lon": 137.44,
+  "lat": -4.59,
+  "place": "Gale crater",
+  "note": "A rover that landed at Bradbury Landing and explores the layered rock of Mount Sharp."
+ },
+ {
+  "id": "insight",
+  "name": "InSight",
+  "mission": "InSight",
+  "agency": "NASA",
+  "date": "2018-11-26",
+  "lon": 135.62,
+  "lat": 4.5,
+  "place": "Elysium Planitia",
+  "note": "A lander that listened for marsquakes until December 2022."
+ },
+ {
+  "id": "perseverance",
+  "name": "Perseverance",
+  "mission": "Mars 2020 Perseverance and the Ingenuity helicopter",
+  "agency": "NASA",
+  "date": "2021-02-18",
+  "lon": 77.4509,
+  "lat": 18.4446,
+  "place": "Jezero crater",
+  "note": "A rover that landed at Octavia E. Butler Landing and collects rock cores. It carried the Ingenuity helicopter."
+ },
+ {
+  "id": "zhurong",
+  "name": "Zhurong",
+  "mission": "Tianwen-1 lander and the Zhurong rover",
+  "agency": "CNSA",
+  "date": "2021-05-14",
+  "lon": 109.93,
+  "lat": 25.07,
+  "place": "Utopia Planitia",
+  "note": "China's first Mars rover. It drove about 1.9 km before going into hibernation in May 2022."
+ }
+]

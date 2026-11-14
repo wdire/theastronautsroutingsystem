@@ -1,0 +1,10 @@
+{
+  "id": "weather-meda",
+  "name": "Perseverance MEDA daily weather at Jezero crater",
+  "mission": "Mars 2020 Perseverance (MEDA)",
+  "product": "mars.nasa.gov RSS weather feed, category mars2020",
+  "url": "https://mars.nasa.gov/rss/api/?feed=weather&category=mars2020&feedtype=json",
+  "licence": "Public domain (NASA/JPL-Caltech/CAB).",
+  "notes": "The feed holds 7 sols and has not been updated since 2024-04-27 (sol 1133). Kept as it is, with its dates.",
+  "retrieved": "2026-11-14"
+}

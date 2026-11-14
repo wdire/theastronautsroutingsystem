@@ -1,0 +1,10 @@
+{
+  "id": "mola-megdr",
+  "name": "MOLA Mission Experiment Gridded Data Record, topography at 16 pixels per degree",
+  "mission": "Mars Global Surveyor (MOLA)",
+  "product": "MGS-M-MOLA-5-MEGDR-L3-V1.0, megt90n000eb.img",
+  "url": "https://pds-geosciences.wustl.edu/mgs/mgs-m-mola-5-megdr-l3-v1/mgsl_300x/meg016/",
+  "licence": "Public domain (NASA / USGS); credit the instrument teams named (NASA PDS Geosciences Node; Smith et al. 2003)",
+  "notes": "Planet elevation tiles, zoom 0 to 3. Heights are metres above the MOLA areoid.",
+  "retrieved": "2026-11-14"
+}

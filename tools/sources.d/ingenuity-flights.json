@@ -1,0 +1,10 @@
+{
+  "id": "ingenuity-flights",
+  "name": "Ingenuity flight paths and landing points",
+  "mission": "Mars 2020 Ingenuity Mars Helicopter",
+  "product": "MMGIS layers m20_heli_flight_path.json and m20_heli_waypoints.json",
+  "url": "https://science.nasa.gov/mission/mars-2020-perseverance/location-map/",
+  "licence": "Public domain (NASA/JPL-Caltech).",
+  "notes": "From https://mars.nasa.gov/mmgis-maps/M20/Layers/json/m20_heli_flight_path.json and https://mars.nasa.gov/mmgis-maps/M20/Layers/json/m20_heli_waypoints.json. 72 flights, 18.139 km in all. The flight paths carry no heights: each leg is given the ground height of its landing point.",
+  "retrieved": "2026-11-14"
+}

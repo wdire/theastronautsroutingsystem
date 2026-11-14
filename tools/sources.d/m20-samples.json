@@ -1,0 +1,10 @@
+{
+  "id": "m20-samples",
+  "name": "Perseverance sample list",
+  "mission": "Mars 2020 Perseverance",
+  "product": "Mars Rock Samples table (sample number, name, rock, location, rock type, sol sealed)",
+  "url": "https://science.nasa.gov/mission/mars-2020-perseverance/mars-rock-samples/",
+  "licence": "Public domain (NASA/JPL-Caltech).",
+  "notes": "30 samples as published by NASA. Each is placed at the rover's localised stop (JPL MMGIS waypoints) on the sol it was taken. NASA lists the sol a tube was sealed; the coring sol is read from the raw images feed (the last sol up to sealing with a full set of CacheCam frames), because a few tubes were sealed later and elsewhere. NASA gives no sealing sol yet for samples 29 and 30 (Bell Island, Gallants): their sols come from the photo captions on the same page (sols 1497 and 1551) and the CacheCam frames around them. The campaign is derived from NASA's sampling location.",
+  "retrieved": "2026-11-14"
+}

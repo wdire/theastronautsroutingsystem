@@ -1,0 +1,10 @@
+{
+  "id": "iau-names",
+  "name": "Gazetteer of Planetary Nomenclature: Mars feature names",
+  "mission": "IAU Working Group for Planetary System Nomenclature / USGS Astrogeology",
+  "product": "MARS_nomenclature_center_pts (shapefile of centre points)",
+  "url": "https://planetarynames.wr.usgs.gov/Page/MARS/target",
+  "licence": "Public domain (USGS). Names approved by the International Astronomical Union.",
+  "notes": "Downloaded from https://asc-planetarynames-data.s3.us-west-2.amazonaws.com/MARS_nomenclature_center_pts.zip. Kept: approved names with their centre within 2 degrees of the region, and features over 300 km across that reach into it from nearby. Albedo features are left out. minZoom is set from the feature's size, so large features are labelled first.",
+  "retrieved": "2026-11-14"
+}

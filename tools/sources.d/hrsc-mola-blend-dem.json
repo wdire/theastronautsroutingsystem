@@ -1,0 +1,10 @@
+{
+  "id": "hrsc-mola-blend-dem",
+  "name": "Mars HRSC and MOLA blended digital elevation model, 200 m, version 2",
+  "mission": "Mars Express (HRSC) and Mars Global Surveyor (MOLA)",
+  "product": "Mars_HRSC_MOLA_BlendDEM_Global_200mp_v2",
+  "url": "https://planetarymaps.usgs.gov/mosaic/Mars/HRSC_MOLA_Blend/Mars_HRSC_MOLA_BlendDEM_Global_200mp_v2.tif",
+  "licence": "Public domain (NASA / USGS); credit the instrument teams named (USGS Astrogeology; Fergason et al. 2018)",
+  "notes": "Region elevation, zoom 6 to 10, read by HTTP ranges for the window only. Metres above the MOLA areoid.",
+  "retrieved": "2026-11-14"
+}
