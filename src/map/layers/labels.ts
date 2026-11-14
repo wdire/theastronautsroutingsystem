@@ -39,6 +39,11 @@ export function addLabels(map: MapLibreMap): () => void {
     for (const l of labels) {
       if (l.el.dataset.on !== '1') continue;
       const r = l.el.getBoundingClientRect();
+      // A name cut by the edge of the screen reads as a stray syllable: show it whole or not at all.
+      if (r.left < 2 || r.right > window.innerWidth - 2) {
+        l.el.classList.add('is-hidden');
+        continue;
+      }
       const clash = kept.some((k) => r.left < k.right + 4 && r.right > k.left - 4 && r.top < k.bottom + 1 && r.bottom > k.top - 1);
       l.el.classList.toggle('is-hidden', clash);
       if (!clash) kept.push(r);

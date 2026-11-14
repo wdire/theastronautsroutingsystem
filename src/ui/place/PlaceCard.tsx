@@ -1,3 +1,4 @@
+import { useIsPhone } from '@/ui/hooks/useMediaQuery';
 import { StationReadings } from './Stations';
 import { useEffect, useState, type ReactNode } from 'react';
 import { Binoculars, ExternalLink, Flag, Link2, MapPinPlus, Navigation, X, ZoomIn } from 'lucide-react';
@@ -122,6 +123,7 @@ const split = (text: string): [string, string] => {
 
 export function PlaceCard() {
   const placeId = useApp((s) => s.placeId);
+  const phone = useIsPhone();
   const openPlace = useApp((s) => s.openPlace);
   const scenario = useApp((s) => s.scenario);
   // Conditions are shown to the minute; no need to re-render every second.
@@ -191,22 +193,28 @@ export function PlaceCard() {
   return (
     <article className="panel flex min-h-0 flex-col overflow-hidden" aria-label={v.name}>
       <div className="scroll-quiet min-h-0 flex-1 overflow-y-auto">
-        <Photos photos={v.photos} name={v.name} />
+        {phone ? null : <Photos photos={v.photos} name={v.name} />}
 
-        <header className="relative px-4 pt-4 pr-12">
+        <header className="relative px-4 pt-4 pr-12 max-md:pt-1.5">
           <h2 className="text-[19px] leading-snug font-semibold tracking-[-0.01em]">{v.name}</h2>
           <p className="mt-0.5 text-[13px] text-muted-foreground">{v.subtitle}</p>
           <button
             type="button"
             aria-label={`Close ${v.name}`}
             onClick={() => openPlace(null)}
-            className="absolute top-3 right-2.5 inline-flex size-9 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-secondary hover:text-foreground"
+            className="absolute top-3 right-2.5 inline-flex size-9 items-center max-md:top-0.5 pointer-coarse:size-11 justify-center rounded-md text-muted-foreground transition-colors hover:bg-secondary hover:text-foreground"
           >
             <X className="size-4" aria-hidden />
           </button>
         </header>
 
         <p className="px-4 pt-3 text-sm leading-relaxed">{v.kind === 'point' ? pointSummary(ctx) : v.summary}</p>
+        {/* On a phone the sheet opens half way: the name and the summary come before the photos. */}
+        {phone && v.photos.length > 0 ? (
+          <div className="mt-3">
+            <Photos photos={v.photos} name={v.name} />
+          </div>
+        ) : null}
         {v.detail ? <p className="px-4 pt-2 text-[13px] leading-relaxed text-muted-foreground">{v.detail}</p> : null}
 
         <div className="flex flex-wrap gap-1.5 px-4 pt-4">

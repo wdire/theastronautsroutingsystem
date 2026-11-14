@@ -1,4 +1,4 @@
-import { Binoculars, Layers, LocateFixed, Minus, Navigation2, Plus } from 'lucide-react';
+import { Binoculars, LocateFixed, Minus, Navigation2, Plus } from 'lucide-react';
 import { getMap } from '@/map/instance';
 import { LANDING_SITE } from '@/lib/constants';
 import { useApp } from '@/store';
@@ -8,12 +8,10 @@ import { IconButton } from '@/ui/shell/IconButton';
 const readBearing = (m: { getBearing(): number }) => Math.round(m.getBearing());
 const readPitch = (m: { getPitch(): number }) => Math.round(m.getPitch());
 
-/** Bottom right: layers, tilt, north, the landing site, and zoom. */
-export function MapButtons({ withLayers = false }: { withLayers?: boolean }) {
+/** Bottom right: tilt, Rover View, north, the landing site, and zoom. `compact` leaves zoom to the fingers. */
+export function MapButtons({ compact = false }: { compact?: boolean }) {
   const bearing = useMapState(readBearing, 0);
   const pitch = useMapState(readPitch, 0);
-  const layersOpen = useApp((s) => s.dock === 'layers');
-  const toggleDock = useApp((s) => s.toggleDock);
   const tilted = pitch > 5;
   const pickingView = useApp((s) => s.picking === 'roverView');
   const setPicking = useApp((s) => s.setPicking);
@@ -21,11 +19,6 @@ export function MapButtons({ withLayers = false }: { withLayers?: boolean }) {
   return (
     <div className="flex flex-col items-end gap-2">
       <div className="panel flex flex-col p-0.5">
-        {withLayers ? (
-          <IconButton label="Map layers" active={layersOpen} onClick={() => toggleDock('layers')}>
-            <Layers />
-          </IconButton>
-        ) : null}
         <IconButton
           label={tilted ? 'Look straight down' : 'Tilt the view'}
           active={tilted}
@@ -49,15 +42,17 @@ export function MapButtons({ withLayers = false }: { withLayers?: boolean }) {
           <LocateFixed />
         </IconButton>
       </div>
-      <div className="panel flex flex-col p-0.5">
-        <IconButton label="Zoom in" onClick={() => getMap()?.zoomIn({ duration: 250 })}>
-          <Plus />
-        </IconButton>
-        <div className="mx-2 h-px bg-border" aria-hidden />
-        <IconButton label="Zoom out" onClick={() => getMap()?.zoomOut({ duration: 250 })}>
-          <Minus />
-        </IconButton>
-      </div>
+      {compact ? null : (
+        <div className="panel flex flex-col p-0.5">
+          <IconButton label="Zoom in" onClick={() => getMap()?.zoomIn({ duration: 250 })}>
+            <Plus />
+          </IconButton>
+          <div className="mx-2 h-px bg-border" aria-hidden />
+          <IconButton label="Zoom out" onClick={() => getMap()?.zoomOut({ duration: 250 })}>
+            <Minus />
+          </IconButton>
+        </div>
+      )}
     </div>
   );
 }

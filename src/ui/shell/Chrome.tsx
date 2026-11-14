@@ -14,7 +14,8 @@ import { DiscoverPanel } from '@/ui/panels/DiscoverPanel';
 import { MissionsPanel } from '@/ui/panels/MissionsPanel';
 import { HowPanel } from '@/ui/panels/HowPanel';
 import { Route } from 'lucide-react';
-import { useIsPhone } from '@/ui/hooks/useMediaQuery';
+import { useIsPhone, useMediaQuery } from '@/ui/hooks/useMediaQuery';
+import { PhoneChrome } from './PhoneChrome';
 
 function DockContent() {
   const dock = useApp((s) => s.dock);
@@ -48,11 +49,13 @@ function LeftPanel() {
 
 function PickingHint() {
   const picking = useApp((s) => s.picking);
+  const touch = useMediaQuery('(pointer: coarse)');
   if (!picking) return null;
+  const verb = touch ? 'Tap' : 'Click';
   return (
-    <div role="status" className="panel pointer-events-none absolute top-3 left-1/2 flex h-10 -translate-x-1/2 items-center gap-2 px-3.5 text-[13px] font-medium">
-      {picking === 'start' ? 'Click the map to set the start.' : picking === 'stop' ? 'Click the map to add a stop.' : 'Click the map where you want to stand.'}
-      <span className="text-muted-foreground">Esc cancels</span>
+    <div role="status" className="panel pointer-events-none absolute top-3 left-1/2 flex h-10 -translate-x-1/2 items-center gap-2 px-3.5 text-[13px] font-medium whitespace-nowrap max-md:top-[7.75rem]">
+      {picking === 'start' ? `${verb} the map to set the start.` : picking === 'stop' ? `${verb} the map to add a stop.` : `${verb} the map where you want to stand.`}
+      {touch ? null : <span className="text-muted-foreground">Esc cancels</span>}
     </div>
   );
 }
@@ -63,24 +66,10 @@ export function Chrome() {
 
   if (phone) {
     return (
-      <div className="pointer-events-none absolute inset-0">
-        <div className="pointer-events-auto absolute inset-x-2.5 top-[max(0.625rem,env(safe-area-inset-top))] flex flex-col items-end gap-2">
-          <div className="w-full">
-            <SearchBox leading={<MainMenu />} />
-          </div>
-          <ClockMenu />
-        </div>
-        <div className="pointer-events-auto absolute right-2.5 bottom-[max(1.5rem,env(safe-area-inset-bottom))]">
-          <MapButtons withLayers />
-        </div>
-        <div className="pointer-events-auto absolute inset-x-0 bottom-0 flex max-h-[62dvh] flex-col [&>section]:rounded-b-none [&>article]:rounded-b-none [&>button]:mb-6 [&>button]:ml-2.5">
-          <LeftPanel />
-        </div>
+      <>
+        <PhoneChrome place={<PlaceCard />} planner={<Planner />} dockPanel={<DockContent />} />
         <PickingHint />
-        <div className="pointer-events-auto absolute inset-x-0 bottom-0 flex max-h-[72dvh] justify-center [&>section]:w-full [&>section]:max-w-none [&>section]:rounded-b-none">
-          <DockContent />
-        </div>
-      </div>
+      </>
     );
   }
 

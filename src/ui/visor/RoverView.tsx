@@ -5,6 +5,8 @@ import { nextLtst, marsTime, sunriseSunset } from '@/engines/marsTime';
 import { fmtClock, fmtDeg, fmtDuration, fmtElevation, fmtLatLon } from '@/lib/format';
 import { cn } from '@/lib/cn';
 import type { VisorHandle, VisorState } from '@/visor';
+import { useMediaQuery } from '@/ui/hooks/useMediaQuery';
+import { MovePad } from './MovePad';
 import { propCaption, sceneProps, standpoint } from './scene';
 
 const TIMES: readonly { label: string; hour: number }[] = [
@@ -26,7 +28,7 @@ function CompassTape({ heading }: { heading: number }) {
     marks.push({ deg, label: norm % 45 === 0 ? (POINTS[norm / 45] ?? '') : String(norm), major: norm % 45 === 0 });
   }
   return (
-    <div className="relative h-9 w-[min(560px,70vw)] overflow-hidden [mask-image:linear-gradient(90deg,transparent,black_18%,black_82%,transparent)]" aria-hidden>
+    <div className="relative h-9 w-[min(560px,60vw)] overflow-hidden [mask-image:linear-gradient(90deg,transparent,black_18%,black_82%,transparent)]" aria-hidden>
       {marks.map((m) => (
         <span
           key={m.deg}
@@ -55,6 +57,7 @@ export default function RoverView() {
   const [error, setError] = useState<string | null>(null);
   /** The thing the viewer is standing near, if any. */
   const [nearId, setNearId] = useState<string | null>(null);
+  const touch = useMediaQuery('(pointer: coarse)');
   const lon = at?.lon;
   const lat = at?.lat;
 
@@ -147,17 +150,30 @@ export default function RoverView() {
         <button
           type="button"
           onClick={closeVisor}
-          className="panel pointer-events-auto inline-flex h-10 items-center gap-2 px-3 text-sm font-medium hover:bg-secondary"
+          aria-label="Back to the map"
+          className="panel pointer-events-auto inline-flex h-10 items-center gap-2 px-3 text-sm font-medium hover:bg-secondary max-md:size-11 max-md:justify-center max-md:px-0"
         >
           <ArrowLeft className="size-4" aria-hidden />
-          Back to the map
+          <span className="max-md:hidden">Back to the map</span>
         </button>
         <div className={cn('absolute top-3 left-1/2 -translate-x-1/2', SHADOW)}>{state ? <CompassTape heading={state.headingDeg} /> : null}</div>
       </div>
 
       {state?.ready ? (
         <>
-          <dl className={cn('figure pointer-events-none absolute bottom-4 left-4 grid max-w-[300px] gap-1 text-[12.5px] leading-tight font-medium text-white/95', SHADOW)}>
+          {touch ? (
+            <div className="absolute bottom-[max(1.25rem,env(safe-area-inset-bottom))] left-5">
+              <MovePad onMove={(right, forward, fast) => handleRef.current?.setMove(right, forward, fast)} />
+            </div>
+          ) : null}
+
+          <dl
+            className={cn(
+              'figure pointer-events-none absolute grid gap-1 text-[12.5px] leading-tight font-medium text-white/95',
+              touch ? 'right-3 bottom-[max(1.25rem,env(safe-area-inset-bottom))] left-[152px] text-[11.5px]' : 'bottom-4 left-4 max-w-[300px]',
+              SHADOW,
+            )}
+          >
             <div>{fmtLatLon(state.lat, state.lon)}</div>
             <div>
               {fmtElevation(state.elev)}, slope {fmtDeg(state.slopeDeg, state.slopeDeg < 10 ? 1 : 0)}, heading {fmtDeg(state.headingDeg)}
@@ -169,7 +185,7 @@ export default function RoverView() {
             {nearId ? <div className="font-sans text-white/75">{propCaption(nearId)}</div> : null}
           </dl>
 
-          <div className="pointer-events-auto absolute bottom-4 left-1/2 flex -translate-x-1/2 flex-col items-center gap-2">
+          <div className={cn('pointer-events-auto absolute left-1/2 flex -translate-x-1/2 flex-col items-center gap-2', touch ? 'top-[4.25rem]' : 'bottom-4')}>
             <div role="radiogroup" aria-label="Time of day" className="panel flex gap-0.5 p-0.5">
               {TIMES.map((t) => {
                 const checked = Math.abs(time.ltstH - t.hour) < 0.1;
@@ -180,14 +196,14 @@ export default function RoverView() {
                     role="radio"
                     aria-checked={checked}
                     onClick={() => setTime(t.hour)}
-                    className={cn('h-9 rounded-md px-3 text-[13px] font-medium transition-colors', checked ? 'bg-primary/20 text-foreground' : 'text-muted-foreground hover:bg-secondary hover:text-foreground')}
+                    className={cn('h-9 rounded-md px-3 text-[13px] font-medium transition-colors pointer-coarse:h-11', checked ? 'bg-primary/20 text-foreground' : 'text-muted-foreground hover:bg-secondary hover:text-foreground')}
                   >
                     {t.label}
                   </button>
                 );
               })}
             </div>
-            <p className={cn('hidden text-xs text-white/80 md:block', SHADOW)}>W A S D or the arrow keys to walk. Hold Shift to go at rover speed. Drag to look. Esc to leave.</p>
+            {touch ? null : <p className={cn('text-xs text-white/80', SHADOW)}>W A S D or the arrow keys to walk. Hold Shift to go at rover speed. Drag to look. Esc to leave.</p>}
           </div>
         </>
       ) : null}
