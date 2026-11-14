@@ -2,7 +2,7 @@
 
 Plan: docs/superpowers/plans/2026-11-14-areo.md. One line per task, then rulings.
 
-- [ ] 1 Skeleton, design system, store, globe entry
+- [x] 1 Skeleton, design system, store, globe entry (store, URL sync, tokens, Archivo, globe in and out; e2e globe.spec passes). Panels and dock come with their tasks.
 - [ ] 2 Tile package
 - [ ] 3 Other datasets and models
 - [ ] 4 Engines
@@ -20,3 +20,4 @@ Plan: docs/superpowers/plans/2026-11-14-areo.md. One line per task, then rulings
   until the repo has a remote.
 - This file is the ledger (the build spec asks for it and it survives `git clean`). Cost if wrong: none.
 - Subagents write files and never commit; the main session checks and commits. Cost if wrong: a slower commit.
+- Typeface: Archivo (variable, width axis), chosen against IBM Plex Sans, Public Sans and Barlow on a sample place card: its numerals are the most distinct at small sizes and the width axis gives figures a narrower cut without a second family. Cost if wrong: one @font-face swap in src/fonts.css.

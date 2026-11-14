@@ -1,0 +1,222 @@
+@import 'tailwindcss';
+@import 'tw-animate-css';
+
+@custom-variant dark (&:where([data-theme='dark'], [data-theme='dark'] *));
+
+/*
+ * Areo tokens. Panels are basalt, text is dust, the one accent is the blue of a Martian sunset.
+ * Green, amber and red mean state and severity and are used for nothing else.
+ */
+:root,
+[data-theme='dark'] {
+  color-scheme: dark;
+  --background: #1b1917;
+  --foreground: #efe9e1;
+  --card: #1b1917;
+  --card-foreground: #efe9e1;
+  --popover: #23201d;
+  --popover-foreground: #efe9e1;
+  --primary: #9cc4ea;
+  --primary-foreground: #0e1a25;
+  --secondary: #2a2723;
+  --secondary-foreground: #efe9e1;
+  --muted: #24211e;
+  --muted-foreground: #a8a096;
+  --accent: #2e2a26;
+  --accent-foreground: #efe9e1;
+  --destructive: #e8573d;
+  --border: rgb(255 240 222 / 0.11);
+  --input: rgb(255 240 222 / 0.16);
+  --ring: #9cc4ea;
+
+  --faint: #7d766d;
+  --sunken: #141211;
+  --ok: #8dbf8f;
+  --advisory: #9cc4ea;
+  --caution: #e9a63f;
+  --warning: #ee5c40;
+  --shadow-panel: 0 1px 0 rgb(255 240 222 / 0.04) inset, 0 8px 28px rgb(0 0 0 / 0.42), 0 1px 2px rgb(0 0 0 / 0.5);
+}
+
+[data-theme='light'] {
+  color-scheme: light;
+  --background: #f5f2ee;
+  --foreground: #1f1b17;
+  --card: #f5f2ee;
+  --card-foreground: #1f1b17;
+  --popover: #fbf9f6;
+  --popover-foreground: #1f1b17;
+  --primary: #1f5f95;
+  --primary-foreground: #f7fafc;
+  --secondary: #e9e4dd;
+  --secondary-foreground: #1f1b17;
+  --muted: #ece7e0;
+  --muted-foreground: #645c53;
+  --accent: #e6e0d8;
+  --accent-foreground: #1f1b17;
+  --destructive: #c23a22;
+  --border: rgb(40 28 16 / 0.14);
+  --input: rgb(40 28 16 / 0.22);
+  --ring: #1f5f95;
+
+  --faint: #8a8177;
+  --sunken: #e9e4dd;
+  --ok: #3b7d45;
+  --advisory: #1f5f95;
+  --caution: #a8690a;
+  --warning: #c23a22;
+  --shadow-panel: 0 8px 28px rgb(30 18 8 / 0.22), 0 1px 2px rgb(30 18 8 / 0.2);
+}
+
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-popover: var(--popover);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-destructive: var(--destructive);
+  --color-border: var(--border);
+  --color-input: var(--input);
+  --color-ring: var(--ring);
+  --color-faint: var(--faint);
+  --color-sunken: var(--sunken);
+  --color-ok: var(--ok);
+  --color-advisory: var(--advisory);
+  --color-caution: var(--caution);
+  --color-warning: var(--warning);
+
+  --font-sans: 'Areo Sans', ui-sans-serif, system-ui, -apple-system, 'Segoe UI', sans-serif;
+  --font-figure: 'Areo Figures', 'Areo Sans', ui-sans-serif, system-ui, sans-serif;
+
+  --radius-sm: 4px;
+  --radius-md: 6px;
+  --radius-lg: 8px;
+  --radius-xl: 12px;
+
+  --shadow-panel: var(--shadow-panel);
+
+  --ease-out-soft: cubic-bezier(0.22, 0.8, 0.3, 1);
+}
+
+@layer base {
+  * {
+    border-color: var(--border);
+  }
+  html,
+  body,
+  #root {
+    height: 100%;
+  }
+  body {
+    margin: 0;
+    overflow: hidden;
+    background: #0b0908;
+    color: var(--foreground);
+    font-family: var(--font-sans);
+    font-size: 14px;
+    line-height: 1.45;
+    -webkit-font-smoothing: antialiased;
+    text-rendering: optimizeLegibility;
+    overscroll-behavior: none;
+  }
+  button,
+  [role='button'] {
+    cursor: pointer;
+  }
+  :focus-visible {
+    outline: 2px solid var(--ring);
+    outline-offset: 2px;
+  }
+  ::selection {
+    background: color-mix(in srgb, var(--primary) 35%, transparent);
+  }
+}
+
+@utility figure {
+  font-family: var(--font-figure);
+  font-variant-numeric: tabular-nums lining-nums;
+  font-feature-settings: 'tnum' 1, 'lnum' 1;
+}
+
+@utility panel {
+  background: var(--background);
+  color: var(--foreground);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-panel);
+}
+
+@utility scroll-quiet {
+  scrollbar-width: thin;
+  scrollbar-color: color-mix(in srgb, var(--foreground) 22%, transparent) transparent;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}
+
+/* The label on the opening globe. */
+.globe-marker {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: #fbf4ea;
+  font: 500 13px/1 var(--font-sans);
+  letter-spacing: 0.01em;
+  text-shadow: 0 1px 6px rgb(0 0 0 / 0.75);
+  transition: opacity 300ms var(--ease-out-soft);
+}
+.globe-marker.is-hidden {
+  opacity: 0 !important;
+  pointer-events: none;
+}
+.globe-marker-ring {
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  border: 1.5px solid #fbf4ea;
+  box-shadow: 0 0 0 1px rgb(0 0 0 / 0.35), 0 0 0 0 rgb(251 244 234 / 0.5);
+  animation: marker-pulse 2.6s var(--ease-out-soft) infinite;
+}
+.globe-marker:hover .globe-marker-ring,
+.globe-marker:focus-visible .globe-marker-ring {
+  background: #fbf4ea;
+}
+@keyframes marker-pulse {
+  0% { box-shadow: 0 0 0 1px rgb(0 0 0 / 0.35), 0 0 0 0 rgb(251 244 234 / 0.45); }
+  70% { box-shadow: 0 0 0 1px rgb(0 0 0 / 0.35), 0 0 0 12px rgb(251 244 234 / 0); }
+  100% { box-shadow: 0 0 0 1px rgb(0 0 0 / 0.35), 0 0 0 0 rgb(251 244 234 / 0); }
+}
+
+/* Faint stars behind the planet. The map canvas is transparent outside the globe. */
+.space {
+  background-color: #070605;
+  background-image:
+    radial-gradient(1px 1px at 12% 18%, rgb(255 255 255 / 0.55) 50%, transparent 51%),
+    radial-gradient(1px 1px at 71% 9%, rgb(255 255 255 / 0.4) 50%, transparent 51%),
+    radial-gradient(1.4px 1.4px at 38% 64%, rgb(255 244 230 / 0.5) 50%, transparent 51%),
+    radial-gradient(1px 1px at 86% 47%, rgb(255 255 255 / 0.35) 50%, transparent 51%),
+    radial-gradient(1px 1px at 55% 31%, rgb(255 255 255 / 0.3) 50%, transparent 51%),
+    radial-gradient(1.2px 1.2px at 24% 83%, rgb(220 232 255 / 0.45) 50%, transparent 51%),
+    radial-gradient(1px 1px at 93% 78%, rgb(255 255 255 / 0.3) 50%, transparent 51%),
+    radial-gradient(1px 1px at 5% 52%, rgb(255 255 255 / 0.28) 50%, transparent 51%);
+  background-size: 640px 520px, 720px 610px, 560px 680px, 810px 590px, 470px 430px, 690px 750px, 880px 640px, 530px 480px;
+}
