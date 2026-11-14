@@ -1,6 +1,11 @@
 import {
   Color,
   DirectionalLight,
+  HalfFloatType,
+  Mesh,
+  PMREMGenerator,
+  WebGLRenderTarget,
+  type Texture,
   FogExp2,
   HemisphereLight,
   NeutralToneMapping,
@@ -11,14 +16,18 @@ import {
   Vector3,
   WebGLRenderer,
 } from 'three';
+import { EffectComposer } from 'three/examples/jsm/postprocessing/EffectComposer.js';
+import { SMAAPass } from 'three/examples/jsm/postprocessing/SMAAPass.js';
+import { OutputPass } from 'three/examples/jsm/postprocessing/OutputPass.js';
+import { N8AOPass } from 'n8ao';
 import type { Scenario, VehicleId } from '@/engines/types';
 import { sunPosition } from '@/engines/marsTime';
 import { tauAt, visibilityKm } from '@/engines/environment';
 import { groundAt } from '@/data/dem';
 import { bearingOf, toLocal, toLonLat, type Frame } from './frame';
-import { buildPatch, FAR, HOLE_INSET_M, MID, NEAR, type Patch, type PatchSpec } from './patch';
+import { buildPatch, CLOSE, FAR, HOLE_INSET_M, MID, NEAR, type Patch, type PatchSpec } from './patch';
 import { fieldSlopeAt } from './heightfield';
-import { groundQuality } from './groundShader';
+import { groundQuality, loadGroundDetail } from './groundShader';
 import { createSky } from './sky';
 import { createRocks } from './rocks';
 import { skyState } from './skyModel';
@@ -85,6 +94,10 @@ export interface VisorHandle {
   setMove(right: number, forward: number, fast?: boolean): void;
   look(dYawDeg: number, dPitchDeg: number): void;
   setQuality(q: Quality): void;
+  /** Raises the eye above the ground on foot, m (0 is standing). */
+  setLift(m: number): void;
+  /** Shows or hides the drawn-in rocks. */
+  setRocks(on: boolean): void;
   /** Which camera follows the mission. */
   setCamera(mode: CameraMode): void;
   resize(): void;
@@ -96,16 +109,18 @@ export interface VisorHandle {
   /** How far the camera is above the drawn ground under it, m. Never negative. */
   eyeAboveGround(): number;
   /** What the last frame cost, for the performance checks. */
-  stats(): { triangles: number; calls: number; rocks: number };
+  stats(): { triangles: number; calls: number; rocks: number; layers: string };
   dispose(): void;
 }
 
 const EYE_M = 1.7;
 const WALK_MS = 1.6;
 const FAST_MS = 9;
+const MAX_LIFT_M = 150;
 
 export function groundSourceName(zoom: number): string {
-  if (zoom >= 14) return 'HiRISE 1 m DTM';
+  if (zoom >= 18) return 'HiRISE 1 m DTM';
+  if (zoom >= 14) return 'HiRISE DTM, read at 5 m';
   if (zoom >= 12) return 'CTX 20 m DTM';
   if (zoom >= 6) return 'HRSC and MOLA 200 m DEM';
   return 'MOLA 463 m DEM';
@@ -122,7 +137,7 @@ export class WebGLUnavailableError extends Error {
 export async function mountVisor(canvas: HTMLCanvasElement, options: VisorOptions): Promise<VisorHandle> {
   let renderer: WebGLRenderer;
   try {
-    renderer = new WebGLRenderer({ canvas, antialias: true, powerPreference: 'high-performance' });
+    renderer = new WebGLRenderer({ canvas, antialias: false, powerPreference: 'high-performance' });
   } catch {
     throw new WebGLUnavailableError();
   }
@@ -157,6 +172,33 @@ export async function mountVisor(canvas: HTMLCanvasElement, options: VisorOption
   const sky = createSky();
   scene.add(sky.mesh);
 
+  /* ---- what the camera sees goes through ambient occlusion, then antialiasing, then tone mapping ---- */
+  const composer = new EffectComposer(renderer, new WebGLRenderTarget(1, 1, { type: HalfFloatType }));
+  const ao = new N8AOPass(scene, camera, 1, 1);
+  ao.configuration.aoRadius = 1.6;
+  ao.configuration.distanceFalloff = 0.5;
+  ao.configuration.intensity = 2.4;
+  ao.configuration.gammaCorrection = false;
+  ao.setQualityMode('Medium');
+  composer.addPass(ao);
+  composer.addPass(new SMAAPass());
+  composer.addPass(new OutputPass());
+
+  // The sky lights everything it can see: an environment map rendered from the dome, renewed as the sun moves.
+  const pmrem = new PMREMGenerator(renderer);
+  const envScene = new Scene();
+  envScene.add(new Mesh(sky.mesh.geometry, sky.mesh.material));
+  let envMap: Texture | null = null;
+  let envSun = new Vector3(0, -2, 0);
+  const renewEnvironment = (sunDir: Vector3) => {
+    if (envMap && sunDir.distanceTo(envSun) < 0.03) return;
+    envSun = sunDir.clone();
+    const next = pmrem.fromScene(envScene, 0, 0.1, 1000).texture;
+    scene.environment = next;
+    envMap?.dispose();
+    envMap = next;
+  };
+
   const base = await groundAt(options.lon, options.lat).catch(() => ({ elev: 0, slopeDeg: 0, zoom: 0 }));
   const frame: Frame = { lon0: options.lon, lat0: options.lat, base: base.elev };
 
@@ -181,17 +223,36 @@ export async function mountVisor(canvas: HTMLCanvasElement, options: VisorOption
   };
 
   /* ---- ground layers ---- */
-  const layers: Record<PatchSpec['kind'], { patch: Patch | null; building: boolean; spec: PatchSpec; moveM: number }> = {
-    far: { patch: null, building: false, spec: FAR, moveM: 25_000 },
-    mid: { patch: null, building: false, spec: MID, moveM: 8_000 },
-    near: { patch: null, building: false, spec: NEAR, moveM: 380 },
+  loadGroundDetail(maxAniso);
+  type Layer = { patch: Patch | null; building: boolean; spec: PatchSpec; moveM: number; sharpening: boolean };
+  const layers: Record<PatchSpec['kind'], Layer> = {
+    far: { patch: null, building: false, spec: FAR, moveM: 25_000, sharpening: false },
+    mid: { patch: null, building: false, spec: MID, moveM: 8_000, sharpening: false },
+    near: { patch: null, building: false, spec: NEAR, moveM: 380, sharpening: false },
+    close: { patch: null, building: false, spec: CLOSE, moveM: 56, sharpening: false },
   };
+  const ORDER: PatchSpec['kind'][] = ['far', 'mid', 'near', 'close'];
+  const INSET: Record<PatchSpec['kind'], number> = { far: 0, mid: HOLE_INSET_M.mid, near: HOLE_INSET_M.near, close: HOLE_INSET_M.close };
 
   const updateHoles = () => {
-    const { far, mid, near } = layers;
-    // The hole stops a little inside the finer patch, so the two overlap rather than leave a crack.
-    if (far.patch) far.patch.setHole(mid.patch?.cx ?? 1e9, mid.patch?.cz ?? 1e9, mid.patch ? MID.sizeM / 2 - HOLE_INSET_M.mid : 0);
-    if (mid.patch) mid.patch.setHole(near.patch?.cx ?? 1e9, near.patch?.cz ?? 1e9, near.patch ? NEAR.sizeM / 2 - HOLE_INSET_M.near : 0);
+    // Each layer leaves a hole where the next finer one lies; the hole stops a little inside the finer
+    // patch, so the two overlap rather than leave a crack.
+    for (let i = 0; i < ORDER.length - 1; i += 1) {
+      const coarse = layers[ORDER[i]!].patch;
+      const kind = ORDER[i + 1]!;
+      const fine = layers[kind].patch;
+      coarse?.setHole(fine?.cx ?? 1e9, fine?.cz ?? 1e9, fine ? fine.spec.sizeM / 2 - INSET[kind] : 0);
+    }
+  };
+
+  const swapIn = (layer: Layer, next: Patch) => {
+    if (layer.patch) {
+      scene.remove(layer.patch.mesh);
+      layer.patch.dispose();
+    }
+    layer.patch = next;
+    scene.add(next.mesh);
+    updateHoles();
   };
 
   const ensure = (kind: PatchSpec['kind'], x: number, z: number) => {
@@ -199,17 +260,20 @@ export async function mountVisor(canvas: HTMLCanvasElement, options: VisorOption
     if (layer.building || disposed) return;
     const p = layer.patch;
     if (p && Math.hypot(p.cx - x, p.cz - z) < layer.moveM) return;
+    // The close patch lies on the near one and blends into its surface: it waits for it.
+    const coarser = kind === 'close' ? layers.near.patch : null;
+    if (kind === 'close' && !coarser) return;
     layer.building = true;
-    buildPatch(frame, x, z, layer.spec, maxAniso)
+    // Where the ground is not yet drawn at all, the package is used first (fast); HiRISE follows.
+    const quick = !p && layer.spec.hirise !== undefined;
+    const cx = kind === 'close' ? Math.round(x / 8) * 8 : x;
+    const cz = kind === 'close' ? Math.round(z / 8) * 8 : z;
+    const options = { maxAnisotropy: maxAniso, hirise: !quick, coarser: coarser ? (px: number, pz: number) => coarser.heightAt(px, pz) : undefined };
+    buildPatch(frame, cx, cz, layer.spec, options)
       .then((next) => {
         if (disposed) return next.dispose();
-        if (layer.patch) {
-          scene.remove(layer.patch.mesh);
-          layer.patch.dispose();
-        }
-        layer.patch = next;
-        scene.add(next.mesh);
-        updateHoles();
+        swapIn(layer, next);
+        if (quick) sharpen(kind, next);
       })
       .catch(() => undefined)
       .finally(() => {
@@ -217,13 +281,39 @@ export async function mountVisor(canvas: HTMLCanvasElement, options: VisorOption
       });
   };
 
-  const heightAt = (x: number, z: number): number => layers.near.patch?.heightAt(x, z) ?? layers.mid.patch?.heightAt(x, z) ?? layers.far.patch?.heightAt(x, z) ?? 0;
+  /** Rebuilds a patch drawn from the package with HiRISE, in place, once its tiles have arrived. */
+  const sharpen = (kind: PatchSpec['kind'], from: Patch) => {
+    const layer = layers[kind];
+    layer.sharpening = true;
+    state.loading = state.ready ? 'Bringing in HiRISE detail…' : state.loading;
+    const coarser = kind === 'close' ? layers.near.patch : null;
+    buildPatch(frame, from.cx, from.cz, layer.spec, { maxAnisotropy: maxAniso, hirise: true, coarser: coarser ? (px, pz) => coarser.heightAt(px, pz) : undefined })
+      .then((next) => {
+        // Moved on meanwhile: the newer patch is already HiRISE.
+        if (disposed || layer.patch !== from) return next.dispose();
+        swapIn(layer, next);
+        // The close patch blended into the old near surface; it is built again against the new one.
+        if (kind === 'near' && layers.close.patch) rebuildClose = true;
+      })
+      .catch(() => undefined)
+      .finally(() => {
+        layer.sharpening = false;
+        if (!Object.values(layers).some((l) => l.sharpening)) state.loading = null;
+      });
+  };
+  let rebuildClose = false;
+
+  const heightAt = (x: number, z: number): number =>
+    layers.close.patch?.heightAt(x, z) ?? layers.near.patch?.heightAt(x, z) ?? layers.mid.patch?.heightAt(x, z) ?? layers.far.patch?.heightAt(x, z) ?? 0;
 
   retainModels();
-  const nearHeight = (x: number, z: number) => layers.near.patch?.heightAt(x, z) ?? null;
+  const nearHeight = (x: number, z: number) => layers.close.patch?.heightAt(x, z) ?? layers.near.patch?.heightAt(x, z) ?? null;
   const props = createProps(scene, frame, options.props ?? [], nearHeight);
   // Rocks stand on the near patch only: beyond it they would be smaller than a pixel.
-  const rocks = createRocks(scene, nearHeight, (x, z) => (layers.near.patch ? fieldSlopeAt(layers.near.patch.field, x, z) : 0), props.clearings);
+  const rocks = createRocks(scene, nearHeight, (x, z) => {
+    const p = layers.close.patch ?? layers.near.patch;
+    return p ? fieldSlopeAt(p.field, x, z) : 0;
+  }, props.clearings, (x, z) => (layers.close.patch ?? layers.near.patch)?.roughnessAt(x, z) ?? layers.near.patch?.roughnessAt(x, z) ?? null);
   let rocksPatch: Patch | null = null;
   const mission = options.mission;
   const party = mission ? createParty(scene, mission.vehicle, heightAt) : null;
@@ -234,6 +324,8 @@ export async function mountVisor(canvas: HTMLCanvasElement, options: VisorOption
   let chaseAngle = Number.NaN;
   let orbitAngle = 0;
   let eyeAbove = EYE_M;
+  // On foot the wheel lifts the eye off the ground, up to a drone's height, and brings it back down.
+  let lift = 0;
 
   /* ---- viewer ---- */
   const pos = new Vector3(0, EYE_M, 0);
@@ -283,10 +375,20 @@ export async function mountVisor(canvas: HTMLCanvasElement, options: VisorOption
   canvas.addEventListener('pointermove', onPointerMove);
   canvas.addEventListener('pointerup', onPointerUp);
   canvas.addEventListener('pointercancel', onPointerUp);
+  const onWheel = (e: WheelEvent) => {
+    if (mission) return;
+    e.preventDefault();
+    // Proportional steps: a notch is a few centimetres near the ground and metres high up.
+    lift = Math.max(0, Math.min(MAX_LIFT_M, (lift + 0.6) * Math.exp(e.deltaY * -0.0022) - 0.6));
+  };
+  canvas.addEventListener('wheel', onWheel, { passive: false });
 
   const applyQuality = () => {
     const low = effective === 'low';
     renderer.setPixelRatio(low ? 1 : Math.min(window.devicePixelRatio || 1, 2));
+    composer.setPixelRatio(renderer.getPixelRatio());
+    ao.enabled = !low;
+    ao.configuration.halfRes = renderer.getPixelRatio() > 1.5;
     groundQuality.value = low ? 0 : 1;
     rocks.setLowQuality(low);
     sun.shadow.mapSize.set(low ? 1024 : 2048, low ? 1024 : 2048);
@@ -299,6 +401,7 @@ export async function mountVisor(canvas: HTMLCanvasElement, options: VisorOption
     const w = canvas.clientWidth || window.innerWidth;
     const h = canvas.clientHeight || window.innerHeight;
     renderer.setSize(w, h, false);
+    composer.setSize(w, h);
     camera.aspect = w / Math.max(1, h);
     // A phone held upright needs a wider lens to feel the same.
     camera.fov = camera.aspect < 1 ? 78 : 62;
@@ -324,11 +427,15 @@ export async function mountVisor(canvas: HTMLCanvasElement, options: VisorOption
     // Azimuth is clockwise from north; north is -z, east is +x.
     sunDir.set(Math.sin(az) * Math.cos(el), Math.sin(el), -Math.cos(az) * Math.cos(el)).normalize();
     const trueEl = (s.elevDeg * Math.PI) / 180;
-    sky.update(sk, new Vector3(Math.sin(az) * Math.cos(trueEl), Math.sin(trueEl), -Math.cos(az) * Math.cos(trueEl)).normalize());
+    const skySun = new Vector3(Math.sin(az) * Math.cos(trueEl), Math.sin(trueEl), -Math.cos(az) * Math.cos(trueEl)).normalize();
+    sky.update(sk, skySun);
+    renewEnvironment(skySun);
     sun.color.setRGB(...sk.sun);
-    sun.intensity = sk.sunIntensity;
+    sun.intensity = sk.sunIntensity * 1.15;
     sun.castShadow = sk.sunIntensity > 0.15;
-    hemi.intensity = sk.ambient;
+    // Most of the fill comes from the sky's environment map; the hemisphere adds the ground's bounce.
+    hemi.intensity = sk.ambient * 0.35;
+    scene.environmentIntensity = sk.ambient * 0.55;
     hemi.color.setRGB(sk.zenith[0] * 0.6 + 0.4, sk.zenith[1] * 0.6 + 0.38, sk.zenith[2] * 0.6 + 0.36);
     hemi.groundColor.setRGB(0.5, 0.38, 0.27);
     fog.color.setRGB(...sk.fog);
@@ -400,7 +507,8 @@ export async function mountVisor(canvas: HTMLCanvasElement, options: VisorOption
       const right = (keys.has('KeyD') || keys.has('ArrowRight') ? 1 : 0) - (keys.has('KeyA') || keys.has('ArrowLeft') ? 1 : 0) + pad.right;
       const len = Math.hypot(fwd, right);
       if (len > 0.01) {
-        const speed = (keys.has('ShiftLeft') || keys.has('ShiftRight') || pad.fast ? FAST_MS : WALK_MS) * Math.min(1, len);
+        // High up the ground slides by slowly: the pace grows with the height.
+        const speed = (keys.has('ShiftLeft') || keys.has('ShiftRight') || pad.fast ? FAST_MS : WALK_MS) * Math.min(1, len) * (1 + lift / 6);
         const sin = Math.sin(yaw);
         const cos = Math.cos(yaw);
         // Facing direction for yaw 0 is north (-z); positive yaw turns toward the east.
@@ -409,12 +517,14 @@ export async function mountVisor(canvas: HTMLCanvasElement, options: VisorOption
         // Nobody walks through a rover: a step into one ends at its side.
         [pos.x, pos.z] = keepOutside(nx, nz, props.clearings, 0.75);
       }
-      eyeAbove = EYE_M;
+      eyeAbove = EYE_M + lift;
     }
 
-    ensure('far', pos.x, pos.z);
-    ensure('mid', pos.x, pos.z);
-    ensure('near', pos.x, pos.z);
+    if (rebuildClose && !layers.close.building && !layers.close.sharpening && layers.close.patch) {
+      rebuildClose = false;
+      sharpen('close', layers.close.patch);
+    }
+    for (const kind of ORDER) ensure(kind, pos.x, pos.z);
 
     // Stand on the drawn ground, and ease the eye height so steps in the data do not jolt the view.
     const ground = heightAt(pos.x, pos.z);
@@ -429,10 +539,10 @@ export async function mountVisor(canvas: HTMLCanvasElement, options: VisorOption
     sky.mesh.scale.setScalar(100_000);
 
     // A new near patch means new ground under every rock.
-    const groundChanged = rocksPatch !== layers.near.patch;
+    const groundChanged = rocksPatch !== (layers.close.patch ?? layers.near.patch);
     rocks.update(pos.x, pos.z, groundChanged);
     props.update(pos.x, pos.z, groundChanged);
-    rocksPatch = layers.near.patch;
+    rocksPatch = layers.close.patch ?? layers.near.patch;
 
     updateLight(now);
     // The shadow box follows the viewer, moved in whole texels so shadows do not swim.
@@ -440,11 +550,11 @@ export async function mountVisor(canvas: HTMLCanvasElement, options: VisorOption
     sun.target.position.set(Math.round(pos.x / texel) * texel, ground, Math.round(pos.z / texel) * texel);
     sun.position.copy(sun.target.position).addScaledVector(sunDir, 400);
 
-    renderer.render(scene, camera);
+    composer.render(dt);
 
     if (!state.ready && layers.near.patch && layers.mid.patch) {
       state.ready = true;
-      state.loading = null;
+      state.loading = Object.values(layers).some((l) => l.sharpening) ? 'Bringing in HiRISE detail…' : null;
       eyeY = heightAt(pos.x, pos.z) + eyeAbove;
     }
     if (quality === 'auto' && state.ready && mission) {
@@ -479,7 +589,7 @@ export async function mountVisor(canvas: HTMLCanvasElement, options: VisorOption
       state.lon = lon;
       state.lat = lat;
       state.elev = ground + frame.base;
-      const near = layers.near.patch;
+      const near = layers.close.patch ?? layers.near.patch;
       state.slopeDeg = near ? fieldSlopeAt(near.field, pos.x, pos.z) : 0;
       state.headingDeg = bearingOf(Math.sin(viewYaw), -Math.cos(viewYaw));
       state.pitchDeg = (-viewPitch * 180) / Math.PI;
@@ -522,6 +632,12 @@ export async function mountVisor(canvas: HTMLCanvasElement, options: VisorOption
         applyQuality();
       }
     },
+    setLift(m) {
+      lift = Math.max(0, Math.min(MAX_LIFT_M, m));
+    },
+    setRocks(on) {
+      rocks.setVisible(on);
+    },
     setCamera(mode) {
       state.camera = mode;
       // The drag offset belongs to the camera it was made on.
@@ -533,7 +649,7 @@ export async function mountVisor(canvas: HTMLCanvasElement, options: VisorOption
     props: () => props.list(),
     position: () => ({ x: pos.x, y: pos.y, z: pos.z }),
     eyeAboveGround: () => pos.y - heightAt(pos.x, pos.z),
-    stats: () => ({ triangles: renderer.info.render.triangles, calls: renderer.info.render.calls, rocks: rocks.count() }),
+    stats: () => ({ triangles: renderer.info.render.triangles, calls: renderer.info.render.calls, rocks: rocks.count(), layers: ORDER.map((k) => `${k}:${layers[k].patch ? (layers[k].patch.hirise ? `hirise ${layers[k].patch.debug}` : 'package') : 'none'}`).join(' ') }),
     dispose() {
       disposed = true;
       cancelAnimationFrame(raf);
@@ -545,6 +661,7 @@ export async function mountVisor(canvas: HTMLCanvasElement, options: VisorOption
       canvas.removeEventListener('pointermove', onPointerMove);
       canvas.removeEventListener('pointerup', onPointerUp);
       canvas.removeEventListener('pointercancel', onPointerUp);
+      canvas.removeEventListener('wheel', onWheel);
       canvas.removeEventListener('webglcontextlost', onLost);
       canvas.removeEventListener('webglcontextrestored', onRestored);
       for (const layer of Object.values(layers)) layer.patch?.dispose();
@@ -554,6 +671,10 @@ export async function mountVisor(canvas: HTMLCanvasElement, options: VisorOption
       guides?.dispose();
       releaseModels();
       sky.dispose();
+      envMap?.dispose();
+      pmrem.dispose();
+      ao.dispose();
+      composer.dispose();
       renderer.dispose();
     },
   };

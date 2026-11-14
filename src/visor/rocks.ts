@@ -1,6 +1,6 @@
 import { BufferAttribute, Color, DynamicDrawUsage, IcosahedronGeometry, InstancedMesh, Matrix4, MeshStandardMaterial, Quaternion, Vector3, type BufferGeometry, type Scene } from 'three';
 import { mergeVertices } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
-import { groundQuality } from './groundShader';
+import { groundDetail, groundQuality } from './groundShader';
 import { ROCK_CLASSES, hash, rocksInCell, type RockClass } from './rockField';
 
 type Shape = 'lumpy' | 'platy' | 'block';
@@ -56,8 +56,8 @@ function rockGeometry(shape: Shape, seed: number, detail: number): BufferGeometr
   // Vertex colours: dark basalt below, the ground’s butterscotch dust settled on the faces that look up.
   const normal = g.getAttribute('normal');
   const colours = new Float32Array(normal.count * 3);
-  const rock = new Color(0.2, 0.15, 0.125);
-  const dust = new Color(0.52, 0.36, 0.24);
+  const rock = new Color(0.22, 0.185, 0.16);
+  const dust = new Color(0.5, 0.37, 0.27);
   const c = new Color();
   for (let i = 0; i < normal.count; i += 1) {
     const up = Math.max(0, Math.min(1, (normal.getY(i) - 0.25) / 0.6));
@@ -78,15 +78,28 @@ function rockMaterial(): MeshStandardMaterial {
   const material = new MeshStandardMaterial({ vertexColors: true, roughness: 0.96, metalness: 0 });
   material.onBeforeCompile = (shader) => {
     shader.uniforms.rockQuality = groundQuality;
+    shader.uniforms.uRockTex = groundDetail.bedrock;
+    // Texture coordinates in metres about each rock, so a boulder is not a scaled-up pebble.
     shader.vertexShader = shader.vertexShader
-      .replace('#include <common>', '#include <common>\nvarying vec3 vRockPos;')
-      .replace('#include <begin_vertex>', '#include <begin_vertex>\n#ifdef USE_INSTANCING\n  vRockPos = position * 6.0 + fract(instanceMatrix[3].xyz * 0.173) * 17.0;\n#else\n  vRockPos = position * 6.0;\n#endif');
+      .replace('#include <common>', '#include <common>\nvarying vec3 vRockPos;\nvarying vec3 vRockN;')
+      .replace(
+        '#include <begin_vertex>',
+        '#include <begin_vertex>\n#ifdef USE_INSTANCING\n  vRockPos = mat3(instanceMatrix) * position + fract(instanceMatrix[3].xyz * 0.173) * 17.0;\n  vRockN = normalize(mat3(instanceMatrix) * normal);\n#else\n  vRockPos = position;\n  vRockN = normal;\n#endif',
+      );
     shader.fragmentShader = shader.fragmentShader
       .replace(
         '#include <common>',
         `#include <common>
 varying vec3 vRockPos;
+varying vec3 vRockN;
 uniform float rockQuality;
+uniform sampler2D uRockTex;
+// The bedrock photograph's height and brightness, read along the three axes and blended by the face's facing.
+vec4 rockTri(vec3 p, vec3 n) {
+  vec3 w = pow(abs(normalize(n)), vec3(4.0));
+  w /= w.x + w.y + w.z;
+  return texture2D(uRockTex, p.yz) * w.x + texture2D(uRockTex, p.xz) * w.y + texture2D(uRockTex, p.xy) * w.z;
+}
 float rockHash(vec3 p) { p = fract(p * 0.3183099 + 0.1); p *= 17.0; return fract(p.x * p.y * p.z * (p.x + p.y + p.z)); }
 float rockNoise(vec3 x) {
   vec3 i = floor(x); vec3 f = fract(x); f = f * f * (3.0 - 2.0 * f);
@@ -99,9 +112,10 @@ float rockRelief(vec3 p) { return rockNoise(p) * 0.6 + rockNoise(p * 2.7 + 3.1) 
         '#include <color_fragment>',
         `#include <color_fragment>
   // How much of the noise a pixel can still resolve: 1 close by, 0 when a pixel spans a whole feature.
-  float rockFade = 1.0 - smoothstep(0.25, 1.4, length(fwidth(vRockPos)));
-  float rockH = rockRelief(vRockPos);
-  diffuseColor.rgb *= mix(1.0, 0.72 + 0.56 * rockH, rockFade);`,
+  float rockFade = 1.0 - smoothstep(0.006, 0.05, length(fwidth(vRockPos)));
+  vec4 rockT = rockTri(vRockPos / 0.9, vRockN);
+  float rockH = rockT.a * 0.75 + rockRelief(vRockPos * 9.0) * 0.25;
+  diffuseColor.rgb *= mix(1.0, 0.6 + 0.8 * rockT.b, rockFade);`,
       )
       .replace(
         '#include <normal_fragment_maps>',
@@ -110,12 +124,12 @@ float rockRelief(vec3 p) { return rockNoise(p) * 0.6 + rockNoise(p * 2.7 + 3.1) 
     vec3 sx = dFdx(-vViewPosition); vec3 sy = dFdy(-vViewPosition);
     vec3 r1 = cross(sy, normal); vec3 r2 = cross(normal, sx);
     float det = dot(sx, r1);
-    vec2 dh = vec2(dFdx(rockH), dFdy(rockH)) * (0.05 * rockFade);
+    vec2 dh = vec2(dFdx(rockH), dFdy(rockH)) * (0.02 * rockFade);
     normal = normalize(abs(det) * normal - sign(det) * (dh.x * r1 + dh.y * r2));
   }`,
       );
   };
-  material.customProgramCacheKey = () => 'areo-rock';
+  material.customProgramCacheKey = () => 'areo-rock2';
   return material;
 }
 
@@ -149,15 +163,17 @@ export function createRocks(
   slopeAt: (x: number, z: number) => number,
   /** Discs kept free of rocks: under vehicles and buildings. */
   clearings: readonly { x: number; z: number; r: number }[] = [],
+  /** How broken the ground is seen from orbit, 0 to 1, or null where that is not known. */
+  rockinessAt: (x: number, z: number) => number | null = () => null,
 ) {
   const material = rockMaterial();
   const layout: [RockClass['name'], Shape, number, number][] = [
-    ['pebble', 'lumpy', 0, 0.6],
-    ['pebble', 'platy', 0.6, 1],
-    ['cobble', 'lumpy', 0, 0.5],
-    ['cobble', 'block', 0.5, 1],
-    ['boulder', 'block', 0, 0.7],
-    ['boulder', 'lumpy', 0.7, 1],
+    ['pebble', 'block', 0, 0.5],
+    ['pebble', 'platy', 0.5, 1],
+    ['cobble', 'lumpy', 0, 0.3],
+    ['cobble', 'block', 0.3, 1],
+    ['boulder', 'block', 0, 0.8],
+    ['boulder', 'platy', 0.8, 1],
   ];
   const instanced = (geometry: BufferGeometry, capacity: number): InstancedMesh => {
     const mesh = new InstancedMesh(geometry, material, capacity);
@@ -188,6 +204,7 @@ export function createRocks(
   const tint = new Color();
   const UP = new Vector3(0, 1, 0);
   let lowQuality = false;
+  let hidden = false;
 
   const place = (cls: RockClass, cx: number, cz: number) => {
     const mine = batches.filter((b) => b.cls === cls);
@@ -207,7 +224,7 @@ export function createRocks(
         const mx = (ix + 0.5) * cls.cellM;
         const mz = (iz + 0.5) * cls.cellM;
         if (heightAt(mx, mz) === null) continue;
-        for (const rock of rocksInCell(cls, ix, iz, slopeAt(mx, mz))) {
+        for (const rock of rocksInCell(cls, ix, iz, slopeAt(mx, mz), undefined, rockinessAt(mx, mz))) {
           if (blocked.length > 0 && blocked.some((c) => (rock.x - c.x) ** 2 + (rock.z - c.z) ** 2 < (c.r + rock.size / 2) ** 2)) continue;
           const y = heightAt(rock.x, rock.z);
           if (y === null) continue;
@@ -258,11 +275,15 @@ export function createRocks(
         place(cls, x, z);
       }
     },
+    setVisible(on: boolean) {
+      hidden = !on;
+      for (const b of batches) b.near.visible = b.far.visible = on && !(lowQuality && b.cls.name === 'pebble');
+    },
     count: () => batches.reduce((n, b) => n + (b.near.visible ? b.near.count + b.far.count : 0), 0),
     setLowQuality(low: boolean) {
       lowQuality = low;
       for (const b of batches) {
-        if (b.cls.name === 'pebble') b.near.visible = b.far.visible = !low;
+        if (b.cls.name === 'pebble') b.near.visible = b.far.visible = !low && !hidden;
         if (b.cls.name === 'cobble') b.near.castShadow = !low;
       }
       if (!low) lastCell.clear();

@@ -1,0 +1,10 @@
+{
+  "id": "ground-detail-textures",
+  "name": "Close-up ground detail (ambientCG Ground079S, Ground110, Rock062)",
+  "mission": "ambientCG (Lennart Demes)",
+  "product": "Ground079S (fine regolith with grit and small pebbles), Ground110 (a pebble-strewn pavement), Rock062 (cracked, weathered bedrock)",
+  "url": "https://ambientcg.com/",
+  "licence": "CC0 1.0 (public domain dedication)",
+  "notes": "Shape only: their surface normals, height and brightness add grain below the 25 cm of HiRISE within a few tens of metres of the viewer in Rover View. They are photographs of Earth materials, drawn in, not measured; the colour comes from the orbital data.",
+  "retrieved": "2026-11-14"
+}

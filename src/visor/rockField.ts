@@ -18,9 +18,9 @@ export interface RockClass {
 }
 
 export const ROCK_CLASSES: readonly RockClass[] = [
-  { name: 'pebble', cellM: 5, perCell: 22, minM: 0.06, maxM: 0.32, radiusM: 70, sink: 0.35 },
-  { name: 'cobble', cellM: 12, perCell: 9, minM: 0.28, maxM: 1, radiusM: 220, sink: 0.3 },
-  { name: 'boulder', cellM: 50, perCell: 2, minM: 1, maxM: 3.2, radiusM: 600, sink: 0.25 },
+  { name: 'pebble', cellM: 5, perCell: 9, minM: 0.05, maxM: 0.3, radiusM: 60, sink: 0.45 },
+  { name: 'cobble', cellM: 12, perCell: 4, minM: 0.28, maxM: 0.9, radiusM: 200, sink: 0.42 },
+  { name: 'boulder', cellM: 50, perCell: 1.6, minM: 0.9, maxM: 3, radiusM: 600, sink: 0.36 },
 ];
 
 export interface Rock {
@@ -79,15 +79,25 @@ export function slopeWeight(slopeDeg: number): number {
 
 /**
  * The rocks of one cell. `slopeDeg` is the slope of the ground at the cell, sampled once.
- * `keepOff` lets a caller clear rocks from a path.
+ * `keepOff` lets a caller clear rocks from a path. `rockiness` (0 to 1), where known, is how broken
+ * the ground looks from orbit (see Patch.roughnessAt): rippled sand gets almost none, rubble the most.
  */
-export function rocksInCell(cls: RockClass, ix: number, iz: number, slopeDeg: number, keepOff?: (x: number, z: number) => boolean): Rock[] {
+export function rocksInCell(
+  cls: RockClass,
+  ix: number,
+  iz: number,
+  slopeDeg: number,
+  keepOff?: (x: number, z: number) => boolean,
+  rockiness: number | null = null,
+): Rock[] {
   const salt = cls.cellM * 31;
   const w = slopeWeight(slopeDeg);
   const cx = (ix + 0.5) * cls.cellM;
   const cz = (iz + 0.5) * cls.cellM;
   // Sandy patches hold about a third as many; steep ground up to three times as many.
-  const sand = 0.3 + 0.7 * Math.min(1, sandiness(cx, cz) * 1.6);
+  // Even smooth ground keeps some grit; only boulders vanish from the sand.
+  const floor = cls.name === 'pebble' ? 0.22 : cls.name === 'cobble' ? 0.07 : 0.03;
+  const sand = rockiness === null ? 0.3 + 0.7 * Math.min(1, sandiness(cx, cz) * 1.6) : floor + 1.7 * Math.max(0, Math.min(1, rockiness)) ** 1.4;
   const expected = cls.perCell * sand * (1 + 2 * w);
   const count = Math.floor(expected) + (hash(ix, iz, salt + 1) < expected % 1 ? 1 : 0);
   const out: Rock[] = [];
