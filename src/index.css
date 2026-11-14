@@ -386,3 +386,24 @@
   border-color: var(--warning);
   background: var(--warning);
 }
+
+/* The crew on the map: a disc with an arrow that points the way they are heading. */
+.crew-marker {
+  width: 26px;
+  height: 26px;
+  border-radius: 50%;
+  background: #fbf4ea;
+  border: 3px solid #0e1a25;
+  box-shadow: 0 0 0 2px #9cc4ea, 0 2px 6px rgb(0 0 0 / 0.6);
+  display: grid;
+  place-items: center;
+  pointer-events: none;
+}
+.crew-marker-arrow {
+  width: 0;
+  height: 0;
+  border-left: 5px solid transparent;
+  border-right: 5px solid transparent;
+  border-bottom: 9px solid #0e1a25;
+  transform: translateY(-1px);
+}

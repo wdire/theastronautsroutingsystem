@@ -11,6 +11,7 @@ import { addPlacePicking } from './pick';
 import { addRouteLayers } from './layers/route';
 import { addRangeRings } from './layers/rings';
 import { addAutoTilt } from './tilt';
+import { addMissionLayers } from './layers/mission';
 import { addOverlays } from './layers/overlays';
 import { addLabels } from './layers/labels';
 import { startPlanner } from '@/planner/controller';
@@ -61,7 +62,7 @@ export function MapView() {
 
     whenMapReady((m) => {
       if (!alive) return;
-      cleanups.push(addTerrain(m), addRouteLayers(m), addRangeRings(m), addAutoTilt(m), addOverlays(m), addLabels(m), addPlacePicking(m), addGlobeMarker(m));
+      cleanups.push(addTerrain(m), addRouteLayers(m), addMissionLayers(m), addRangeRings(m), addAutoTilt(m), addOverlays(m), addLabels(m), addPlacePicking(m), addGlobeMarker(m));
     });
 
     setReadoutSampler((lon, lat) => {

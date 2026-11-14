@@ -21,6 +21,8 @@ import { useIsPhone, useIsTouch } from '@/ui/hooks/useMediaQuery';
 import { PhoneChrome } from './PhoneChrome';
 import { FlyoverBar } from '@/ui/mapctl/FlyoverBar';
 import { Hints } from './Hints';
+import { RunPanel } from '@/ui/run/RunPanel';
+import { Alerts } from '@/ui/run/Alerts';
 
 function DockContent() {
   const dock = useApp((s) => s.dock);
@@ -38,8 +40,11 @@ function LeftPanel() {
   const plannerOpen = useApp((s) => s.plannerOpen);
   const planned = useApp((s) => s.plan.stops.length + (s.plan.start ? 1 : 0));
   const openPlanner = useApp((s) => s.openPlanner);
+  const running = useApp((s) => s.world !== null);
   if (placeOpen) return <PlaceCard />;
   if (plannerOpen) return <Planner />;
+  // While a mission runs the plan is not being made: the run panel has the floor.
+  if (running) return null;
   return (
     <button
       type="button"
@@ -90,6 +95,8 @@ function ChromeLayout() {
         <PickingHint />
         <FlyoverBar />
         <Hints />
+        <RunPanel />
+        <Alerts />
       </>
     );
   }
@@ -103,6 +110,8 @@ function ChromeLayout() {
       <PickingHint />
       <FlyoverBar />
       <Hints />
+      <RunPanel />
+      <Alerts />
 
       <div className="pointer-events-auto absolute top-3 right-3">
         <DockRail />

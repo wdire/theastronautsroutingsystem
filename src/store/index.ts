@@ -1,6 +1,7 @@
 import { create } from 'zustand';
 import { subscribeWithSelector } from 'zustand/middleware';
 import type { DonkiFeed } from '@/engines/spaceWeather';
+import type { NewRoute, World } from '@/sim/types';
 import type { MissionPlan, RouteAlternative, RouteStyle, Scenario, Stop, Task, TaskKind, VehicleId, Waypoint } from '@/engines/types';
 
 export type Mode = 'globe' | 'map';
@@ -97,6 +98,14 @@ export interface AppState {
   /** NASA’s space weather feeds as last fetched; null until they arrive. `spaceWeatherFailed` when nothing answered. */
   spaceWeather: DonkiFeed | null;
   spaceWeatherFailed: boolean;
+  /** The mission being run in simulated time, or null. Owned by src/sim/controller.ts. */
+  world: World | null;
+  /** A new route worked out for an alert, shown on the map until the crew takes it or keeps the old one. */
+  proposed: (NewRoute & { alertId: string; addedM: number; addedS: number }) | null;
+  /** The alert a new route is being worked out for. */
+  routingAlertId: string | null;
+  /** Speak alerts aloud. Off until the visitor turns it on. */
+  spokenAlerts: boolean;
   /** A camera flight along the route, while it runs: the next waypoint and how far it is. */
   flyover: { next: string; remainingM: number; progress: number } | null;
 
@@ -189,6 +198,10 @@ export const useApp = create<AppState>()(
       spaceWeather: null,
       spaceWeatherFailed: false,
       flyover: null,
+      world: null,
+      proposed: null,
+      routingAlertId: null,
+      spokenAlerts: false,
 
       plan: EMPTY_PLAN,
       planRev: 0,

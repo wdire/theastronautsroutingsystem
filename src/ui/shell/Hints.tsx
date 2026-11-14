@@ -36,7 +36,7 @@ export function Hints() {
   const planned = useApp((s) => s.plan.start !== null && s.plan.stops.length > 0);
   const sheetOpen = useApp((s) => s.placeId !== null || s.plannerOpen || s.dock !== null);
   const phone = useIsPhone();
-  const ran = useApp((s) => s.flyover !== null || s.visor !== null);
+  const ran = useApp((s) => s.flyover !== null || s.visor !== null || s.world !== null);
 
   const reached = ran ? 3 : planned ? 2 : sawPlace ? 1 : 0;
   const shown = Math.max(step, reached);
@@ -50,7 +50,7 @@ export function Hints() {
   const text = [
     `${verb} anywhere on the map, or search, to see what is there.`,
     'Plan a mission: choose a start, then add the places you want to work at.',
-    'Fly along the route to see the ground it crosses, or stand on it in Rover View.',
+    'Start the mission and watch it run, or fly along the route to see the ground it crosses.',
   ][shown];
 
   return (

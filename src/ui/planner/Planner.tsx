@@ -1,5 +1,6 @@
-import { Bot, Car, Caravan, Check, ChevronDown, Flag, Footprints, Helicopter, MousePointerClick, Plus, TriangleAlert, X, Plane } from 'lucide-react';
+import { Bot, Car, Caravan, Check, ChevronDown, Flag, Footprints, Helicopter, MousePointerClick, Plus, TriangleAlert, X, Plane, Play } from 'lucide-react';
 import { flySelectedRoute } from '@/map/flyover';
+import { startMission } from '@/sim/controller';
 import { Budget } from './Budget';
 import { Departure } from './Departure';
 import { Exports } from './Exports';
@@ -213,14 +214,26 @@ function RouteResult() {
         ) : null}
         </>
       )}
-      <button
-        type="button"
-        onClick={flySelectedRoute}
-        className="mt-3 inline-flex h-9 items-center gap-2 rounded-md border px-3 text-[13px] font-medium transition-colors hover:bg-secondary pointer-coarse:h-11"
-      >
-        <Plane className="size-4 text-muted-foreground" aria-hidden />
-        Fly along the route
-      </button>
+      <div className="mt-4 flex flex-wrap gap-2">
+        {route.hasBudget ? (
+          <button
+            type="button"
+            onClick={() => startMission()}
+            className="inline-flex h-9 items-center gap-2 rounded-md bg-primary px-3.5 text-[13px] font-semibold text-primary-foreground transition-opacity hover:opacity-90 pointer-coarse:h-11"
+          >
+            <Play className="size-4" aria-hidden />
+            Start the mission
+          </button>
+        ) : null}
+        <button
+          type="button"
+          onClick={flySelectedRoute}
+          className="inline-flex h-9 items-center gap-2 rounded-md border px-3 text-[13px] font-medium transition-colors hover:bg-secondary pointer-coarse:h-11"
+        >
+          <Plane className="size-4 text-muted-foreground" aria-hidden />
+          Fly along the route
+        </button>
+      </div>
       <Exports alt={chosen} hasBudget={route.hasBudget} />
       {!route.hasBudget ? (
         <p className="mt-3 text-xs leading-relaxed text-faint">
