@@ -42,7 +42,7 @@ export function App() {
   useEffect(() => {
     const id = window.setInterval(() => {
       const s = useApp.getState();
-      s.setUtcMs(s.utcMs + 1000);
+      s.setUtcMs(s.clockLive ? Date.now() : s.utcMs + 1000);
     }, 1000);
     return () => window.clearInterval(id);
   }, []);

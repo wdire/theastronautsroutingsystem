@@ -54,6 +54,8 @@ export interface AppState {
   /* clock */
   /** The app's "now" on Mars, as UTC milliseconds. Never runs backwards while a mission runs. */
   utcMs: number;
+  /** True while the app clock follows the real present. */
+  clockLive: boolean;
   /** A departure chosen by hand, or null to leave now. */
   departUtcMs: number | null;
   scenario: Scenario;
@@ -76,6 +78,8 @@ export interface AppState {
   setCamera(camera: Camera): void;
   setTheme(theme: Theme): void;
   setUtcMs(utcMs: number): void;
+  /** Jumps the clock. `live` says whether it should go on following the real present. */
+  setClock(utcMs: number, live: boolean): void;
   setDepartUtcMs(utcMs: number | null): void;
   setScenario(patch: Partial<Scenario>): void;
   openDock(tab: DockTab | null): void;
@@ -116,6 +120,7 @@ export const useApp = create<AppState>()(
       theme: 'dark',
 
       utcMs: Date.now(),
+      clockLive: true,
       departUtcMs: null,
       scenario: DEFAULT_SCENARIO,
 
@@ -132,6 +137,7 @@ export const useApp = create<AppState>()(
       setCamera: (camera) => set({ camera }),
       setTheme: (theme) => set({ theme }),
       setUtcMs: (utcMs) => set({ utcMs }),
+      setClock: (utcMs, clockLive) => set({ utcMs, clockLive }),
       setDepartUtcMs: (departUtcMs) => set({ departUtcMs }),
       setScenario: (patch) => set((s) => ({ scenario: { ...s.scenario, ...patch } })),
       openDock: (dock) => set({ dock }),

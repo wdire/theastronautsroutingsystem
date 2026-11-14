@@ -119,8 +119,11 @@ export async function resolvePlace(key: string): Promise<PlaceView | null> {
     if (key.startsWith('@')) {
       const [latText, lonText] = key.slice(1).split(',');
       const lat = Number(latText);
-      const lon = Number(lonText);
-      if (!Number.isFinite(lat) || !Number.isFinite(lon) || Math.abs(lat) > 90) return null;
+      let lon = Number(lonText);
+      // The key can come from a link, so both numbers are checked before anything is drawn from them.
+      if (!Number.isFinite(lat) || !Number.isFinite(lon) || Math.abs(lat) > 90 || Math.abs(lon) > 360) return null;
+      if (lon > 180) lon -= 360;
+      else if (lon < -180) lon += 360;
       return { key, kind: 'point', name: 'Dropped pin', subtitle: fmtLatLon(lat, lon), lon, lat, summary: '', photos: [], zoom: 13 };
     }
     const sep = key.indexOf(':');
@@ -191,7 +194,7 @@ export async function nearby(lon: number, lat: number, excludeKey: string, maxM 
     const distM = distanceM(lon, lat, lo, la);
     if (distM <= maxM) out.push({ key, name, hint, distM, direction: compassWord(bearingDeg(lon, lat, lo, la)), lon: lo, lat: la });
   };
-  for (const p of places) push(`place:${p.id}`, p.name, 'Perseverance site', p.lon, p.lat);
+  for (const p of places) if (p.kind !== 'sample') push(`place:${p.id}`, p.name, 'Perseverance site', p.lon, p.lat);
   for (const s of samples) push(`sample:${s.id}`, s.name, 'Rock sample', s.lon, s.lat);
   // A feature counts as near when its edge is, not only its centre.
   for (const f of names) {

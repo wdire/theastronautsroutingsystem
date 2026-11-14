@@ -18,7 +18,7 @@ async function loadTargets(): Promise<void> {
   targetsLoaded = true;
   const [places, samples] = await Promise.all([loadPlaces().catch(() => []), loadSamples().catch(() => [])]);
   targets = [
-    ...places.map((p) => ({ key: `place:${p.id}`, lon: p.lon, lat: p.lat })),
+    ...places.filter((p) => p.kind !== 'sample').map((p) => ({ key: `place:${p.id}`, lon: p.lon, lat: p.lat })),
     ...samples.map((s) => ({ key: `sample:${s.id}`, lon: s.lon, lat: s.lat })),
   ];
 }

@@ -24,7 +24,7 @@ function useSearchIndex(): SearchItem[] {
     loadPlaces()
       .then((places) =>
         add(
-          places.map((p) => ({
+          places.filter((p) => p.kind !== 'sample').map((p) => ({
             key: `place:${p.id}`,
             kind: p.kind === 'site' ? 'site' : 'place',
             name: p.name,

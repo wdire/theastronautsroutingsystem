@@ -8,6 +8,7 @@ import { SearchBox } from '@/ui/search/SearchBox';
 import { MainMenu } from './MainMenu';
 import { PlaceCard } from '@/ui/place/PlaceCard';
 import { ReliefChip } from '@/ui/mapctl/ReliefChip';
+import { ClockMenu } from '@/ui/clock/ClockMenu';
 import { useIsPhone } from '@/ui/hooks/useMediaQuery';
 
 function EmptyPanel({ children }: { children: ReactNode }) {
@@ -31,8 +32,11 @@ export function Chrome() {
   if (phone) {
     return (
       <div className="pointer-events-none absolute inset-0">
-        <div className="pointer-events-auto absolute inset-x-2.5 top-[max(0.625rem,env(safe-area-inset-top))]">
-          <SearchBox leading={<MainMenu />} />
+        <div className="pointer-events-auto absolute inset-x-2.5 top-[max(0.625rem,env(safe-area-inset-top))] flex flex-col items-end gap-2">
+          <div className="w-full">
+            <SearchBox leading={<MainMenu />} />
+          </div>
+          <ClockMenu />
         </div>
         <div className="pointer-events-auto absolute right-2.5 bottom-[max(1.5rem,env(safe-area-inset-bottom))]">
           <MapButtons withLayers />
@@ -57,7 +61,10 @@ export function Chrome() {
       <div className="pointer-events-auto absolute top-3 right-3">
         <DockRail />
       </div>
-      <div className="absolute top-3 right-[78px] bottom-10 flex flex-col [&>*]:pointer-events-auto">
+      <div className="pointer-events-auto absolute top-3 right-[78px]">
+        <ClockMenu />
+      </div>
+      <div className="absolute top-[68px] right-[78px] bottom-10 flex flex-col [&>*]:pointer-events-auto">
         <DockContent />
       </div>
 

@@ -37,6 +37,8 @@ function devApi(env: Record<string, string>): Plugin {
 export default defineConfig(({ mode }) => ({
   plugins: [react(), tailwindcss(), devApi(loadEnv(mode, root, ''))],
   resolve: { alias: { '@': path.join(root, 'src') } },
+  // The data tools write thousands of files under public/; they must not reload the page.
+  server: { watch: { ignored: ['**/public/region/**', '**/public/data/**', '**/public/models/**', '**/tools/**', '**/docs/**'] } },
   worker: { format: 'es' as const },
   // Named up front so the dev server never re-bundles dependencies in the middle of a session.
   optimizeDeps: {
