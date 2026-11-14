@@ -1,4 +1,5 @@
-import { nasaUrl } from '@/lib/nasa';
+// Relative import on purpose: this module is also bundled into the function under api/.
+import { nasaUrl } from '../lib/nasa';
 
 /**
  * Live space weather for Mars, summarised from NASA’s DONKI database (Space Weather Database Of

@@ -60,6 +60,18 @@ The tile package and datasets are already in `public/`. To rebuild them, see `to
 A NASA API key is optional. Copy `.env.example` to `.env.local` and set `NASA_API_KEY`. It is read only by
 the two functions under `api/` and never reaches the browser; without it they use NASA's keyless server.
 
+## Deploy
+
+The app is a static site plus two small functions under `api/`, set up for Vercel (`vercel.json`).
+
+1. In Vercel, choose Add New, Project, and import this GitHub repository. The framework (Vite), the build
+   command and the output folder are read from `vercel.json`.
+2. Optional: under Settings, Environment Variables, add `NASA_API_KEY` with a key from https://api.nasa.gov.
+3. Deploy. Every push to `main` deploys again.
+
+The tile package under `public/region` is about 100 MB in 8,400 files. Deploying from the Git repository
+has no trouble with that; the Vercel CLI's upload limit on the Hobby plan does.
+
 ## Data
 
 All data is from NASA and USGS: MOLA, HRSC, CTX, HiRISE, THEMIS, Viking, CRISM, the Mars 2020 terrain

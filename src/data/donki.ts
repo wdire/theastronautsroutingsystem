@@ -1,4 +1,5 @@
-import { donkiQueries, parseDonkiList, type DonkiFeed, type FeedName } from '@/engines/spaceWeather';
+// Relative imports on purpose: this file is bundled into the function under api/, which does not know the app's @ alias.
+import { donkiQueries, parseDonkiList, type DonkiFeed, type FeedName } from '../engines/spaceWeather';
 
 /** The database's own server at Goddard: answers browsers directly (CORS) and needs no key. */
 export const CCMC = 'https://ccmc.gsfc.nasa.gov/DONKI/WS/get/';
