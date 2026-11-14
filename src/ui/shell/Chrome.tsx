@@ -20,6 +20,7 @@ import { Route } from 'lucide-react';
 import { useIsPhone, useIsTouch } from '@/ui/hooks/useMediaQuery';
 import { PhoneChrome } from './PhoneChrome';
 import { FlyoverBar } from '@/ui/mapctl/FlyoverBar';
+import { Hints } from './Hints';
 
 function DockContent() {
   const dock = useApp((s) => s.dock);
@@ -88,6 +89,7 @@ function ChromeLayout() {
         <PhoneChrome place={<PlaceCard />} planner={<Planner />} dockPanel={<DockContent />} />
         <PickingHint />
         <FlyoverBar />
+        <Hints />
       </>
     );
   }
@@ -100,6 +102,7 @@ function ChromeLayout() {
       </div>
       <PickingHint />
       <FlyoverBar />
+      <Hints />
 
       <div className="pointer-events-auto absolute top-3 right-3">
         <DockRail />
