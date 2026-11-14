@@ -1,0 +1,109 @@
+import { createRouter, RouteCancelledError, type Router } from '@/engines/router/client';
+import type { PathPoint, RouteStyle, TripOptions, TripResult } from '@/engines/types';
+import { loadGrid } from '@/data/dem';
+import { useApp } from '@/store';
+import { planRoutes, STYLES, type RoutingDeps } from './routing';
+
+type ComputeTrip = (path: PathPoint[], opts: TripOptions) => TripResult;
+
+/**
+ * The trip computer is looked up rather than imported, so the planner works, with shapes only,
+ * in a build that does not have it yet, and picks it up without a code change once it exists.
+ */
+const tripModules = import.meta.glob<{ computeTrip?: ComputeTrip }>('../engines/tripComputer.ts');
+
+async function loadComputeTrip(): Promise<ComputeTrip | undefined> {
+  const load = Object.values(tripModules)[0];
+  if (!load) return undefined;
+  try {
+    return (await load()).computeTrip;
+  } catch {
+    return undefined;
+  }
+}
+
+/**
+ * Keeps the routes in the store in step with the plan. Every change to the plan, the vehicle, the
+ * departure or the what-if weather starts a new run and cancels the old one; a run that is overtaken
+ * never writes its result.
+ */
+export function startPlanner(): () => void {
+  const routers = new Map<RouteStyle, Router>();
+  let timer = 0;
+  let running = -1;
+  let disposed = false;
+  let runCounter = 0;
+
+  const routerFor = (style: RouteStyle): Router => {
+    let r = routers.get(style);
+    if (!r) {
+      r = createRouter();
+      routers.set(style, r);
+    }
+    return r;
+  };
+
+  const run = async () => {
+    timer = 0;
+    if (disposed) return;
+    const s = useApp.getState();
+    // One id per run: the plan revision alone would repeat when only the weather or the hour changes.
+    runCounter += 1;
+    const rev = runCounter;
+    if (running >= 0) for (const r of routers.values()) r.cancel(running);
+    running = rev;
+
+    if (!s.plan.start || s.plan.stops.length === 0) {
+      s.setRoute({ status: 'idle' });
+      return;
+    }
+    s.setRoute({ status: 'routing', rev, progress: 0 });
+    const computeTrip = await loadComputeTrip();
+    const deps: RoutingDeps = {
+      loadGrid: (box, maxCells) => loadGrid(box, maxCells),
+      route: (style, request, grid, onProgress) => routerFor(style).route(request, grid, onProgress),
+      isCurrent: (r) => !disposed && r === running,
+      onProgress: (r, progress) => {
+        if (r === running) useApp.getState().setRoute({ status: 'routing', rev: r, progress });
+      },
+      ...(computeTrip ? { computeTrip } : {}),
+    };
+    try {
+      const result = await planRoutes(
+        { rev, plan: s.plan, departUtcMs: s.departUtcMs ?? s.utcMs, scenario: s.scenario, hazards: [] },
+        deps,
+      );
+      if (result && rev === running && !disposed) useApp.getState().setRoute(result);
+    } catch (err) {
+      if (err instanceof RouteCancelledError || rev !== running || disposed) return;
+      useApp.getState().setRoute({
+        status: 'failed',
+        rev,
+        leg: 0,
+        message: 'The route could not be worked out. Check the connection, then change the plan to try again.',
+      });
+    }
+  };
+
+  const schedule = () => {
+    if (timer) window.clearTimeout(timer);
+    timer = window.setTimeout(() => void run(), 280);
+  };
+
+  const unsubscribe = useApp.subscribe(
+    (s) => [s.planRev, s.scenario, s.departUtcMs] as const,
+    schedule,
+    { equalityFn: (a, b) => a[0] === b[0] && a[1] === b[1] && a[2] === b[2] },
+  );
+  if (useApp.getState().plan.start) schedule();
+
+  return () => {
+    disposed = true;
+    unsubscribe();
+    if (timer) window.clearTimeout(timer);
+    for (const r of routers.values()) r.dispose();
+    routers.clear();
+  };
+}
+
+export { STYLES };

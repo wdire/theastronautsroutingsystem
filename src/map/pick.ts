@@ -46,7 +46,20 @@ export function addPlacePicking(map: MapLibreMap): () => void {
   const onClick = (e: { point: { x: number; y: number }; lngLat: { lng: number; lat: number }; defaultPrevented?: boolean }) => {
     const s = useApp.getState();
     if (s.mode !== 'map' || s.flying || e.defaultPrevented) return;
-    s.openPlace(pickKey(map, e.point, e.lngLat));
+    const key = pickKey(map, e.point, e.lngLat);
+    if (s.picking) {
+      // The planner asked for a point: the click sets the start or adds a stop, named if it hit a known place.
+      const target = s.picking;
+      s.setPicking(null);
+      void resolvePlace(key).then((view) => {
+        const at = view && view.kind !== 'point' ? { lon: view.lon, lat: view.lat, name: view.name, placeId: view.key } : { lon: e.lngLat.lng, lat: e.lngLat.lat };
+        const app = useApp.getState();
+        if (target === 'start') app.setStart(at);
+        else app.addStop(at);
+      });
+      return;
+    }
+    s.openPlace(key);
   };
   map.on('click', onClick);
 
@@ -76,10 +89,20 @@ export function addPlacePicking(map: MapLibreMap): () => void {
   };
   sync(useApp.getState().placeId);
   const unsubscribe = useApp.subscribe((s) => s.placeId, sync);
+  const offPicking = useApp.subscribe(
+    (s) => s.picking,
+    (picking) => map.getCanvas().classList.toggle('is-picking', picking !== null),
+  );
+  const onKey = (e: KeyboardEvent) => {
+    if (e.key === 'Escape' && useApp.getState().picking) useApp.getState().setPicking(null);
+  };
+  window.addEventListener('keydown', onKey);
 
   return () => {
     map.off('click', onClick);
     unsubscribe();
+    offPicking();
+    window.removeEventListener('keydown', onKey);
     marker?.remove();
   };
 }

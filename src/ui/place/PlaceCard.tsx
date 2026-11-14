@@ -168,12 +168,11 @@ export function PlaceCard() {
     const s = useApp.getState();
     if (!s.plan.start) s.setStart({ lon: LANDING_SITE[0], lat: LANDING_SITE[1], name: 'Octavia E. Butler Landing' });
     s.addStop(asWaypoint);
-    s.openPlace(null);
+    s.openPlanner(true);
   };
   const startHere = () => {
     useApp.getState().setStart(asWaypoint);
-    toast('Start set', { description: v.kind === 'point' ? fmtLatLon(v.lat, v.lon) : v.name });
-    openPlace(null);
+    useApp.getState().openPlanner(true);
   };
   const addStop = () => {
     useApp.getState().addStop(asWaypoint);

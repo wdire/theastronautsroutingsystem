@@ -10,7 +10,11 @@ export function startUrlSync(map: MapLibreMap): () => void {
   const initial = takeInitialUrlState(window.location.hash);
   if (initial) {
     const s = useApp.getState();
-    if (initial.plan) s.setPlan({ ...s.plan, ...initial.plan });
+    if (initial.plan) {
+      s.setPlan({ ...s.plan, ...initial.plan });
+      // A link that carries a plan opens on it.
+      if (!initial.place) s.openPlanner(true);
+    }
     if (initial.departUtcMs !== undefined) s.setDepartUtcMs(initial.departUtcMs);
     if (initial.camera) {
       // A link with a view opens straight on the map, without the opening screen.

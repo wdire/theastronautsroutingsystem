@@ -9,6 +9,8 @@ import { MainMenu } from './MainMenu';
 import { PlaceCard } from '@/ui/place/PlaceCard';
 import { ReliefChip } from '@/ui/mapctl/ReliefChip';
 import { ClockMenu } from '@/ui/clock/ClockMenu';
+import { Planner } from '@/ui/planner/Planner';
+import { Route } from 'lucide-react';
 import { useIsPhone } from '@/ui/hooks/useMediaQuery';
 
 function EmptyPanel({ children }: { children: ReactNode }) {
@@ -22,6 +24,37 @@ function DockContent() {
     <DockPanel tab={dock}>
       <EmptyPanel>This panel is being built.</EmptyPanel>
     </DockPanel>
+  );
+}
+
+/** The left column shows one thing at a time: a place, the plan, or the way into planning. */
+function LeftPanel() {
+  const placeOpen = useApp((s) => s.placeId !== null);
+  const plannerOpen = useApp((s) => s.plannerOpen);
+  const planned = useApp((s) => s.plan.stops.length + (s.plan.start ? 1 : 0));
+  const openPlanner = useApp((s) => s.openPlanner);
+  if (placeOpen) return <PlaceCard />;
+  if (plannerOpen) return <Planner />;
+  return (
+    <button
+      type="button"
+      onClick={() => openPlanner(true)}
+      className="panel flex h-11 items-center gap-2.5 self-start px-3.5 text-[13.5px] font-semibold transition-colors hover:bg-secondary"
+    >
+      <Route className="size-4 text-primary" aria-hidden />
+      {planned > 0 ? 'Open the mission plan' : 'Plan a mission'}
+    </button>
+  );
+}
+
+function PickingHint() {
+  const picking = useApp((s) => s.picking);
+  if (!picking) return null;
+  return (
+    <div role="status" className="panel pointer-events-none absolute top-3 left-1/2 flex h-10 -translate-x-1/2 items-center gap-2 px-3.5 text-[13px] font-medium">
+      {picking === 'start' ? 'Click the map to set the start.' : 'Click the map to add a stop.'}
+      <span className="text-muted-foreground">Esc cancels</span>
+    </div>
   );
 }
 
@@ -41,9 +74,10 @@ export function Chrome() {
         <div className="pointer-events-auto absolute right-2.5 bottom-[max(1.5rem,env(safe-area-inset-bottom))]">
           <MapButtons withLayers />
         </div>
-        <div className="pointer-events-auto absolute inset-x-0 bottom-0 flex max-h-[62dvh] flex-col [&>*]:rounded-b-none [&>*]:border-x-0 [&>*]:border-b-0">
-          <PlaceCard />
+        <div className="pointer-events-auto absolute inset-x-0 bottom-0 flex max-h-[62dvh] flex-col [&>section]:rounded-b-none [&>article]:rounded-b-none [&>button]:mb-6 [&>button]:ml-2.5">
+          <LeftPanel />
         </div>
+        <PickingHint />
         <div className="pointer-events-auto absolute inset-x-0 bottom-0 flex max-h-[72dvh] justify-center [&>section]:w-full [&>section]:max-w-none [&>section]:rounded-b-none">
           <DockContent />
         </div>
@@ -55,8 +89,9 @@ export function Chrome() {
     <div className="pointer-events-none absolute inset-0">
       <div className="absolute top-3 bottom-3 left-3 flex w-[372px] flex-col gap-2 [&>*]:pointer-events-auto">
         <SearchBox leading={<MainMenu />} />
-        <PlaceCard />
+        <LeftPanel />
       </div>
+      <PickingHint />
 
       <div className="pointer-events-auto absolute top-3 right-3">
         <DockRail />

@@ -7,7 +7,7 @@ Plan: docs/superpowers/plans/2026-11-14-areo.md. One line per task, then rulings
 - [x] 3 Other datasets and models (names, traverse, Ingenuity flights, 19 places with 48 photos, 30 samples, weather, caves, sites, geology, 5 models; validate_data.py passes)
 - [ ] 4 Engines: done and tested: marsTime, environment, vehicles, metabolic, terrain, isochrone, geology, explain, router, relief, lighting (225 tests). NOT written: tripComputer, departure (blocked, see below; tests parked as tripComputer.test.ts.pending), spaceWeather, export, validate, missions, grading, alerts.
 - [ ] 5 Real protocol, places, search, place card: protocol (package, ancestor upsample, live Viking/CTX/HiRISE detail), DEM grids, search, place card, clock chip done. Left: e2e tests from the plan, check against the final tile package, Rover View button.
-- [ ] 6 Router wiring, route card, mission editor
+- [ ] 6 Router wiring, route card, mission editor: planner panel (vehicle, start, stops with drag reorder, tasks with minutes, undo, round trip, pick on map), routing per leg in 3 styles with stale-run dropping (unit tested), route and pins on the map, alternatives. Left: budget tiles, timing card, profile strip, briefing (all need tripComputer), templates from missions, click-the-route-to-add-a-stop, draggable pins, e2e tests.
 - [ ] 7 Simulation, alerts, base, run panel
 - [ ] 8 Visor and Rover View
 - [ ] 9 Map look, layers, Discover, flyover

@@ -1,6 +1,6 @@
 import { create } from 'zustand';
 import { subscribeWithSelector } from 'zustand/middleware';
-import type { MissionPlan, RouteStyle, Scenario, Stop, Task, TaskKind, VehicleId, Waypoint } from '@/engines/types';
+import type { MissionPlan, RouteAlternative, RouteStyle, Scenario, Stop, Task, TaskKind, VehicleId, Waypoint } from '@/engines/types';
 
 export type Mode = 'globe' | 'map';
 export type Theme = 'dark' | 'light';
@@ -41,6 +41,12 @@ export function newId(prefix: string): string {
   return `${prefix}${Date.now().toString(36)}${idCounter.toString(36)}`;
 }
 
+export type RouteState =
+  | { status: 'idle' }
+  | { status: 'routing'; rev: number; progress: number }
+  | { status: 'ready'; rev: number; alternatives: RouteAlternative[]; selected: string; cellM: number; hasBudget: boolean }
+  | { status: 'failed'; rev: number; message: string; leg: number; nearest?: readonly [number, number] };
+
 export interface AppState {
   /* view */
   mode: Mode;
@@ -64,6 +70,11 @@ export interface AppState {
   plan: MissionPlan;
   /** Bumped on every change to the plan; routing replies for an older revision are dropped. */
   planRev: number;
+  /** The planner panel is showing. */
+  plannerOpen: boolean;
+  /** What the next click on the map sets, if anything. */
+  picking: 'start' | 'stop' | null;
+  route: RouteState;
 
   /* ui */
   dock: DockTab | null;
@@ -88,6 +99,10 @@ export interface AppState {
   toggleSection(id: string): void;
 
   setPlan(plan: MissionPlan): void;
+  openPlanner(open: boolean): void;
+  setPicking(picking: 'start' | 'stop' | null): void;
+  setRoute(route: RouteState): void;
+  selectRoute(id: string): void;
   setStart(start: Waypoint | null): void;
   addStop(at: Waypoint, index?: number): string;
   removeStop(id: string): void;
@@ -126,6 +141,9 @@ export const useApp = create<AppState>()(
 
       plan: EMPTY_PLAN,
       planRev: 0,
+      plannerOpen: false,
+      picking: null,
+      route: { status: 'idle' },
 
       dock: null,
       placeId: null,
@@ -146,6 +164,10 @@ export const useApp = create<AppState>()(
       toggleSection: (id) => set((s) => ({ sections: { ...s.sections, [id]: !s.sections[id] } })),
 
       setPlan: (plan) => editPlan(() => plan),
+      openPlanner: (plannerOpen) => set(plannerOpen ? { plannerOpen, placeId: null } : { plannerOpen, picking: null }),
+      setPicking: (picking) => set({ picking }),
+      setRoute: (route) => set({ route }),
+      selectRoute: (id) => set((s) => (s.route.status === 'ready' ? { route: { ...s.route, selected: id } } : {})),
       setStart: (start) => editPlan((p) => ({ ...p, start })),
       addStop: (at, index) => {
         const id = newId('s');
@@ -188,7 +210,7 @@ export const useApp = create<AppState>()(
       setStyle: (style) => editPlan((p) => ({ ...p, style })),
       setRoundTrip: (roundTrip) => editPlan((p) => ({ ...p, roundTrip })),
       setCampAtNight: (campAtNight) => editPlan((p) => ({ ...p, campAtNight })),
-      clearPlan: () => editPlan(() => EMPTY_PLAN),
+      clearPlan: () => editPlan((p) => ({ ...EMPTY_PLAN, vehicle: p.vehicle })),
     };
   }),
 );

@@ -8,6 +8,8 @@ import { imgTile } from './protocol/img';
 import { demTile } from './protocol/dem';
 import { addTerrain } from './terrain';
 import { addPlacePicking } from './pick';
+import { addRouteLayers } from './layers/route';
+import { startPlanner } from '@/planner/controller';
 import { addGlobeMarker } from './globeMarker';
 import { setReadoutSampler } from './readout';
 import { SOURCE_BASE } from './style';
@@ -45,7 +47,7 @@ export function MapView() {
         }
       }),
     );
-    cleanups.push(startGlobeSpin(map));
+    cleanups.push(startGlobeSpin(map), startPlanner());
 
     const onClick = (e: { lngLat: { lng: number; lat: number } }) => {
       if (useApp.getState().mode === 'globe' && isInRegion(e.lngLat.lng, e.lngLat.lat)) flyIn(map);
@@ -55,7 +57,7 @@ export function MapView() {
 
     whenMapReady((m) => {
       if (!alive) return;
-      cleanups.push(addTerrain(m), addPlacePicking(m), addGlobeMarker(m));
+      cleanups.push(addTerrain(m), addRouteLayers(m), addPlacePicking(m), addGlobeMarker(m));
     });
 
     setReadoutSampler((lon, lat) => {
