@@ -36,6 +36,46 @@ new folder under `src/ui`, or Tailwind misses the new classes); screenshots with
 The model that wrote most of this stopped on the trip-budget content; Opus subagents wrote `tripComputer.ts`,
 `departure.ts`, `export.ts`, `validate.ts`, `missions.ts`, `alerts.ts` and `src/sim/*` without trouble.
 
+## Fourth session (2026-11-14, night): crew missions, relief, descent
+
+The team asked for: crews that are really chosen (missions, invites, roles, tasks, notes, a debrief; other
+people online; androids as virtual crew), ground that is not flat where the data is coarse, the rover wheel
+that turned with its strut, a blackout in Rover View, and zooming from the map into 3D.
+- Backend: Convex (`convex/`), anonymous local deployment for now (`npx convex dev` beside Vite; it writes
+  `VITE_CONVEX_URL` to `.env.local`). No login: each browser keeps a clientId and a secret (hash on the server).
+  Before deploying, the team logs in to Convex and creates a cloud deployment; set `VITE_CONVEX_URL` in Vercel.
+- `src/visor/relief.ts`: relief the data cannot hold, cut off at the resolution of the data under each point
+  (HiRISE 1 m: only the last metres; 200 m DEM: everything below ~600 m): rolling ground (Hurst ~0.8), ridged
+  knobs, ledged rock benches, transverse aeolian ridges in low ground, three size classes of craters with rims,
+  ejecta and sand fill. A `soil` attribute (sand, rock) drives the ground shader and rock density. Rocks gather
+  in clusters and lean on the slope. Pure function of planet position: same crater on every visit.
+- Wheels: cut by whole connected parts inside a wheel's cylinder (struts and fenders stay), axle recentred on
+  the tyre (the SEV's guessed hub was 12 cm off and its radius is 0.38 m, not 0.5).
+- Blackout: not reproduced in a 40 s ride at 20x/100x. Hardened: contexts are released on close
+  (`forceContextLoss`; browsers keep ~16 and reopening Rover View could take the map's), a lost context that
+  is not restored in 1.8 s rebuilds the view on a fresh canvas, the camera falls back from non-finite numbers,
+  and the close layer is not rebuilt at 5x and faster.
+- Map to 3D: past zoom 18.85 a push of the wheel (or "Go now", or the phone's button) opens Rover View from the
+  map camera's height and heading and eases down; scrolling out past 150 m returns to the map (`src/map/descend.ts`).
+- 3D crew from the mission roster (`store.roster`): people in white suits with their colour on arm and thigh
+  bands, androids in graphite plating with a lit visor band, name tags; the helmet camera is the visitor's
+  own member. The two stray suits at a mission's start are gone. Other people with Rover View open walk where
+  they are (`store.walkers`, `src/visor/walkers.ts`).
+- The real blackout: when quality dropped to low (slow frames, or a mission at 5x+), N8AO was switched off,
+  and N8AO is the pass that draws the scene into the composer: every frame after that was black. Now the scene
+  is drawn plainly whenever AO is off. Pixel ratio is capped at 1.5.
+- Crew client (`src/net/`, `src/ui/crew/`): identity, presence, Crew dock tab (you, invites, your mission, open
+  missions, online now, past missions), mission room (departure, roster with roles and walking order,
+  androids, task assignment, pre-EVA checklist, start), run sync (commander publishes the world about once a
+  second, the route only when it changes; members mirror it read-only and talk on the radio), private notes,
+  debrief (planned vs actual, tasks, timeline, crew log). Two-browser run: `tools/.cache/shots/crew-two.mjs`.
+- A Convex cron closes missions whose commander vanished (run silent 10 min, plan untouched 12 h, commander away).
+- Dev now needs two processes: `npm run dev -- --port 5173 --strictPort` and `npx convex dev`.
+
+Open from this session: the bundle's first load measures 422 kB gzip counted as everything index.html loads
+(HEAD measured the same way: 421 kB), so the 400 kB budget was counted differently before; the crew code is lazy.
+Sol numbers in the crew UI are Mars Sol Dates (54343), as the rest of the app's clock.
+
 ## Third session (2026-11-14, evening): realism pass
 
 The team asked for Rover View, the models and the map to look like NASA's own 3D work, and for the data to

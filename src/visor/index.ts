@@ -33,6 +33,8 @@ import { createRocks } from './rocks';
 import { skyState } from './skyModel';
 import { createProps, keepOutside } from './props';
 import { createParty } from './party';
+import { createWalkers, type WalkerSpec } from './walkers';
+import type { CrewLook } from './crewLook';
 import { createGuides } from './guides';
 import { releaseModels, retainModels } from './models';
 import type { PropSpec } from './modelSpecs';
@@ -53,6 +55,14 @@ export interface VisorOptions {
   /** A running mission to ride along with. Absent: the viewer walks on their own. */
   mission?: MissionFeed;
   onState?: (state: VisorState) => void;
+  /** Came from the map: start at the map camera's height and heading, then come down to eye level. */
+  arrive?: { headingDeg: number; pitchDeg: number; liftM: number };
+  /** The visitor zoomed out past the highest view: the caller goes back to the map. */
+  onAscend?: () => void;
+  /** Other people standing in Rover View, asked a few times a second. */
+  walkers?: () => readonly WalkerSpec[];
+  /** The browser took the graphics away and did not give them back: the caller should start the view again. */
+  onLost?: () => void;
 }
 
 export type CameraMode = 'helmet' | 'chase' | 'orbit';
@@ -60,6 +70,8 @@ export type CameraMode = 'helmet' | 'chase' | 'orbit';
 /** What the view needs from a running mission, asked every frame. */
 export interface MissionFeed {
   vehicle: VehicleId;
+  /** Who walks, in file order; the visitor's own member carries the helmet camera. */
+  roster: readonly CrewLook[];
   /** Where the crew is now; null once there is no mission. */
   crew(): { lon: number; lat: number; headingDeg: number; speedMs: number; moving: boolean } | null;
   /** The route from the crew on, nearest first, and the next objective. */
@@ -264,6 +276,9 @@ export async function mountVisor(canvas: HTMLCanvasElement, options: VisorOption
     // The close patch lies on the near one and blends into its surface: it waits for it.
     const coarser = kind === 'close' ? layers.near.patch : null;
     if (kind === 'close' && !coarser) return;
+    // At 5x and faster the ground under the wheels streams past: rebuilding the finest layer every few
+    // seconds only churns memory (a 25 cm image and a quarter of a million points each time).
+    if (kind === 'close' && mission?.fast()) return;
     layer.building = true;
     // Where the ground is not yet drawn at all, the package is used first (fast); HiRISE follows.
     const quick = !p && layer.spec.hirise !== undefined;
@@ -317,7 +332,10 @@ export async function mountVisor(canvas: HTMLCanvasElement, options: VisorOption
   }, props.clearings, (x, z) => (layers.close.patch ?? layers.near.patch)?.roughnessAt(x, z) ?? layers.near.patch?.roughnessAt(x, z) ?? null);
   let rocksPatch: Patch | null = null;
   const mission = options.mission;
-  const party = mission ? createParty(scene, mission.vehicle, heightAt) : null;
+  const party = mission ? createParty(scene, mission.vehicle, heightAt, mission.roster) : null;
+  // Other people with Rover View open nearby, walking where they are.
+  const walkers = options.walkers ? createWalkers(scene, frame, heightAt) : null;
+  let lastWalkers = -1e9;
   const guides = mission ? createGuides(scene, heightAt) : null;
   let lastGuides = -1e9;
   let loweredForSpeed = false;
@@ -326,13 +344,20 @@ export async function mountVisor(canvas: HTMLCanvasElement, options: VisorOption
   let orbitAngle = 0;
   let eyeAbove = EYE_M;
   // On foot the wheel lifts the eye off the ground, up to a drone's height, and brings it back down.
-  let lift = 0;
+  let lift = options.mission ? 0 : Math.max(0, Math.min(MAX_LIFT_M, options.arrive?.liftM ?? 0));
+  // The descent from the map's camera, eased over a few seconds once the ground is built; any input ends it.
+  let descent: { t: number; lift: number; pitch: number } | null = options.arrive && !options.mission ? { t: 0, lift, pitch: (-options.arrive.pitchDeg * Math.PI) / 180 } : null;
+  // Zooming out past the top is gathered like the map's push, so one notch too many does not leave.
+  let ascendPush = 0;
+  let ascendAt = 0;
 
   /* ---- viewer ---- */
   const pos = new Vector3(0, EYE_M, 0);
+  const lastSound = pos.clone();
   // In a mission these are offsets from the camera's own direction; on foot they are the direction itself.
-  let yaw = options.mission ? 0 : ((options.headingDeg ?? 0) * Math.PI) / 180;
-  let pitch = options.mission ? 0 : -0.06;
+  let yaw = options.mission ? 0 : (((options.arrive?.headingDeg ?? options.headingDeg ?? 0) * Math.PI) / 180);
+  // Positive pitch looks down (the camera turns by its negative); the arrival's pitch is the other way round.
+  let pitch = options.mission ? 0 : options.arrive ? (-options.arrive.pitchDeg * Math.PI) / 180 : -0.06;
   let eyeY = EYE_M;
   const keys = new Set<string>();
   const pad = { right: 0, forward: 0, fast: false };
@@ -379,6 +404,15 @@ export async function mountVisor(canvas: HTMLCanvasElement, options: VisorOption
   const onWheel = (e: WheelEvent) => {
     if (mission) return;
     e.preventDefault();
+    descent = null;
+    if (e.deltaY > 0 && lift >= MAX_LIFT_M - 0.5 && options.onAscend) {
+      const now = performance.now();
+      if (now - ascendAt > 700) ascendPush = 0;
+      ascendAt = now;
+      ascendPush += Math.abs(e.deltaMode === 1 ? e.deltaY * 40 : e.deltaY);
+      if (ascendPush > 320) options.onAscend();
+      return;
+    }
     // Proportional steps: a notch is a few centimetres near the ground and metres high up.
     lift = Math.max(0, Math.min(MAX_LIFT_M, (lift + 0.6) * Math.exp(e.deltaY * -0.0022) - 0.6));
   };
@@ -386,7 +420,9 @@ export async function mountVisor(canvas: HTMLCanvasElement, options: VisorOption
 
   const applyQuality = () => {
     const low = effective === 'low';
-    renderer.setPixelRatio(low ? 1 : Math.min(window.devicePixelRatio || 1, 2));
+    // 1.5 at most: on a Retina screen the difference from 2 is hard to see, and it is 44% fewer pixels for
+    // ambient occlusion and antialiasing to work through every frame.
+    renderer.setPixelRatio(low ? 1 : Math.min(window.devicePixelRatio || 1, 1.5));
     composer.setPixelRatio(renderer.getPixelRatio());
     // Half-resolution AO is left off: switching it made n8ao hand three.js a render target it could not
     // set up on a high-density screen, and every frame threw.
@@ -433,11 +469,12 @@ export async function mountVisor(canvas: HTMLCanvasElement, options: VisorOption
     sky.update(sk, skySun);
     renewEnvironment(skySun);
     sun.color.setRGB(...sk.sun);
-    sun.intensity = sk.sunIntensity * 1.35;
+    sun.intensity = sk.sunIntensity * 1.5;
     sun.castShadow = sk.sunIntensity > 0.15;
     // Most of the fill comes from the sky's environment map; the hemisphere adds the ground's bounce.
-    hemi.intensity = sk.ambient * 0.22;
-    scene.environmentIntensity = sk.ambient * 0.42;
+    // Kept low: Mars's thin dusty sky fills shadows less than Earth's, and too much fill flattens the relief.
+    hemi.intensity = sk.ambient * 0.16;
+    scene.environmentIntensity = sk.ambient * 0.32;
     hemi.color.setRGB(sk.zenith[0] * 0.6 + 0.4, sk.zenith[1] * 0.6 + 0.38, sk.zenith[2] * 0.6 + 0.36);
     hemi.groundColor.setRGB(0.5, 0.38, 0.27);
     fog.color.setRGB(...sk.fog);
@@ -459,6 +496,17 @@ export async function mountVisor(canvas: HTMLCanvasElement, options: VisorOption
     last = now;
     if (dt > 0) fpsSmooth += (1 / dt - fpsSmooth) * 0.05;
 
+    if (descent && state.ready) {
+      if (keys.size > 0 || dragging) {
+        descent = null;
+      } else {
+        descent.t = Math.min(1, descent.t + dt / 3.2);
+        const k = descent.t < 0.5 ? 4 * descent.t ** 3 : 1 - (-2 * descent.t + 2) ** 3 / 2;
+        lift = descent.lift * (1 - k);
+        pitch = descent.pitch + (-0.06 - descent.pitch) * k;
+        if (descent.t >= 1) descent = null;
+      }
+    }
     let viewYaw = yaw;
     let viewPitch = pitch;
     const crew = mission && party ? mission.crew() : null;
@@ -536,6 +584,14 @@ export async function mountVisor(canvas: HTMLCanvasElement, options: VisorOption
     // Never under the ground, whichever camera it is.
     if (eyeY < ground + 0.6) eyeY = ground + 0.6;
     pos.y = eyeY;
+    // One bad number (a height read off the edge of every layer, a zero-length step) would leave the camera
+    // nowhere and the screen black for good: fall back to the last place that was sound.
+    if (!Number.isFinite(pos.x) || !Number.isFinite(pos.y) || !Number.isFinite(pos.z)) {
+      pos.copy(lastSound);
+      eyeY = pos.y;
+    } else {
+      lastSound.copy(pos);
+    }
     camera.position.copy(pos);
     camera.rotation.set(-Math.max(-1.3, Math.min(1.3, viewPitch)), -viewYaw, 0);
     sky.mesh.position.copy(pos);
@@ -547,13 +603,22 @@ export async function mountVisor(canvas: HTMLCanvasElement, options: VisorOption
     props.update(pos.x, pos.z, groundChanged);
     rocksPatch = layers.close.patch ?? layers.near.patch;
 
+    if (walkers && options.walkers) {
+      if (now - lastWalkers > 250) {
+        lastWalkers = now;
+        walkers.set(options.walkers());
+      }
+      walkers.update(dt);
+    }
     updateLight(now);
     // The shadow box follows the viewer, moved in whole texels so shadows do not swim.
     const texel = 180 / sun.shadow.mapSize.x;
     sun.target.position.set(Math.round(pos.x / texel) * texel, ground, Math.round(pos.z / texel) * texel);
     sun.position.copy(sun.target.position).addScaledVector(sunDir, 400);
 
-    if (postOk) {
+    // N8AO is the pass that draws the scene into the composer: with it off (low quality, fast missions)
+    // the composer would hand on an empty buffer and the screen went black. Then the scene is drawn plainly.
+    if (postOk && ao.enabled) {
       try {
         composer.render(dt);
       } catch (err) {
@@ -616,13 +681,17 @@ export async function mountVisor(canvas: HTMLCanvasElement, options: VisorOption
   };
   raf = requestAnimationFrame(frameLoop);
 
+  let lostTimer = 0;
   const onLost = (e: Event) => {
     e.preventDefault();
     cancelAnimationFrame(raf);
     state.loading = 'The graphics were interrupted. Restoring the view…';
     options.onState?.({ ...state });
+    // Most browsers hand the context back within a second; when one does not, the view is built anew.
+    lostTimer = window.setTimeout(() => options.onLost?.(), 1800);
   };
   const onRestored = () => {
+    window.clearTimeout(lostTimer);
     last = performance.now();
     state.loading = null;
     raf = requestAnimationFrame(frameLoop);
@@ -683,6 +752,7 @@ export async function mountVisor(canvas: HTMLCanvasElement, options: VisorOption
       rocks.dispose();
       props.dispose();
       party?.dispose();
+      walkers?.dispose();
       guides?.dispose();
       releaseModels();
       sky.dispose();
@@ -690,7 +760,11 @@ export async function mountVisor(canvas: HTMLCanvasElement, options: VisorOption
       pmrem.dispose();
       ao.dispose();
       composer.dispose();
+      window.clearTimeout(lostTimer);
       renderer.dispose();
+      // Release the context now rather than when the page forgets the canvas: browsers keep only about
+      // sixteen, and opening Rover View a few times would otherwise take the map's own context away.
+      renderer.forceContextLoss();
     },
   };
 }

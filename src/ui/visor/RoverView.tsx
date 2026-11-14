@@ -10,6 +10,7 @@ import { MovePad } from './MovePad';
 import { missionFeed } from './missionFeed';
 import { MissionHud } from './MissionHud';
 import { propCaption, sceneProps, standpoint } from './scene';
+import { returnToMap } from '@/map/descend';
 
 const TIMES: readonly { label: string; hour: number }[] = [
   { label: 'Morning', hour: 8.5 },
@@ -58,18 +59,26 @@ export default function RoverView() {
   const at = useApp((s) => s.visor);
   const closeVisor = useApp((s) => s.closeVisor);
   const minute = useApp((s) => Math.floor(s.utcMs / 60_000));
-  const canvasRef = useRef<HTMLCanvasElement>(null);
+  const hostRef = useRef<HTMLDivElement>(null);
   const handleRef = useRef<VisorHandle | null>(null);
   const [state, setState] = useState<VisorState | null>(null);
   const [error, setError] = useState<string | null>(null);
+  // Bumped when the browser takes the graphics away for good: a fresh canvas and a fresh view.
+  const [attempt, setAttempt] = useState(0);
   const touch = useIsTouch();
   const riding = useApp((s) => s.world?.run != null);
   const lon = at?.lon;
   const lat = at?.lat;
 
   useEffect(() => {
-    const canvas = canvasRef.current;
-    if (!canvas || lon === undefined || lat === undefined) return;
+    const host = hostRef.current;
+    if (!host || lon === undefined || lat === undefined) return;
+    // A canvas of its own for every start: a closed view gives its context back to the browser, and a
+    // context once given back cannot be had again from the same canvas (React starts effects twice in
+    // development, and a lost context is rebuilt from scratch).
+    const canvas = document.createElement('canvas');
+    canvas.className = 'block size-full touch-none';
+    host.appendChild(canvas);
     let cancelled = false;
     const app = useApp.getState();
     // Riding along with a mission: the mission owns the clock, and the view follows the crew.
@@ -94,6 +103,19 @@ export default function RoverView() {
           utcMs: () => useApp.getState().utcMs,
           scenario: () => useApp.getState().scenario,
           props,
+          // Read once per opening, from the store: the arrival only shapes how the view starts.
+          ...(app.visor?.arrive && !mission ? { arrive: app.visor.arrive } : {}),
+          walkers: () => useApp.getState().walkers,
+          onAscend: () => {
+            if (cancelled) return;
+            // Back up to the map, over the spot the view had walked to, facing the same way.
+            const s = handleRef.current?.getState();
+            useApp.getState().closeVisor();
+            if (s) returnToMap(s.lon, s.lat, s.headingDeg);
+          },
+          onLost: () => {
+            if (!cancelled) setAttempt((n) => n + 1);
+          },
           onState: (next) => {
             if (cancelled) return;
             // The view reports five times a second; redraw the overlay only when something it shows has changed.
@@ -114,13 +136,14 @@ export default function RoverView() {
       cancelled = true;
       handleRef.current?.dispose();
       handleRef.current = null;
+      canvas.remove();
       delete window.__areoVisor;
       if (mission) return;
       const now = useApp.getState();
       now.setClock(saved.live ? Date.now() : saved.utcMs, saved.live);
       now.setClockPaused(saved.paused);
     };
-  }, [lon, lat]);
+  }, [lon, lat, attempt]);
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
@@ -146,7 +169,7 @@ export default function RoverView() {
 
   return (
     <div className="absolute inset-0 z-40 bg-black" role="region" aria-label="Rover View">
-      <canvas ref={canvasRef} className="size-full touch-none" />
+      <div ref={hostRef} className="size-full" />
 
       <div className="pointer-events-none absolute inset-x-0 top-0 flex items-start justify-between p-3">
         <button
@@ -212,7 +235,7 @@ export default function RoverView() {
                 );
               })}
             </div>
-            {touch ? null : <p className={cn('text-xs text-white/80', SHADOW)}>W A S D or the arrow keys to walk. Hold Shift to go at rover speed. Drag to look. Esc to leave.</p>}
+            {touch ? null : <p className={cn('text-xs text-white/80', SHADOW)}>W A S D or the arrow keys to walk, Shift for rover speed. Drag to look. Scroll to rise, and past the top to return to the map.</p>}
           </div>
         </>
       ) : null}

@@ -4,6 +4,7 @@ import { useApp, type DockTab } from '@/store';
 import { DOCK_TABS } from '@/ui/dock/tabs';
 import { MapButtons } from '@/ui/mapctl/MapButtons';
 import { ReliefChip } from '@/ui/mapctl/ReliefChip';
+import { DescendHint } from '@/ui/mapctl/DescendHint';
 import { SearchBox } from '@/ui/search/SearchBox';
 import { ClockMenu } from '@/ui/clock/ClockMenu';
 import { cn } from '@/lib/cn';
@@ -85,6 +86,11 @@ export function PhoneChrome({ place, planner, dockPanel }: { place: ReactNode; p
       <div className="absolute bottom-0 left-2.5 pb-2" style={{ marginBottom: clear.bottom }}>
         <ReliefChip />
       </div>
+      {content ? null : (
+        <div className="absolute left-1/2 -translate-x-1/2" style={{ bottom: clear.bottom + 56 }}>
+          <DescendHint touch />
+        </div>
+      )}
       <div className="pointer-events-auto absolute right-2.5" style={{ bottom: clear.bottom + 12 }}>
         <MapButtons compact />
       </div>

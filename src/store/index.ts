@@ -6,7 +6,7 @@ import type { MissionPlan, RouteAlternative, RouteStyle, Scenario, Stop, Task, T
 
 export type Mode = 'globe' | 'map';
 export type Theme = 'dark' | 'light';
-export type DockTab = 'layers' | 'discover' | 'missions' | 'how';
+export type DockTab = 'layers' | 'discover' | 'missions' | 'crew' | 'how';
 
 export interface Camera {
   lon: number;
@@ -41,6 +41,39 @@ let idCounter = 0;
 export function newId(prefix: string): string {
   idCounter += 1;
   return `${prefix}${Date.now().toString(36)}${idCounter.toString(36)}`;
+}
+
+/**
+ * Where Rover View opens. `arrive` is set when the visitor zoomed into it from the map: the view starts
+ * where the map's camera was (that height, that heading) and comes down to the ground.
+ */
+export interface VisorAt {
+  lon: number;
+  lat: number;
+  arrive?: { headingDeg: number; pitchDeg: number; liftM: number };
+}
+
+/** One member of the crew drawn in 3D: a person (white suit, coloured band) or an android. */
+export interface RosterMember {
+  id: string;
+  name: string;
+  role: string;
+  /** The suit band's colour, CSS hex. */
+  color: string;
+  android: boolean;
+  /** The visitor themself: the helmet camera sits in this member. */
+  me: boolean;
+}
+
+/** Someone else standing in Rover View nearby, from presence. */
+export interface Walker {
+  id: string;
+  name: string;
+  color: string;
+  lon: number;
+  lat: number;
+  headingDeg: number;
+  moving: boolean;
 }
 
 export type Overlay = 'none' | 'geology' | 'olivine' | 'carbonate' | 'slope';
@@ -121,9 +154,16 @@ export interface AppState {
   picking: 'start' | 'stop' | 'roverView' | null;
   route: RouteState;
   /** The spot the 3D ground view is open on, or null while the map shows. */
-  visor: { lon: number; lat: number } | null;
+  visor: VisorAt | null;
   /** The clock stands still (Rover View’s fixed times of day). */
   clockPaused: boolean;
+  /**
+   * The crew of the mission the visitor is in, in walking order, or null outside a shared mission (the 3D
+   * view then draws the visitor alone). Filled by the crew layer (src/net).
+   */
+  roster: RosterMember[] | null;
+  /** Other people online whose Rover View is open; drawn walking where they are. Filled by src/net. */
+  walkers: Walker[];
 
   /* ui */
   dock: DockTab | null;
@@ -155,7 +195,7 @@ export interface AppState {
   setPlan(plan: MissionPlan, missionId?: string): void;
   openPlanner(open: boolean): void;
   setPicking(picking: 'start' | 'stop' | 'roverView' | null): void;
-  openVisor(at: { lon: number; lat: number }): void;
+  openVisor(at: VisorAt): void;
   closeVisor(): void;
   setClockPaused(paused: boolean): void;
   setRoute(route: RouteState): void;
@@ -210,6 +250,8 @@ export const useApp = create<AppState>()(
       picking: null,
       route: { status: 'idle' },
       visor: null,
+      roster: null,
+      walkers: [],
       clockPaused: false,
 
       dock: null,

@@ -19,6 +19,15 @@ let lastTick = 0;
 let spoken = new Set<string>();
 // Counts missions started: a reply to a route asked for one mission must never land on the next.
 let missionSerial = 0;
+// Set while the world shown is another browser's run (a crew member watching the commander's): the levers
+// below then do nothing, since the next snapshot would undo them anyway.
+let mirror = false;
+
+/** Marks the world in the store as someone else's run, or as this browser's own again. */
+export function setMirror(on: boolean): void {
+  mirror = on;
+  if (on) stopTimer();
+}
 
 const world = (): World | null => useApp.getState().world;
 function put(next: World | null): void {
@@ -71,6 +80,8 @@ export function startMission(): boolean {
   const seed = Math.abs(Math.round(route.trip.totals.distM * 7 + route.path.length * 13)) || 1;
   const started = startRun(createWorld(departUtcMs, seed), { name, plan: s.plan, path: [...route.path], stopIndices: [...route.stopIndices], trip: route.trip, scenario: s.scenario }, departUtcMs);
   if (!started.run) return false;
+  // A run of this browser's own: whatever was being watched before is over.
+  mirror = false;
   spoken = new Set();
   missionSerial += 1;
   useApp.setState({ world: started, utcMs: started.utcMs, clockLive: false, clockPaused: true, proposed: null, routingAlertId: null, plannerOpen: false, placeId: null, picking: null });
@@ -80,16 +91,33 @@ export function startMission(): boolean {
   return true;
 }
 
+/**
+ * Takes up a run that was going on before this page loaded (the commander's browser after a reload, rebuilt
+ * from the crew server's last snapshot) and keeps it ticking from where it was.
+ */
+export function resumeMission(next: World): boolean {
+  if (!next.run || mirror) return false;
+  // Alerts already raised were spoken before the reload.
+  spoken = new Set(next.alerts.map((a) => a.id));
+  missionSerial += 1;
+  useApp.setState({ world: next, utcMs: next.utcMs, clockLive: false, clockPaused: true, proposed: null, routingAlertId: null, plannerOpen: false, picking: null });
+  lastTick = performance.now();
+  stopTimer();
+  if (next.run.status === 'running') timer = window.setInterval(loop, TICK_MS);
+  return true;
+}
+
 /** Ends the mission, if one is running, and gives the clock back to real time. */
 export function closeMission(): void {
   stopTimer();
+  mirror = false;
   missionSerial += 1;
   useApp.setState({ world: null, proposed: null, routingAlertId: null, utcMs: Date.now(), clockLive: true, clockPaused: false });
 }
 
 export function abortRun(): void {
   const w = world();
-  if (!w) return;
+  if (!w || mirror) return;
   // A new route for a mission that is over is nobody's to take.
   useApp.setState({ proposed: null, routingAlertId: null });
   put(abortMission(w));
@@ -97,12 +125,12 @@ export function abortRun(): void {
 
 export function setRunSpeed(speed: Speed): void {
   const w = world();
-  if (w) put(setSpeed(w, speed));
+  if (w && !mirror) put(setSpeed(w, speed));
 }
 
 export function toggleRunPaused(): void {
   const w = world();
-  if (!w) return;
+  if (!w || mirror) return;
   lastTick = performance.now();
   put(setPaused(w, !w.paused));
 }
@@ -115,7 +143,7 @@ export function sayToBase(text: string): void {
 
 export function ignore(alertId: string): void {
   const w = world();
-  if (w) put(ignoreAlert(w, alertId));
+  if (w && !mirror) put(ignoreAlert(w, alertId));
 }
 
 /** Puts an event in front of the crew right now. For the demo console and the tests. */
@@ -131,7 +159,7 @@ export function forceRunEvent(kind: EventKind): void {
 export async function apply(alertId: string): Promise<void> {
   const w = world();
   const alert = w?.alerts.find((a) => a.id === alertId);
-  if (!w?.run || !alert?.action || alert.resolved) return;
+  if (mirror || !w?.run || !alert?.action || alert.resolved) return;
   if (alert.action.kind !== 'reroute' && alert.action.kind !== 'turnBack') return put(applyAlert(w, alertId));
 
   const ask = proposal(w, alertId);
@@ -180,7 +208,7 @@ export async function apply(alertId: string): Promise<void> {
 export function takeProposed(): void {
   const { proposed } = useApp.getState();
   const w = world();
-  if (!proposed || !w) return;
+  if (!proposed || !w || mirror) return;
   lastTick = performance.now();
   useApp.setState({ proposed: null });
   put(adoptRoute(w, proposed.alertId, { path: proposed.path, stopIndices: proposed.stopIndices, trip: proposed.trip }));

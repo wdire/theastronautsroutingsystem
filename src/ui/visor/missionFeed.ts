@@ -22,8 +22,12 @@ export function missionFeed(): MissionFeed | null {
     return along;
   };
 
+  // The crew as the mission's roster has it; alone, the visitor walks by themself.
+  const roster = useApp.getState().roster;
+  const crew = roster && roster.length > 0 ? roster.map((m) => ({ ...m })) : [{ id: 'me', name: 'You', role: 'Commander', color: '#e8743b', android: false, me: true }];
   return {
     vehicle: run.vehicle,
+    roster: crew,
     crew() {
       const w = useApp.getState().world;
       if (!w?.run) return null;

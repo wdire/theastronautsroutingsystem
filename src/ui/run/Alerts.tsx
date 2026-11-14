@@ -4,6 +4,7 @@ import { useApp } from '@/store';
 import { SEVERITY } from '@/ui/alerts/severity';
 import { fmtDistance, fmtDuration } from '@/lib/format';
 import { cn } from '@/lib/cn';
+import { useCrew, watchingRun } from '@/net/state';
 
 const PRIMARY = 'h-9 rounded-md bg-primary px-3.5 text-[13px] font-semibold text-primary-foreground transition-opacity hover:opacity-90 pointer-coarse:h-11';
 const QUIET = 'h-9 rounded-md border px-3 text-[13px] font-medium transition-colors hover:bg-secondary pointer-coarse:h-11';
@@ -24,6 +25,8 @@ export function Alerts({ inVisor = false }: { inVisor?: boolean }) {
   const alerts = useApp((s) => s.world?.alerts);
   const routingId = useApp((s) => s.routingAlertId);
   const proposed = useApp((s) => s.proposed);
+  // A crew member sees the alert; acting on it is the commander's call.
+  const watching = useCrew(watchingRun);
   const open = sortAlerts((alerts ?? []).filter((a) => !a.resolved));
   const alert = proposed ? open.find((a) => a.id === proposed.alertId) : open[0];
   if (!alert) return null;
@@ -49,7 +52,9 @@ export function Alerts({ inVisor = false }: { inVisor?: boolean }) {
         </div>
       </div>
 
-      {proposed ? (
+      {watching ? (
+        <p className="mt-3 border-t pt-3 text-[13px] text-muted-foreground">The commander decides.{open.length > 1 ? ` ${open.length - 1} more waiting.` : ''}</p>
+      ) : proposed ? (
         <div className="mt-3 border-t pt-3">
           <p className="text-[13px] leading-relaxed">
             {inVisor ? 'A new route' : 'A new route, the dashed green line'}: {change(proposed.addedM, fmtDistance, 'longer', 'shorter', 'the same length')}

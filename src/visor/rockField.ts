@@ -101,13 +101,27 @@ export function rocksInCell(
   const expected = cls.perCell * sand * (1 + 2 * w);
   const count = Math.floor(expected) + (hash(ix, iz, salt + 1) < expected % 1 ? 1 : 0);
   const out: Rock[] = [];
+  // Rocks are not sown evenly: a broken block lies among its own fragments, and wind leaves gravel in
+  // lag patches. Part of each cell's rocks gather round one spot in it, the more so on rocky ground.
+  const gx = (ix + 0.2 + 0.6 * hash(ix, iz, salt + 3)) * cls.cellM;
+  const gz = (iz + 0.2 + 0.6 * hash(ix, iz, salt + 4)) * cls.cellM;
+  const gather = 0.35 + 0.4 * Math.min(1, Math.max(0, rockiness ?? 0.4));
+  // Rocky ground holds larger rocks too, not only more of them.
+  const grow = 0.8 + 0.5 * Math.min(1, Math.max(0, rockiness ?? 0.4));
   for (let k = 0; k < count; k += 1) {
-    const x = (ix + hash(ix, iz, salt + 10 + k * 5)) * cls.cellM;
-    const z = (iz + hash(ix, iz, salt + 11 + k * 5)) * cls.cellM;
+    let x = (ix + hash(ix, iz, salt + 10 + k * 5)) * cls.cellM;
+    let z = (iz + hash(ix, iz, salt + 11 + k * 5)) * cls.cellM;
+    if (hash(ix, iz, salt + 15 + k * 5) < gather) {
+      // Scattered about the gathering spot, closer in more often than not.
+      const a = hash(ix, iz, salt + 16 + k * 5) * Math.PI * 2;
+      const r = cls.cellM * 0.32 * hash(ix, iz, salt + 17 + k * 5) ** 1.7;
+      x = gx + Math.cos(a) * r;
+      z = gz + Math.sin(a) * r;
+    }
     if (keepOff?.(x, z)) continue;
     // Most rocks are small: the size is skewed toward the low end.
     const t = hash(ix, iz, salt + 12 + k * 5) ** 2.4;
-    const size = (cls.minM + (cls.maxM - cls.minM) * t) * (1 + 0.5 * w);
+    const size = (cls.minM + (cls.maxM - cls.minM) * t) * (1 + 0.5 * w) * grow;
     out.push({ x, z, size, yaw: hash(ix, iz, salt + 13 + k * 5) * Math.PI * 2, variant: hash(ix, iz, salt + 14 + k * 5) });
   }
   return out;

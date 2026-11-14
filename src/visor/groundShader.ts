@@ -48,6 +48,7 @@ uniform sampler2D uBedrock;
 varying vec3 vWPos;
 varying vec3 vWNormal;
 varying vec2 vUvHi;
+varying vec2 vSoil;
 
 float hash12(vec2 p) {
   vec3 p3 = fract(vec3(p.xyx) * 0.1031);
@@ -79,6 +80,11 @@ vec3 marsGrade(vec3 c) {
   float l = dot(c, vec3(0.2126, 0.7152, 0.0722));
   return mix(vec3(l), c, 0.66) * vec3(1.0, 0.975, 0.96);
 }
+// Mars's loose sand is basaltic: darker and greyer than the dust-covered ground around it.
+vec3 sandTone(vec3 c) {
+  float l = dot(c, vec3(0.2126, 0.7152, 0.0722));
+  return mix(vec3(l), c, 0.62) * vec3(0.7, 0.68, 0.69);
+}
 // A tiled texture read twice, at two sizes and turned against each other, so its repeat is not seen.
 vec4 twoScale(sampler2D t, vec2 p, float size) {
   vec4 a = texture2D(t, p / size);
@@ -96,9 +102,10 @@ const DETAIL_COARSE = /* glsl */ `
   float slope = degrees(acos(clamp(normalize(vWNormal).y, 0.0, 1.0)));
   float tone = (fbm(p * 0.004) - 0.5) * show(120.0, px) + (fbm(p * 0.03) - 0.5) * 0.6 * show(18.0, px);
   diffuseColor.rgb *= 1.0 + tone * 0.22;
-  float rock = smoothstep(4.0, 12.0, slope + (fbm(p * 0.006) - 0.5) * 5.0);
+  float rock = max(smoothstep(4.0, 12.0, slope + (fbm(p * 0.006) - 0.5) * 5.0), vSoil.y * 0.6);
   float lum = dot(diffuseColor.rgb, vec3(0.2126, 0.7152, 0.0722));
   diffuseColor.rgb = mix(diffuseColor.rgb, vec3(lum) * vec3(0.9, 0.84, 0.8), rock * 0.35);
+  diffuseColor.rgb = mix(diffuseColor.rgb, sandTone(diffuseColor.rgb), vSoil.x * 0.6);
   diffuseColor.rgb = marsGrade(diffuseColor.rgb);
 }
 `;
@@ -137,12 +144,19 @@ const DETAIL_NEAR = /* glsl */ `
   float lift = ratio < 1.0 ? pow(ratio, 1.6) : 1.0 + (ratio - 1.0) * 1.05;
   base *= mix(1.0, lift, hiOn);
 
-  // Tone patches the orbiters would show as one pixel.
-  float tone = (fbm(p * 0.05) - 0.5) * show(12.0, px) + (fbm(p * 0.6) - 0.5) * 0.5 * show(1.2, px);
-  base *= 1.0 + tone * mix(0.22, 0.08, hiOn);
+  // Tone patches the orbiters would show as one pixel: dust drifts, lag gravel, darker wind streaks.
+  float tone = (fbm(p * 0.012) - 0.5) * 1.2 * show(60.0, px) + (fbm(p * 0.05) - 0.5) * show(12.0, px) + (fbm(p * 0.6) - 0.5) * 0.5 * show(1.2, px);
+  base *= 1.0 + tone * mix(0.3, 0.08, hiOn);
 
-  float bed = max(outcrop, smoothstep(14.0, 26.0, slope + (fbm(p * 0.07) - 0.5) * 8.0));
-  float grav = (1.0 - bed) * smoothstep(0.3, 0.75, broken + (fbm(p * 0.21 + 7.0) - 0.5) * 0.5);
+  // The invented relief's soil: dark sand in hollows and ridge fields, rock on rims and knobs.
+  float sand = vSoil.x * (1.0 - hiOn * 0.7) * smoothstep(0.15, 0.6, vSoil.x + (fbm(p * 0.09 + 3.0) - 0.5) * 0.5);
+  float soilRock = vSoil.y * (1.0 - hiOn * 0.7);
+  base = mix(base, sandTone(base), sand * 0.75);
+  // Dust settles brightest on the gentle rises between.
+  base *= 1.0 + (1.0 - sand) * (1.0 - soilRock) * 0.06;
+
+  float bed = max(max(outcrop, smoothstep(14.0, 26.0, slope + (fbm(p * 0.07) - 0.5) * 8.0)), smoothstep(0.45, 0.85, soilRock + (fbm(p * 0.13) - 0.5) * 0.45) * 0.85);
+  float grav = (1.0 - bed) * smoothstep(0.3, 0.75, broken + soilRock * 0.6 + (fbm(p * 0.21 + 7.0) - 0.5) * 0.5) * (1.0 - sand);
   float reg = max(0.0, 1.0 - bed - grav);
 
   // Rock is greyer and a little darker than the dust around it.
@@ -188,10 +202,10 @@ export function groundMaterial(kind: GroundKind, map: Texture, hole: { center: V
     shader.uniforms.uBedrock = detail.bedrock;
     material.userData.uniforms = shader.uniforms;
     shader.vertexShader = shader.vertexShader
-      .replace('#include <common>', '#include <common>\nattribute vec2 uvHi;\nvarying vec3 vWPos;\nvarying vec3 vWNormal;\nvarying vec2 vUvHi;')
+      .replace('#include <common>', '#include <common>\nattribute vec2 uvHi;\nattribute vec2 soil;\nvarying vec3 vWPos;\nvarying vec3 vWNormal;\nvarying vec2 vUvHi;\nvarying vec2 vSoil;')
       .replace(
         '#include <begin_vertex>',
-        '#include <begin_vertex>\nvWPos = (modelMatrix * vec4(transformed, 1.0)).xyz;\nvWNormal = normalize(mat3(modelMatrix) * normal);\nvUvHi = uvHi;',
+        '#include <begin_vertex>\nvWPos = (modelMatrix * vec4(transformed, 1.0)).xyz;\nvWNormal = normalize(mat3(modelMatrix) * normal);\nvUvHi = uvHi;\nvSoil = soil;',
       );
     shader.fragmentShader = shader.fragmentShader
       .replace('#include <common>', `#include <common>\n${COMMON}`)
@@ -205,6 +219,6 @@ export function groundMaterial(kind: GroundKind, map: Texture, hole: { center: V
         '#include <normal_fragment_maps>\nnormal = normalize(normal + (viewMatrix * vec4(gdBump.x, 0.0, gdBump.y, 0.0)).xyz);',
       );
   };
-  material.customProgramCacheKey = () => `areo-ground2|${close ? 'near' : 'coarse'}`;
+  material.customProgramCacheKey = () => `areo-ground3|${close ? 'near' : 'coarse'}`;
   return material;
 }

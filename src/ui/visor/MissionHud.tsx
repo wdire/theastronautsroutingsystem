@@ -3,6 +3,7 @@ import { marsTime, sunriseSunset } from '@/engines/marsTime';
 import { VEHICLES } from '@/engines/vehicles';
 import { setRunSpeed, toggleRunPaused } from '@/sim/controller';
 import { SPEEDS } from '@/sim/types';
+import { useCrew, watchingRun } from '@/net/state';
 import { crewAt, progress } from '@/sim/world';
 import { useApp } from '@/store';
 import { Alerts } from '@/ui/run/Alerts';
@@ -46,6 +47,8 @@ function Arc({ label, frac }: { label: string; frac: number | null }) {
  */
 export function MissionHud({ camera, onCamera }: { camera: CameraMode; onCamera: (mode: CameraMode) => void }) {
   const world = useApp((s) => s.world);
+  // A crew member watches the commander's run: speed and pause are the commander's to set.
+  const watching = useCrew(watchingRun);
   const run = world?.run;
   if (!world || !run) return null;
   const crew = crewAt(run, world.utcMs);
@@ -105,7 +108,7 @@ export function MissionHud({ camera, onCamera }: { camera: CameraMode; onCamera:
             </button>
           ))}
         </div>
-        {over ? null : (
+        {over || watching ? null : (
           <div className="panel flex items-center gap-0.5 p-0.5">
             <div role="radiogroup" aria-label="Speed" className="flex gap-0.5">
               {SPEEDS.map((speed) => (

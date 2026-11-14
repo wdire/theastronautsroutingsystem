@@ -71,7 +71,7 @@ export default defineConfig(({ mode }) => ({
   worker: { format: 'es' as const },
   // Named up front so the dev server never re-bundles dependencies in the middle of a session.
   optimizeDeps: {
-    include: ['react', 'react-dom', 'react-dom/client', 'zustand', 'zustand/middleware', 'radix-ui', 'lucide-react', 'sonner', 'vaul', 'clsx', 'tailwind-merge', 'class-variance-authority', 'maplibre-gl', '@dnd-kit/core', '@dnd-kit/sortable', '@dnd-kit/utilities', 'three', 'three/examples/jsm/loaders/GLTFLoader.js', 'three/examples/jsm/libs/meshopt_decoder.module.js', 'three/examples/jsm/utils/SkeletonUtils.js', 'three/examples/jsm/utils/BufferGeometryUtils.js', 'three/examples/jsm/postprocessing/EffectComposer.js', 'three/examples/jsm/postprocessing/SMAAPass.js', 'three/examples/jsm/postprocessing/OutputPass.js', 'three/examples/jsm/environments/RoomEnvironment.js', 'n8ao'],
+    include: ['react', 'react-dom', 'react-dom/client', 'zustand', 'zustand/middleware', 'radix-ui', 'lucide-react', 'sonner', 'vaul', 'clsx', 'tailwind-merge', 'class-variance-authority', 'maplibre-gl', '@dnd-kit/core', '@dnd-kit/sortable', '@dnd-kit/utilities', 'convex/react', 'convex/browser', 'convex/values', 'three', 'three/examples/jsm/loaders/GLTFLoader.js', 'three/examples/jsm/libs/meshopt_decoder.module.js', 'three/examples/jsm/utils/SkeletonUtils.js', 'three/examples/jsm/utils/BufferGeometryUtils.js', 'three/examples/jsm/postprocessing/EffectComposer.js', 'three/examples/jsm/postprocessing/SMAAPass.js', 'three/examples/jsm/postprocessing/OutputPass.js', 'three/examples/jsm/environments/RoomEnvironment.js', 'n8ao'],
   },
   build: { target: 'es2023', chunkSizeWarningLimit: 900 },
   test: {

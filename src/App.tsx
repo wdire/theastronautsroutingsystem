@@ -5,10 +5,19 @@ import { startUrlSync } from '@/store/sync';
 import { Intro } from '@/ui/intro/Intro';
 import { useApp } from '@/store';
 import { cn } from '@/lib/cn';
+import { NET_ENABLED } from '@/net/config';
 
 // The opening screen needs the planet and one button. Search, panels and the planner load beside it,
 // and are there well before the flight down ends.
-const Chrome = lazy(() => import('@/ui/shell/Chrome').then((m) => ({ default: m.Chrome })));
+const loadChrome = () => import('@/ui/shell/Chrome');
+const Chrome = lazy(() => loadChrome().then((m) => ({ default: m.Chrome })));
+// With a crew server, the crew layer wraps the chrome. Both chunks are asked for at once, so neither waits on the other.
+const NetRoot = NET_ENABLED
+  ? lazy(() => {
+      void loadChrome();
+      return import('@/net/NetRoot');
+    })
+  : null;
 const Toasts = lazy(() => import('@/ui/shell/Chrome').then((m) => ({ default: m.Toasts })));
 // three.js and the 3D view load only when they are first opened.
 const RoverView = lazy(() => import('@/ui/visor/RoverView'));
@@ -72,7 +81,13 @@ export function App() {
         inert={!inMap}
       >
         <Suspense fallback={null}>
-          <Chrome />
+          {NetRoot ? (
+            <NetRoot>
+              <Chrome />
+            </NetRoot>
+          ) : (
+            <Chrome />
+          )}
         </Suspense>
       </div>
       {visorOpen ? (

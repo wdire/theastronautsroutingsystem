@@ -1,5 +1,5 @@
-import { useEffect, useRef, useState } from 'react';
-import { Binoculars, MessageSquare, Pause, Play, Square } from 'lucide-react';
+import { useEffect, useMemo, useRef, useState } from 'react';
+import { Binoculars, FileText, MessageSquare, Pause, Play, Square } from 'lucide-react';
 import { marsTime } from '@/engines/marsTime';
 import { missionById } from '@/engines/missions';
 import type { CrewSnapshot } from '@/engines/types';
@@ -11,6 +11,7 @@ import { useApp } from '@/store';
 import { Popover, PopoverContent, PopoverTrigger } from '@/ui/components/ui/popover';
 import { fmtClock, fmtDistance, fmtDuration, fmtNumber, fmtPercent } from '@/lib/format';
 import { cn } from '@/lib/cn';
+import { useCrew, watchingRun } from '@/net/state';
 
 function stateWords(run: MissionRun, crew: CrewSnapshot, next: string): string {
   const v = VEHICLES[run.vehicle];
@@ -48,29 +49,53 @@ function Gauge({ label, frac, detail }: { label: string; frac: number | null; de
   );
 }
 
+interface Line {
+  id: string;
+  from: 'crew' | 'base' | 'system';
+  /** Who spoke, on a crew mission's radio. */
+  who?: string;
+  mine?: boolean;
+  text: string;
+  atUtcMs: number;
+}
+
 function Chat({ world }: { world: World }) {
   const [text, setText] = useState('');
-  const [seen, setSeen] = useState(world.messages.length);
   const [open, setOpen] = useState(false);
   const end = useRef<HTMLDivElement>(null);
-  const unread = open ? 0 : world.messages.slice(seen).filter((m) => m.from !== 'crew').length;
-  const latest = world.messages.findLast((m) => m.from !== 'crew');
+  // On a crew mission everyone's calls go to the crew log, and the commander's browser passes them to the base.
+  const radio = useCrew((s) => s.radio);
+  const log = useCrew((s) => s.log);
+  const myId = useCrew((s) => s.me?.clientId);
+  const lines = useMemo<Line[]>(() => {
+    if (!radio) return world.messages;
+    const base = world.messages.filter((m) => m.from !== 'crew');
+    const calls = log.filter((l) => l.kind === 'radio').map((l) => ({ id: l.id, from: 'crew' as const, who: l.authorName, mine: l.authorId === myId, text: l.text, atUtcMs: l.missionUtcMs ?? world.utcMs }));
+    return [...base, ...calls].sort((a, b) => a.atUtcMs - b.atUtcMs);
+  }, [radio, log, myId, world.messages, world.utcMs]);
+  const [seen, setSeen] = useState(lines.length);
+  const unread = open ? 0 : lines.slice(seen).filter((m) => m.from !== 'crew' || (radio && !m.mine)).length;
+  const latest = lines.findLast((m) => m.from !== 'crew' || (radio && !m.mine));
   useEffect(() => {
     if (open) end.current?.scrollIntoView({ block: 'end' });
-  }, [open, world.messages.length]);
+  }, [open, lines.length]);
+  const send = (line: string) => {
+    if (radio) radio(line);
+    else sayToBase(line);
+  };
 
   return (
     <Popover
       open={open}
       onOpenChange={(next) => {
         setOpen(next);
-        setSeen(world.messages.length);
+        setSeen(lines.length);
       }}
     >
       <PopoverTrigger asChild>
         <button type="button" className="relative inline-flex h-9 max-w-[17rem] items-center gap-2 rounded-md border px-2.5 text-[13px] font-medium transition-colors hover:bg-secondary pointer-coarse:h-11">
           <MessageSquare className="size-4 shrink-0 text-muted-foreground" aria-hidden />
-          <span className="shrink-0">Talk to base</span>
+          <span className="shrink-0">{radio ? 'Radio' : 'Talk to base'}</span>
           {latest && !open ? <span className="truncate font-normal text-muted-foreground max-md:hidden">{latest.text}</span> : null}
           {unread > 0 ? (
             <span className="figure absolute -top-1.5 -right-1.5 grid h-5 min-w-5 place-items-center rounded-full bg-primary px-1 text-[11px] font-bold text-primary-foreground">
@@ -81,13 +106,23 @@ function Chat({ world }: { world: World }) {
         </button>
       </PopoverTrigger>
       <PopoverContent side="top" align="end" sideOffset={10} className="flex h-[min(26rem,60dvh)] w-[min(22rem,calc(100vw-1.5rem))] flex-col p-0">
-        <h2 className="border-b px-3.5 py-2.5 text-[13px] font-semibold">Radio</h2>
+        <h2 className="border-b px-3.5 py-2.5 text-[13px] font-semibold">{radio ? 'Crew radio' : 'Radio'}</h2>
         <div className="scroll-quiet min-h-0 flex-1 overflow-y-auto px-3.5 py-3" aria-live="polite">
-          {world.messages.length === 0 ? <p className="text-[13px] text-muted-foreground">Ask the base about air, power, time, the next stop, dust or radiation. It answers from what the crew’s instruments say.</p> : null}
+          {lines.length === 0 ? (
+            <p className="text-[13px] text-muted-foreground">
+              {radio ? 'The whole crew hears what you say here. ' : ''}Ask the base about air, power, time, the next stop, dust or radiation. It answers from what the crew’s instruments say.
+            </p>
+          ) : null}
           <ul className="flex flex-col gap-2.5">
-            {world.messages.map((m) => (
-              <li key={m.id} className={cn('max-w-[88%] text-[13px] leading-relaxed', m.from === 'crew' ? 'self-end rounded-md bg-primary/15 px-2.5 py-1.5' : m.from === 'system' ? 'text-muted-foreground' : '')}>
-                {m.from === 'base' ? <span className="block text-[11px] font-medium text-faint">Base</span> : null}
+            {lines.map((m) => (
+              <li
+                key={m.id}
+                className={cn(
+                  'max-w-[88%] text-[13px] leading-relaxed',
+                  m.from === 'crew' ? (radio && !m.mine ? 'self-start rounded-md bg-secondary px-2.5 py-1.5' : 'self-end rounded-md bg-primary/15 px-2.5 py-1.5') : m.from === 'system' ? 'text-muted-foreground' : '',
+                )}
+              >
+                {m.from === 'base' ? <span className="block text-[11px] font-medium text-faint">Base</span> : m.who && !m.mine ? <span className="block text-[11px] font-medium text-faint">{m.who}</span> : null}
                 {m.text}
               </li>
             ))}
@@ -98,7 +133,7 @@ function Chat({ world }: { world: World }) {
           className="flex gap-1.5 border-t p-2"
           onSubmit={(e) => {
             e.preventDefault();
-            sayToBase(text);
+            send(text);
             setText('');
           }}
         >
@@ -107,7 +142,7 @@ function Chat({ world }: { world: World }) {
             onChange={(e) => setText(e.target.value)}
             name="message"
             autoComplete="off"
-            aria-label="Message to base"
+            aria-label={radio ? 'Message to the crew and base' : 'Message to base'}
             placeholder="How is our oxygen…"
             maxLength={400}
             className="h-9 min-w-0 flex-1 rounded-md border bg-transparent px-2.5 text-[13px] outline-none focus-visible:border-ring focus-visible:ring-1 focus-visible:ring-ring pointer-coarse:h-11"
@@ -123,6 +158,8 @@ function Chat({ world }: { world: World }) {
 
 function Outcome({ run }: { run: MissionRun }) {
   const missionId = useApp((s) => s.missionId);
+  // A crew mission's end offers its debrief, once the commander's browser has filed it.
+  const crewMission = useCrew((s) => s.current?.id ?? s.ended);
   const out = run.outcome;
   if (!out) return null;
   const verdict = (missionId ? missionById(missionId) : undefined)?.judge({
@@ -143,9 +180,24 @@ function Outcome({ run }: { run: MissionRun }) {
           {out.o2Frac !== null ? `, ${fmtPercent(Math.max(0, out.o2Frac))} of the oxygen left` : ''}, {fmtNumber(out.doseMSv, 2)} mSv.
         </p>
       </div>
-      <button type="button" onClick={closeMission} className="h-9 shrink-0 rounded-md bg-primary px-3.5 text-[13px] font-semibold text-primary-foreground pointer-coarse:h-11">
-        Back to planning
-      </button>
+      <div className="flex shrink-0 flex-wrap gap-2">
+        {crewMission ? (
+          <button type="button" onClick={() => useCrew.setState({ debriefId: crewMission })} className="inline-flex h-9 items-center gap-2 rounded-md border px-3 text-[13px] font-medium transition-colors hover:bg-secondary pointer-coarse:h-11">
+            <FileText className="size-4 text-muted-foreground" aria-hidden />
+            Read the debrief
+          </button>
+        ) : null}
+        <button
+          type="button"
+          onClick={() => {
+            closeMission();
+            useCrew.setState({ ended: null });
+          }}
+          className="h-9 shrink-0 rounded-md bg-primary px-3.5 text-[13px] font-semibold text-primary-foreground pointer-coarse:h-11"
+        >
+          Back to planning
+        </button>
+      </div>
     </div>
   );
 }
@@ -153,6 +205,8 @@ function Outcome({ run }: { run: MissionRun }) {
 /** The mission while it runs: what the crew is doing, how far along, what they have left, and the controls. */
 export function RunPanel() {
   const world = useApp((s) => s.world);
+  const watching = useCrew(watchingRun);
+  const linkStale = useCrew((s) => s.linkStale);
   const run = world?.run;
   if (!world || !run) return null;
   const crew = crewAt(run, world.utcMs);
@@ -167,6 +221,11 @@ export function RunPanel() {
       aria-label="Mission"
       className="panel pointer-events-auto absolute bottom-3 left-1/2 w-[min(47rem,calc(100vw-1.5rem))] -translate-x-1/2 px-4 py-3 max-md:bottom-[4.25rem] md:max-w-[calc(100vw-30rem)]"
     >
+      {watching && linkStale && running ? (
+        <p role="status" className="mb-2.5 rounded-md bg-caution/10 px-2.5 py-1.5 text-xs font-medium text-caution">
+          Waiting for the commander’s link. The run shows where it was last heard.
+        </p>
+      ) : null}
       {!running ? (
         <Outcome run={run} />
       ) : (
@@ -181,26 +240,32 @@ export function RunPanel() {
                 {crew.state === 'move' ? `, ${fmtDistance(prog.nextDistM)} and ${fmtDuration(prog.nextS)} to go` : ''}, tasks {prog.tasksDone} of {prog.tasksTotal}
               </p>
             </div>
-            <div role="radiogroup" aria-label="Speed" className="flex shrink-0 gap-0.5 rounded-md border p-0.5">
-              {SPEEDS.map((speed) => (
-                <button
-                  key={speed}
-                  type="button"
-                  role="radio"
-                  aria-checked={world.speed === speed}
-                  onClick={() => setRunSpeed(speed)}
-                  className={cn('figure h-8 min-w-9 rounded px-1.5 text-xs font-semibold transition-colors pointer-coarse:h-10 pointer-coarse:min-w-10', world.speed === speed ? 'bg-primary/20 text-foreground' : 'text-muted-foreground hover:bg-secondary')}
-                >
-                  {speed}×
+            {watching ? (
+              <p className="shrink-0 text-xs text-muted-foreground">The commander decides speed and stops.</p>
+            ) : (
+              <>
+                <div role="radiogroup" aria-label="Speed" className="flex shrink-0 gap-0.5 rounded-md border p-0.5">
+                  {SPEEDS.map((speed) => (
+                    <button
+                      key={speed}
+                      type="button"
+                      role="radio"
+                      aria-checked={world.speed === speed}
+                      onClick={() => setRunSpeed(speed)}
+                      className={cn('figure h-8 min-w-9 rounded px-1.5 text-xs font-semibold transition-colors pointer-coarse:h-10 pointer-coarse:min-w-10', world.speed === speed ? 'bg-primary/20 text-foreground' : 'text-muted-foreground hover:bg-secondary')}
+                    >
+                      {speed}×
+                    </button>
+                  ))}
+                </div>
+                <button type="button" aria-label={world.paused ? 'Resume the mission' : 'Pause the mission'} onClick={toggleRunPaused} className="grid size-9 shrink-0 place-items-center rounded-md border transition-colors hover:bg-secondary pointer-coarse:size-11">
+                  {world.paused ? <Play className="size-4" aria-hidden /> : <Pause className="size-4" aria-hidden />}
                 </button>
-              ))}
-            </div>
-            <button type="button" aria-label={world.paused ? 'Resume the mission' : 'Pause the mission'} onClick={toggleRunPaused} className="grid size-9 shrink-0 place-items-center rounded-md border transition-colors hover:bg-secondary pointer-coarse:size-11">
-              {world.paused ? <Play className="size-4" aria-hidden /> : <Pause className="size-4" aria-hidden />}
-            </button>
-            <button type="button" aria-label="End the mission" onClick={abortRun} className="grid size-9 shrink-0 place-items-center rounded-md border text-muted-foreground transition-colors hover:bg-secondary hover:text-foreground pointer-coarse:size-11">
-              <Square className="size-3.5" aria-hidden />
-            </button>
+                <button type="button" aria-label="End the mission" onClick={abortRun} className="grid size-9 shrink-0 place-items-center rounded-md border text-muted-foreground transition-colors hover:bg-secondary hover:text-foreground pointer-coarse:size-11">
+                  <Square className="size-3.5" aria-hidden />
+                </button>
+              </>
+            )}
           </div>
 
           <div className="relative mt-3 h-1.5 rounded-full bg-secondary" role="progressbar" aria-label="Mission progress" aria-valuemin={0} aria-valuemax={100} aria-valuenow={Math.round(prog.fraction * 100)}>

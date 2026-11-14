@@ -8,6 +8,7 @@ import { mapImgTile } from './protocol/tone';
 import { demTile } from './protocol/dem';
 import { addTerrain } from './terrain';
 import { addPlacePicking } from './pick';
+import { addDescend } from './descend';
 import { addRouteLayers } from './layers/route';
 import { addRangeRings } from './layers/rings';
 import { addAutoTilt } from './tilt';
@@ -61,7 +62,7 @@ export function MapView() {
 
     whenMapReady((m) => {
       if (!alive) return;
-      cleanups.push(addTerrain(m), addRouteLayers(m), addRangeRings(m), addAutoTilt(m), addOverlays(m), addLabels(m), addPlacePicking(m), addGlobeMarker(m));
+      cleanups.push(addTerrain(m), addRouteLayers(m), addRangeRings(m), addAutoTilt(m), addOverlays(m), addLabels(m), addPlacePicking(m), addGlobeMarker(m), addDescend(m));
       // The mission's layers bring the simulation with them; nobody needs that to see the planet, so it loads after.
       void import('./layers/mission').then(({ addMissionLayers }) => {
         if (alive) cleanups.push(addMissionLayers(m));

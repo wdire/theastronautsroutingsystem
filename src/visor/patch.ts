@@ -1,5 +1,5 @@
 import { BufferAttribute, BufferGeometry, CanvasTexture, LinearMipmapLinearFilter, Mesh, MeshStandardMaterial, NoColorSpace, RepeatWrapping, SRGBColorSpace, Vector2, type Texture } from 'three';
-import { loadGrid } from '@/data/dem';
+import { finestZoomAt, loadGrid } from '@/data/dem';
 import { getCoverage, hasTile, nearestTile, tileUrl } from '@/data/coverage';
 import { boxTouchesHirise, loadEsriHiriseImage, loadHiriseHeights, loadHiriseImage, type HiriseHeights, type HiriseImage } from '@/data/hirise';
 import { makeGrid } from '@/engines/terrain';
@@ -10,6 +10,7 @@ import { imgTile } from '@/map/protocol/img';
 import { curvatureDrop, toLonLat, type Frame } from './frame';
 import { fieldHeightAt, fieldIndices, type HeightField } from './heightfield';
 import { groundMaterial, type GroundKind } from './groundShader';
+import { cutoffForSourceZoom, HIRISE_CUTOFF_M, planetMetres, reliefAt, type ReliefSample } from './relief';
 
 export interface PatchSpec {
   kind: GroundKind;
@@ -33,12 +34,17 @@ export interface PatchSpec {
    * draws on top. With `demZoom` the coarser heights are read from the package at that zoom; without
    * it, from the coarser patch’s own drawn surface (the close patch, which lies wholly on the near one).
    */
-  blend?: { demZoom?: number; fromM: number; toM: number; sinkM: number };
+  blend?: { demZoom?: number; fromM: number; toM: number; sinkM: number; reliefMinM?: number };
+  /**
+   * The finest invented relief this layer draws, m (see relief.ts), about four of its triangles. Absent: the
+   * layer draws the data alone. A blend's `reliefMinM` is the coarser layer's, so the ring meets what it draws.
+   */
+  reliefMinM?: number;
 }
 
 /** The ground layers, coarse to fine. Each finer one cuts a hole in the one before it. */
 export const FAR: PatchSpec = { kind: 'far', sizeM: 85_000, samples: 257, imgZoom: 10, demZoom: 9 };
-export const MID: PatchSpec = { kind: 'mid', sizeM: 40_000, samples: 401, imgZoom: 12, demZoom: 10, blend: { demZoom: FAR.demZoom, fromM: 4_000, toM: 1_000, sinkM: 10 } };
+export const MID: PatchSpec = { kind: 'mid', sizeM: 40_000, samples: 401, imgZoom: 12, demZoom: 10, reliefMinM: 400, blend: { demZoom: FAR.demZoom, fromM: 4_000, toM: 1_000, sinkM: 10 } };
 export const NEAR: PatchSpec = {
   kind: 'near',
   sizeM: 2_000,
@@ -46,10 +52,11 @@ export const NEAR: PatchSpec = {
   imgZoom: 14,
   demZoom: 14,
   hirise: { dtm: 2, ortho: 14, image: 'esri', priority: 3 },
-  blend: { demZoom: MID.demZoom, fromM: 330, toM: 140, sinkM: 0.8 },
+  reliefMinM: 16,
+  blend: { demZoom: MID.demZoom, fromM: 330, toM: 140, sinkM: 0.8, reliefMinM: MID.reliefMinM },
 };
 /** Under the viewer’s feet: half-metre triangles on the 1 m model, the 25 cm image on top. */
-export const CLOSE: PatchSpec = { kind: 'close', sizeM: 256, samples: 513, imgZoom: 14, demZoom: 14, hirise: { dtm: 0, ortho: 0, image: 'usgs', priority: 0 }, blend: { fromM: 44, toM: 16, sinkM: 0.12 } };
+export const CLOSE: PatchSpec = { kind: 'close', sizeM: 256, samples: 513, imgZoom: 14, demZoom: 14, hirise: { dtm: 0, ortho: 0, image: 'usgs', priority: 0 }, reliefMinM: 1.6, blend: { fromM: 44, toM: 16, sinkM: 0.12 } };
 
 /** How far inside a layer’s edge the coarser layer’s hole stops, m. Inside the ring where the two agree. */
 export const HOLE_INSET_M = { mid: 700, near: 110, close: 20 } as const;
@@ -236,10 +243,36 @@ export async function buildPatch(frame: Frame, cx: number, cz: number, spec: Pat
   }
   const hiHeights: HiriseHeights | null = hiH && hiShare > 0 ? hiH : null;
 
+  // How fine the package's elevation is around each point, on a coarse lattice read bilinearly: the
+  // invented relief starts where the data stops.
+  const cov = getCoverage();
+  const LAT = 17;
+  const cutLattice = new Float32Array(LAT * LAT);
+  for (let j = 0; j < LAT; j += 1) {
+    for (let k = 0; k < LAT; k += 1) {
+      const [lon, lat] = toLonLat(frame, cx - half + (k * spec.sizeM) / (LAT - 1), cz - half + (j * spec.sizeM) / (LAT - 1));
+      cutLattice[j * LAT + k] = cutoffForSourceZoom(cov ? Math.min(finestZoomAt(cov, lon, lat), loaded.spec.zoom) : loaded.coarsestSourceZoom);
+    }
+  }
+  const cutoffAt = (ix: number, iz: number): number => {
+    const gx = (ix / (n - 1)) * (LAT - 1);
+    const gz = (iz / (n - 1)) * (LAT - 1);
+    const x0 = Math.min(LAT - 2, Math.floor(gx));
+    const z0 = Math.min(LAT - 2, Math.floor(gz));
+    const u = gx - x0;
+    const v = gz - z0;
+    const at = (a: number, b: number) => cutLattice[b * LAT + a] ?? 600;
+    return (at(x0, z0) * (1 - u) + at(x0 + 1, z0) * u) * (1 - v) + (at(x0, z0 + 1) * (1 - u) + at(x0 + 1, z0 + 1) * u) * v;
+  };
+  const rs: ReliefSample = { h: 0, sand: 0, rock: 0 };
+  const rsCoarse: ReliefSample = { h: 0, sand: 0, rock: 0 };
+
   const heights = new Float32Array(n * n);
   const positions = new Float32Array(n * n * 3);
   const uvs = new Float32Array(n * n * 2);
   const uvHi = new Float32Array(n * n * 2);
+  // Per point: loose sand and exposed rock, 0 to 1, for the shader and the rocks.
+  const soil = new Float32Array(n * n * 2);
   for (let iz = 0; iz < n; iz += 1) {
     const z = cz - half + iz * step;
     for (let ix = 0; ix < n; ix += 1) {
@@ -248,21 +281,32 @@ export async function buildPatch(frame: Frame, cx: number, cz: number, spec: Pat
       const lon = lonLat[i * 2] ?? 0;
       const lat = lonLat[i * 2 + 1] ?? 0;
       let elevation = grid.elevation(lat, lon);
+      let cutoff = cutoffAt(ix, iz);
       if (hiHeights) {
         const h = hiHeights.heightAt(lon, lat);
         if (h !== null) {
           // Near the mosaic’s edge the model gives way to the package over a few tens of metres.
           elevation = h + hiOffset;
+          cutoff = HIRISE_CUTOFF_M;
         }
+      }
+      const [PX, PZ] = planetMetres(lon, lat);
+      if (spec.reliefMinM !== undefined) {
+        reliefAt(PX, PZ, spec.reliefMinM, cutoff, rs);
+        elevation += rs.h;
+        soil[i * 2] = rs.sand;
+        soil[i * 2 + 1] = rs.rock;
       }
       if (blend) {
         const inside = half - Math.max(Math.abs(x - cx), Math.abs(z - cz));
         if (inside < blend.fromM) {
           const w = 1 - smoothstep(blend.toM, blend.fromM, inside);
-          const coarser = coarseGrid ? coarseGrid.elevation(lat, lon) : (() => {
-            const y = opts.coarser?.(x, z);
-            return y === null || y === undefined ? null : y + frame.base + curvatureDrop(x, z);
-          })();
+          const coarser = coarseGrid
+            ? coarseGrid.elevation(lat, lon) + (blend.reliefMinM !== undefined ? reliefAt(PX, PZ, blend.reliefMinM, cutoffAt(ix, iz), rsCoarse).h : 0)
+            : (() => {
+                const y = opts.coarser?.(x, z);
+                return y === null || y === undefined ? null : y + frame.base + curvatureDrop(x, z);
+              })();
           if (coarser !== null) elevation += (coarser - elevation) * w - blend.sinkM * w;
         }
       }
@@ -285,6 +329,7 @@ export async function buildPatch(frame: Frame, cx: number, cz: number, spec: Pat
   geometry.setAttribute('position', new BufferAttribute(positions, 3));
   geometry.setAttribute('uv', new BufferAttribute(uvs, 2));
   geometry.setAttribute('uvHi', new BufferAttribute(uvHi, 2));
+  geometry.setAttribute('soil', new BufferAttribute(soil, 2));
   geometry.setIndex(new BufferAttribute(fieldIndices(n), 1));
   geometry.computeVertexNormals();
   geometry.computeBoundingSphere();
@@ -328,7 +373,15 @@ export async function buildPatch(frame: Frame, cx: number, cz: number, spec: Pat
     debug: `${hiHeights ? 'dtm' : '-'}${hiTex ? `+img${hiImg?.width ?? 0}` : ''}${hiImg ? `(${hiImg.filled.toFixed(2)})` : ''}`,
     heightAt: (x, z) => fieldHeightAt(field, x, z),
     roughnessAt: (x, z) => {
-      if (!rough || !hiImg) return null;
+      if (!rough || !hiImg) {
+        // Without HiRISE, how rocky the drawn-in relief says it is: blocky rims and knobs, bare sand in hollows.
+        if (spec.reliefMinM === undefined) return null;
+        const gx = Math.round((x - (cx - half)) / step);
+        const gz = Math.round((z - (cz - half)) / step);
+        if (gx < 0 || gz < 0 || gx >= n || gz >= n) return null;
+        const k = (gz * n + gx) * 2;
+        return Math.max(0, Math.min(1, 0.16 + (soil[k + 1] ?? 0) * 1.15 - (soil[k] ?? 0) * 0.3));
+      }
       const [lon, lat] = toLonLat(frame, x, z);
       const [u, v] = hiImg.uvOf(lon, lat);
       const c = Math.floor((u * hiImg.width) / rough.cell);

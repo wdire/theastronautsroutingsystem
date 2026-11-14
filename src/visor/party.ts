@@ -7,6 +7,7 @@ import { MODELS, type ModelName } from './modelSpecs';
 import { seatOnWheels } from './props';
 import { cyclesPerMetre, rigSuit, type Suit } from './suit';
 import { rollWheels, wheelsOf } from './wheels';
+import { dress, nameTag, type CrewLook } from './crewLook';
 
 /** Where the party is asked to be: the crew's place on the route, in scene metres. */
 export interface PartyTarget {
@@ -29,10 +30,12 @@ interface Member {
   wheels: { pivot: Object3D; radius: number }[];
   /** 0 standing to 1 walking, eased. */
   walk: number;
+  look: CrewLook | null;
+  undress: (() => void) | null;
 }
 
 const RAD = Math.PI / 180;
-/** Two walkers in single file, the second this far behind on the first one's footsteps. */
+/** Walkers go in single file, each this far behind the one ahead, on the leader's footsteps. */
 const FILE_GAP_M = 2.4;
 const HOVER_M = 6;
 
@@ -52,20 +55,24 @@ function turnToward(from: number, to: number, maxStep: number): number {
 }
 
 /**
- * The crew or vehicle of a running mission, moving through the scene: two suited walkers in single
- * file, or the rover or helicopter. They follow the simulation's position, stand on the drawn ground,
- * and face the way they move on screen.
+ * The crew or vehicle of a running mission, moving through the scene: the mission's own crew in single
+ * file, in the walking order the commander set, or the rover or helicopter. They follow the simulation's
+ * position, stand on the drawn ground, and face the way they move on screen.
  */
-export function createParty(scene: Scene, vehicle: VehicleId, heightAt: (x: number, z: number) => number) {
+export function createParty(scene: Scene, vehicle: VehicleId, heightAt: (x: number, z: number) => number, crew: readonly CrewLook[]) {
   const model = modelFor(vehicle);
   const walkers = vehicle === 'foot';
-  const members: Member[] = Array.from({ length: walkers ? 2 : 1 }, () => {
+  const looks: (CrewLook | null)[] = walkers ? (crew.length > 0 ? crew.slice(0, 8) : [null]) : [null];
+  const members: Member[] = looks.map((look) => {
     const anchor = new Group();
     anchor.add(standIn(model));
     anchor.visible = false;
     scene.add(anchor);
-    return { anchor, suit: null, x: 0, z: 0, heading: 0, phase: 0, wheels: [], walk: 0 };
+    return { anchor, suit: null, x: 0, z: 0, heading: 0, phase: 0, wheels: [], walk: 0, look, undress: null };
   });
+  // The helmet camera sits in the visitor's own member; without a roster, the last in file.
+  const meIndex = Math.max(0, looks.findIndex((l) => l?.me));
+  const viewIndex = looks.some((l) => l?.me) ? meIndex : members.length - 1;
   let disposed = false;
   let placed = false;
   let firstPerson = false;
@@ -83,6 +90,10 @@ export function createParty(scene: Scene, vehicle: VehicleId, heightAt: (x: numb
         m.wheels = suit ? [] : wheelsOf(body);
         m.anchor.clear();
         m.anchor.add(body);
+        if (suit && m.look) {
+          m.undress = dress(suit.root, m.look);
+          m.anchor.add(nameTag(m.look));
+        }
       }
     })
     .catch(() => undefined); // The stand-ins stay.
@@ -144,25 +155,30 @@ export function createParty(scene: Scene, vehicle: VehicleId, heightAt: (x: numb
           trail.push({ x: lead.x, z: lead.z });
           if (trail.length > 400) trail.shift();
         }
-        const second = members[1];
-        if (second) {
-          // The second walker heads for the leader's footstep one file gap back.
+        // Each follower heads for the leader's footstep its place in file back, measured along the trail.
+        for (let n = 1; n < members.length; n += 1) {
+          const follower = members[n]!;
+          const gap = FILE_GAP_M * n;
           let spot = trail[0] ?? { x: lead.x, z: lead.z };
+          let along = 0;
+          let prev = { x: lead.x, z: lead.z };
           for (let i = trail.length - 1; i >= 0; i -= 1) {
-            const p = trail[i];
-            if (p && Math.hypot(lead.x - p.x, lead.z - p.z) >= FILE_GAP_M) {
+            const p = trail[i]!;
+            along += Math.hypot(prev.x - p.x, prev.z - p.z);
+            prev = p;
+            if (along >= gap) {
               spot = p;
               break;
             }
           }
-          const bx = second.x;
-          const bz = second.z;
-          second.x += (spot.x - second.x) * k;
-          second.z += (spot.z - second.z) * k;
-          const moved = Math.hypot(second.x - bx, second.z - bz);
+          const bx = follower.x;
+          const bz = follower.z;
+          follower.x += (spot.x - follower.x) * k;
+          follower.z += (spot.z - follower.z) * k;
+          const moved = Math.hypot(follower.x - bx, follower.z - bz);
           if (moved > 0.004) {
-            second.heading = turnToward(second.heading, Math.atan2(second.x - bx, -(second.z - bz)), dt * 3.2);
-            second.phase += Math.min(moved * cyclesPerMetre(moved / Math.max(dt, 1e-3)), dt * 2.4);
+            follower.heading = turnToward(follower.heading, Math.atan2(follower.x - bx, -(follower.z - bz)), dt * 3.2);
+            follower.phase += Math.min(moved * cyclesPerMetre(moved / Math.max(dt, 1e-3)), dt * 2.4);
           }
         }
       }
@@ -172,9 +188,9 @@ export function createParty(scene: Scene, vehicle: VehicleId, heightAt: (x: numb
         m.walk += ((target.moving ? 1 : 0) - m.walk) * Math.min(1, dt * 3);
         m.suit?.pose(m.phase, m.walk, 1 / cyclesPerMetre(target.speedMs), clock);
       }
-      // Seen through its own eyes, the last in file (or the vehicle) is not drawn: the camera is inside it.
-      const rear = members[members.length - 1];
-      if (rear && firstPerson) rear.anchor.visible = false;
+      // Seen through its own eyes, the visitor's member (or the vehicle) is not drawn: the camera is inside it.
+      const own = members[viewIndex];
+      if (own && firstPerson) own.anchor.visible = false;
     },
     setFirstPerson(on: boolean): void {
       firstPerson = on;
@@ -182,7 +198,7 @@ export function createParty(scene: Scene, vehicle: VehicleId, heightAt: (x: numb
     /** The leader's place and heading, for the cameras. */
     focus(): { x: number; y: number; z: number; heading: number; rear: { x: number; z: number; heading: number } } {
       const lead = members[0];
-      const rear = members[members.length - 1] ?? lead;
+      const rear = members[viewIndex] ?? lead;
       return {
         x: lead?.x ?? 0,
         y: lead?.anchor.position.y ?? 0,
@@ -202,12 +218,14 @@ export function createParty(scene: Scene, vehicle: VehicleId, heightAt: (x: numb
     /** Eye height of whoever the first-person camera sits in, m. */
     eyeM: VEHICLES[vehicle].eyeHeightM,
     /** How much room the party takes, for the chase camera's distance. */
-    sizeM: walkers ? 2 + FILE_GAP_M : Math.max(...(MODELS[model].stance ? [MODELS[model].stance.length, MODELS[model].stance.width] : [1.5])) + 2,
+    sizeM: walkers ? 2 + FILE_GAP_M * Math.min(3, members.length - 1) : Math.max(...(MODELS[model].stance ? [MODELS[model].stance.length, MODELS[model].stance.width] : [1.5])) + 2,
     dispose(): void {
       disposed = true;
       for (const m of members) {
         scene.remove(m.anchor);
         m.suit?.dispose();
+        m.undress?.();
+        m.anchor.traverse((o) => (o.userData.dispose as (() => void) | undefined)?.());
       }
     },
   };

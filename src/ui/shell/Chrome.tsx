@@ -10,6 +10,7 @@ import { SearchBox } from '@/ui/search/SearchBox';
 import { MainMenu } from './MainMenu';
 import { PlaceCard } from '@/ui/place/PlaceCard';
 import { ReliefChip } from '@/ui/mapctl/ReliefChip';
+import { DescendHint } from '@/ui/mapctl/DescendHint';
 import { ClockMenu } from '@/ui/clock/ClockMenu';
 import { Planner } from '@/ui/planner/Planner';
 import { LayersPanel } from '@/ui/panels/LayersPanel';
@@ -23,14 +24,55 @@ import { FlyoverBar } from '@/ui/mapctl/FlyoverBar';
 import { Hints } from './Hints';
 import { RunPanel } from '@/ui/run/RunPanel';
 import { Alerts } from '@/ui/run/Alerts';
+import { lazy, Suspense } from 'react';
+import { NET_ENABLED } from '@/net/config';
+import { cn } from '@/lib/cn';
+import { useCrew } from '@/net/state';
+
+// The crew panels load when first opened; they exist only with a crew server.
+const CrewPanel = lazy(() => import('@/ui/crew/CrewPanel'));
+const DebriefDialog = lazy(() => import('@/ui/crew/Debrief'));
+
+/** The debrief opens over everything, from the crew panel or from the end of a run. */
+function CrewDialogs() {
+  const open = useCrew((s) => s.debriefId !== null);
+  if (!NET_ENABLED || !open) return null;
+  return (
+    <Suspense fallback={null}>
+      <DebriefDialog />
+    </Suspense>
+  );
+}
 
 function DockContent() {
   const dock = useApp((s) => s.dock);
   if (!dock) return null;
   return (
     <DockPanel tab={dock}>
-      {dock === 'layers' ? <LayersPanel /> : dock === 'discover' ? <DiscoverPanel /> : dock === 'missions' ? <MissionsPanel /> : <HowPanel />}
+      {dock === 'layers' ? (
+        <LayersPanel />
+      ) : dock === 'discover' ? (
+        <DiscoverPanel />
+      ) : dock === 'missions' ? (
+        <MissionsPanel />
+      ) : dock === 'crew' && NET_ENABLED ? (
+        <Suspense fallback={<p className="px-4 py-4 text-[13px] text-muted-foreground">Loading…</p>}>
+          <CrewPanel />
+        </Suspense>
+      ) : (
+        <HowPanel />
+      )}
     </DockPanel>
+  );
+}
+
+/** The dock's panel. While a mission runs on a narrower screen it stops above the run panel, so the two never overlap. */
+function DockColumn() {
+  const running = useApp((s) => s.world?.run != null);
+  return (
+    <div className={cn('absolute top-[68px] right-[78px] bottom-10 flex flex-col [&>*]:pointer-events-auto', running && 'max-[1600px]:bottom-[10.75rem]')}>
+      <DockContent />
+    </div>
   );
 }
 
@@ -97,6 +139,7 @@ function ChromeLayout() {
         <Hints />
         <RunPanel />
         <Alerts />
+        <CrewDialogs />
       </>
     );
   }
@@ -112,6 +155,7 @@ function ChromeLayout() {
       <Hints />
       <RunPanel />
       <Alerts />
+      <CrewDialogs />
 
       <div className="pointer-events-auto absolute top-3 right-3">
         <DockRail />
@@ -119,10 +163,11 @@ function ChromeLayout() {
       <div className="pointer-events-auto absolute top-3 right-[78px]">
         <ClockMenu />
       </div>
-      <div className="absolute top-[68px] right-[78px] bottom-10 flex flex-col [&>*]:pointer-events-auto">
-        <DockContent />
-      </div>
+      <DockColumn />
 
+      <div className="absolute bottom-[4.5rem] left-1/2 -translate-x-1/2">
+        <DescendHint />
+      </div>
       <div className="absolute right-[70px] bottom-3 flex items-end gap-5">
         <div className="hidden lg:block">
           <CursorReadout />

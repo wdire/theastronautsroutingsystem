@@ -48,10 +48,7 @@ export async function sceneProps(plan: MissionPlan): Promise<PropSpec[]> {
     // The habitat sits 30 m to the side of the way out, so the first steps of the route are clear.
     const [hlon, hlat] = destination(slon, slat, out + 90, 30);
     props.push({ id: 'habitat', model: 'habitat', lon: hlon, lat: hlat, headingDeg: out - 90 });
-    // Two crew by the airlock, the second a step behind.
-    const [alon, alat] = destination(slon, slat, out + 95, 9);
-    const [blon, blat] = destination(slon, slat, out + 118, 10.5);
-    props.push({ id: 'crew-1', model: 'z2', lon: alon, lat: alat, headingDeg: out - 100 }, { id: 'crew-2', model: 'z2', lon: blon, lat: blat, headingDeg: out - 60 });
+    // No crew stands about here: the only people in the scene are a mission's own crew and other visitors.
     if (plan.vehicle === 'pressRover') {
       const [vlon, vlat] = destination(slon, slat, out + 70, 13);
       props.push({ id: 'vehicle', model: 'sev', lon: vlon, lat: vlat, headingDeg: out });
@@ -78,5 +75,5 @@ export function standpoint(lon: number, lat: number, props: readonly PropSpec[])
 export function propCaption(id: string): string {
   if (id === 'perseverance') return "Perseverance, standing where it last reported its position. NASA’s 3D model of the rover.";
   if (id === 'ingenuity') return "Ingenuity, where it came to rest after its last flight in January 2024. NASA’s 3D model.";
-  return "An illustrative base at your mission’s start, built from NASA’s models of a habitat, a pressurised rover and the Z-2 suit. Nothing stands here on Mars.";
+  return "An illustrative base at your mission’s start, built from NASA’s models of a habitat and a pressurised rover. Nothing stands here on Mars.";
 }

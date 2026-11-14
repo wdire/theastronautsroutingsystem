@@ -203,6 +203,8 @@ export function createRocks(
   const p = new Vector3();
   const tint = new Color();
   const UP = new Vector3(0, 1, 0);
+  const ground = new Vector3();
+  const spin = new Quaternion();
   let lowQuality = false;
   let hidden = false;
 
@@ -238,7 +240,12 @@ export function createRocks(
           if (n >= mesh.instanceMatrix.count) continue;
           const height = rock.size * HEIGHT[batch.shape];
           p.set(rock.x, y + height * (0.5 - cls.sink), rock.z);
-          q.setFromAxisAngle(UP, rock.yaw);
+          // A rock rests on the slope it lies on, with a little lean of its own.
+          const e = Math.max(0.25, rock.size * 0.5);
+          const hx = (heightAt(rock.x + e, rock.z) ?? y) - (heightAt(rock.x - e, rock.z) ?? y);
+          const hz = (heightAt(rock.x, rock.z + e) ?? y) - (heightAt(rock.x, rock.z - e) ?? y);
+          ground.set(-hx / (2 * e) + (rock.variant - 0.5) * 0.25, 1, -hz / (2 * e) + (((rock.variant * 13.7) % 1) - 0.5) * 0.25).normalize();
+          q.setFromUnitVectors(UP, ground).multiply(spin.setFromAxisAngle(UP, rock.yaw));
           s.set(rock.size, rock.size, rock.size * (0.75 + rock.variant * 0.5));
           m.compose(p, q, s);
           mesh.setMatrixAt(n, m);
