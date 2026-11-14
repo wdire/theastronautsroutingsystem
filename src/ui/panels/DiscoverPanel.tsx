@@ -1,3 +1,4 @@
+import { ValidatePanel } from './ValidatePanel';
 import { nasaUrl } from '@/lib/nasa';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { Marker } from 'maplibre-gl';
@@ -238,6 +239,9 @@ export function DiscoverPanel() {
             </li>
           ))}
         </ul>
+      </Section>
+      <Section id="discover-validate" title="Check the planner against Perseverance" hint="Route five stretches of its real drive and compare">
+        <ValidatePanel />
       </Section>
     </div>
   );

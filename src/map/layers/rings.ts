@@ -1,7 +1,7 @@
 import { Marker, type GeoJSONSource, type Map as MapLibreMap } from 'maplibre-gl';
 import { loadGrid } from '@/data/dem';
 import { SUIT_FLAT_KMH } from '@/engines/isochrone';
-import type { LonLat, VehicleId } from '@/engines/types';
+import type { LonLat, Vehicle, VehicleId } from '@/engines/types';
 import { VEHICLES } from '@/engines/vehicles';
 import { MARS_RADIUS_M, REGION, inBox } from '@/lib/constants';
 import { useApp } from '@/store';
@@ -13,13 +13,13 @@ const ON_FOOT_HOURS = [1, 2, 4];
 const RING_CELLS = 170_000;
 
 /** How long a crew could walk home on suit air, if the budget engine is in this build. */
-const tripModules = import.meta.glob<{ walkbackLimitHours?: (vehicle: VehicleId) => number }>('../../engines/tripComputer.ts');
+const tripModules = import.meta.glob<{ walkbackLimitHours?: (vehicle: Vehicle) => number }>('../../engines/tripComputer.ts');
 
 async function walkHomeHours(vehicle: VehicleId): Promise<number | null> {
   const load = Object.values(tripModules)[0];
   if (!load) return null;
   try {
-    const hours = (await load()).walkbackLimitHours?.(vehicle);
+    const hours = (await load()).walkbackLimitHours?.(VEHICLES[vehicle]);
     return typeof hours === 'number' && hours > 0 && Number.isFinite(hours) ? hours : null;
   } catch {
     return null;

@@ -121,6 +121,16 @@ test('a click on the route adds a stop along the way, and a pin can be dragged',
     return { x: box.left + px.x, y: box.top + px.y, lon: p[0], lat: p[1] };
   });
   if (!target) throw new Error('no route');
+  // The route has to be drawn before it can be clicked.
+  await page.waitForFunction(
+    ([x, y]) => {
+      const map = window.__areoMap;
+      if (!map || x === undefined || y === undefined) return false;
+      const box = map.getCanvas().getBoundingClientRect();
+      return map.queryRenderedFeatures([x - box.left, y - box.top], { layers: ['route-line'] }).length > 0;
+    },
+    [target.x, target.y],
+  );
   await page.mouse.click(target.x, target.y);
   await expect.poll(() => page.evaluate(() => window.__areo?.getState().plan.stops.length)).toBe(3);
   // It went in between the two stops it lies between, on the route.

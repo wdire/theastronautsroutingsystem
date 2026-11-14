@@ -30,6 +30,11 @@ export interface PlanInput {
   rev: number;
   plan: MissionPlan;
   departUtcMs: number;
+  /**
+   * The visitor has not chosen when to leave: if the trip would not end in daylight leaving at
+   * `departUtcMs`, cost it from the first morning it does.
+   */
+  autoDepart?: boolean;
   scenario: Scenario;
   hazards: HazardZone[];
 }
@@ -43,6 +48,8 @@ export interface RoutingDeps {
   onProgress(rev: number, fraction: number): void;
   /** The trip computer, when the build has one. */
   computeTrip?: (path: PathPoint[], opts: TripOptions) => TripResult;
+  /** When to leave so a trip of this length ends in daylight; with it, `autoDepart` can move the start. */
+  daylightDeparture?: (plannedUtcMs: number, durationS: number, lat: number, lon: number) => { departUtcMs: number; moved: boolean };
 }
 
 /**
@@ -145,34 +152,45 @@ export async function planRoutes(input: PlanInput, deps: RoutingDeps): Promise<R
     deps.onProgress(rev, (leg + 1) / legs);
   }
 
-  const candidates: RouteCandidate[] = STYLES.map((style) => {
-    const path = paths.get(style) ?? [];
-    const indices = stopIndices.get(style) ?? [];
-    const stops: TripStop[] = [];
-    for (let i = 1; i < indices.length; i += 1) {
-      const work = visit.workMin[i] ?? 0;
-      const index = indices[i];
-      if (index === undefined) continue;
-      if (work > 0) {
-        const name = visit.names[i];
-        stops.push({ index, workMin: work, ...(name ? { name } : {}) });
+  const costedAt = (departUtcMs: number): RouteCandidate[] =>
+    STYLES.map((style) => {
+      const path = paths.get(style) ?? [];
+      const indices = stopIndices.get(style) ?? [];
+      const stops: TripStop[] = [];
+      for (let i = 1; i < indices.length; i += 1) {
+        const work = visit.workMin[i] ?? 0;
+        const index = indices[i];
+        if (index === undefined) continue;
+        if (work > 0) {
+          const name = visit.names[i];
+          stops.push({ index, workMin: work, ...(name ? { name } : {}) });
+        }
       }
+      const trip = deps.computeTrip
+        ? deps.computeTrip(path, { vehicle: plan.vehicle, departUtcMs, scenario: input.scenario, style, stops, campAtNight: plan.campAtNight })
+        : shapeOnlyTrip(path);
+      return { style, path, stopIndices: indices, trip };
+    });
+
+  let departUtcMs = input.departUtcMs;
+  let departMoved = false;
+  let candidates = costedAt(departUtcMs);
+  const origin = visit.points[0];
+  // A plan made at Martian midnight should not open with "wait eleven hours": it leaves the next good morning.
+  // A rover that camps is out overnight whenever it leaves, so its start is left alone.
+  if (input.autoDepart && deps.computeTrip && deps.daylightDeparture && origin && !plan.campAtNight) {
+    const lead = candidates.find((c) => c.style === plan.style) ?? candidates[0];
+    const moving = lead ? lead.trip.totals.movingS + lead.trip.totals.workS : 0;
+    const better = deps.daylightDeparture(departUtcMs, moving, origin[1], origin[0]);
+    if (better.moved && Number.isFinite(better.departUtcMs)) {
+      departUtcMs = better.departUtcMs;
+      departMoved = true;
+      candidates = costedAt(departUtcMs);
     }
-    const trip = deps.computeTrip
-      ? deps.computeTrip(path, {
-          vehicle: plan.vehicle,
-          departUtcMs: input.departUtcMs,
-          scenario: input.scenario,
-          style,
-          stops,
-          campAtNight: plan.campAtNight,
-        })
-      : shapeOnlyTrip(path);
-    return { style, path, stopIndices: indices, trip };
-  });
+  }
 
   const alternatives = deps.computeTrip ? mergeAlternatives(candidates) : mergeByShape(candidates);
   const preferred = alternatives.find((a) => a.styles.includes(plan.style)) ?? alternatives[0];
   if (!preferred) return { status: 'failed', rev, message: 'No route came back. Try moving a stop.', leg: 0 };
-  return { status: 'ready', rev, alternatives, selected: preferred.id, cellM, hasBudget: Boolean(deps.computeTrip) };
+  return { status: 'ready', rev, alternatives, selected: preferred.id, cellM, hasBudget: Boolean(deps.computeTrip), departUtcMs, departMoved };
 }

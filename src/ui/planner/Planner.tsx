@@ -1,5 +1,8 @@
 import { Bot, Car, Caravan, Check, ChevronDown, Flag, Footprints, Helicopter, MousePointerClick, Plus, TriangleAlert, X, Plane } from 'lucide-react';
 import { flySelectedRoute } from '@/map/flyover';
+import { Budget } from './Budget';
+import { Departure } from './Departure';
+import { Exports } from './Exports';
 import { toast } from 'sonner';
 import type { RouteAlternative, VehicleId } from '@/engines/types';
 import { VEHICLES } from '@/engines/vehicles';
@@ -186,21 +189,30 @@ function RouteResult() {
       ) : (
         <p className="mb-3 text-[13px] text-muted-foreground">{chosen.label}.</p>
       )}
-      <dl className="grid grid-cols-3 gap-x-3 gap-y-3">
-        {route.hasBudget ? <Fact label="Time" value={fmtDuration(t.durationS)} /> : null}
-        <Fact label="Distance" value={fmtDistance(t.distM)} />
-        <Fact label="Climb" value={`${fmtNumber(t.climbM)} m`} />
-        <Fact label="Steepest" value={fmtDeg(t.maxGradeDeg, 1)} />
-      </dl>
-      {steep ? (
-        <p className="mt-3 flex items-start gap-2 text-xs leading-relaxed text-caution">
-          <TriangleAlert className="mt-0.5 size-3.5 shrink-0" aria-hidden />
-          <span className="text-foreground/85">
-            Part of this route is steeper than is comfortable {vehicle.kind === 'walk' ? 'on foot' : `for the ${vehicle.name.toLowerCase()}`} (
-            {fmtDeg(vehicle.comfortSlopeDeg)}). Those stretches are drawn in amber and red.
-          </span>
-        </p>
-      ) : null}
+      {route.hasBudget ? (
+        <>
+          <Departure departUtcMs={route.departUtcMs} moved={route.departMoved} lon={chosen.path[0]?.[0] ?? 0} vehicle={vehicle} />
+          <Budget alt={chosen} vehicle={vehicle} />
+        </>
+      ) : (
+        <>
+        <dl className="grid grid-cols-3 gap-x-3 gap-y-3">
+          {route.hasBudget ? <Fact label="Time" value={fmtDuration(t.durationS)} /> : null}
+          <Fact label="Distance" value={fmtDistance(t.distM)} />
+          <Fact label="Climb" value={`${fmtNumber(t.climbM)} m`} />
+          <Fact label="Steepest" value={fmtDeg(t.maxGradeDeg, 1)} />
+        </dl>
+        {steep ? (
+          <p className="mt-3 flex items-start gap-2 text-xs leading-relaxed text-caution">
+            <TriangleAlert className="mt-0.5 size-3.5 shrink-0" aria-hidden />
+            <span className="text-foreground/85">
+              Part of this route is steeper than is comfortable {vehicle.kind === 'walk' ? 'on foot' : `for the ${vehicle.name.toLowerCase()}`} (
+              {fmtDeg(vehicle.comfortSlopeDeg)}). Those stretches are drawn in amber and red.
+            </span>
+          </p>
+        ) : null}
+        </>
+      )}
       <button
         type="button"
         onClick={flySelectedRoute}
@@ -209,6 +221,7 @@ function RouteResult() {
         <Plane className="size-4 text-muted-foreground" aria-hidden />
         Fly along the route
       </button>
+      <Exports alt={chosen} hasBudget={route.hasBudget} />
       {!route.hasBudget ? (
         <p className="mt-3 text-xs leading-relaxed text-faint">
           The route follows the real terrain at {fmtNumber(route.cellM)} m detail. Time, oxygen, power and radiation for it are not part of this build yet.

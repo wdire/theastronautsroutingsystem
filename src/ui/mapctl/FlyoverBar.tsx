@@ -11,7 +11,8 @@ export function FlyoverBar() {
       <span>
         <span className="text-muted-foreground">Next </span>
         <span className="font-medium">{flyover.next}</span>
-        <span className="figure text-muted-foreground">, {fmtDistance(flyover.remainingM)}</span>
+        {/* A fixed width, so the bar does not jitter as the distance counts down. */}
+        <span className="figure inline-block min-w-[4.25rem] text-muted-foreground">, {fmtDistance(flyover.remainingM)}</span>
       </span>
       <button type="button" onClick={stopFlyover} className="h-9 rounded-md px-2.5 font-medium text-primary transition-colors hover:bg-secondary">
         Stop

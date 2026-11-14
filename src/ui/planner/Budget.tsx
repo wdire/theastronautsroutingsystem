@@ -130,15 +130,15 @@ export function Budget({ alt, vehicle }: { alt: RouteAlternative; vehicle: Vehic
   return (
     <div>
       <Verdict trip={trip} />
-      <dl className="mt-3 grid grid-cols-3 gap-x-3 gap-y-3.5">
-        <Tile label="Time" value={fmtDuration(t.durationS)} note={t.workS > 0 ? `${fmtDuration(t.workS)} of it at work` : undefined} />
+      <dl className="mt-3.5 grid grid-cols-3 items-start gap-x-3 gap-y-5">
+        <Tile label="Time" value={fmtDuration(t.durationS)} note={t.workS > 0 ? `${fmtDuration(t.workS)} at work` : undefined} />
         <Tile label="Distance" value={fmtDistance(t.distM)} />
-        <Tile label="Back at" value={arrive === null ? 'n/a' : fmtClock(arrive)} note="local solar time" />
-        {t.minO2Frac !== null ? <Tile label="Oxygen" value={`${fmtNumber(t.o2Kg, 2)} kg`} note={`${fmtPercent(Math.max(0, t.minO2Frac))} left at the lowest`} /> : null}
-        {powered ? <Tile label="Energy" value={`${fmtNumber(t.energyKWh, t.energyKWh < 10 ? 1 : 0)} kWh`} note={`battery ${fmtPercent(Math.max(0, t.minBatteryFrac ?? 0))} at the lowest`} /> : <Tile label="Climb" value={`${fmtNumber(t.climbM)} m`} />}
+        <Tile label="Back at" value={arrive === null ? 'n/a' : fmtClock(arrive)} note="solar time" />
+        {t.minO2Frac !== null ? <Tile label="Oxygen" value={`${fmtNumber(t.o2Kg, 2)} kg`} note={`${fmtPercent(Math.max(0, t.minO2Frac))} left`} /> : null}
+        {powered ? <Tile label="Energy" value={`${fmtNumber(t.energyKWh, t.energyKWh < 10 ? 1 : 0)} kWh`} note={`${fmtPercent(Math.max(0, t.minBatteryFrac ?? 0))} left at worst`} /> : <Tile label="Climb" value={`${fmtNumber(t.climbM)} m`} />}
         <Tile label="Steepest" value={fmtDeg(t.maxGradeDeg, 1)} />
       </dl>
-      <dl className="mt-3.5">
+      <dl className="mt-4">
         <Tile label="Radiation dose, modelled" value={`${fmtNumber(t.doseMSv, 2)} mSv`} note={earthDose(t.doseMSv)} />
       </dl>
       <Profile path={alt.path} stopIndices={alt.stopIndices} trip={trip} comfortDeg={vehicle.comfortSlopeDeg} blockDeg={vehicle.blockSlopeDeg} />

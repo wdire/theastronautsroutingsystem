@@ -63,7 +63,17 @@ export interface LayerState {
 export type RouteState =
   | { status: 'idle' }
   | { status: 'routing'; rev: number; progress: number }
-  | { status: 'ready'; rev: number; alternatives: RouteAlternative[]; selected: string; cellM: number; hasBudget: boolean }
+  | {
+      status: 'ready';
+      rev: number;
+      alternatives: RouteAlternative[];
+      selected: string;
+      cellM: number;
+      hasBudget: boolean;
+      /** When the costed trips leave, and whether that was moved to a morning because the visitor had not chosen. */
+      departUtcMs: number;
+      departMoved: boolean;
+    }
   | { status: 'failed'; rev: number; message: string; leg: number; nearest?: readonly [number, number] };
 
 export interface AppState {
@@ -94,6 +104,8 @@ export interface AppState {
   plan: MissionPlan;
   /** Bumped on every change to the plan; routing replies for an older revision are dropped. */
   planRev: number;
+  /** The ready-made mission the plan was loaded from, if any. Edits keep it: the goal is the same. */
+  missionId: string | null;
   /** The planner panel is showing. */
   plannerOpen: boolean;
   /** What the next click on the map sets, if anything. */
@@ -130,7 +142,8 @@ export interface AppState {
   toggleSection(id: string): void;
   setLayers(patch: Partial<LayerState>): void;
 
-  setPlan(plan: MissionPlan): void;
+  /** Replaces the plan. `missionId` when it is one of the ready-made missions, which have a rule for success. */
+  setPlan(plan: MissionPlan, missionId?: string): void;
   openPlanner(open: boolean): void;
   setPicking(picking: 'start' | 'stop' | 'roverView' | null): void;
   openVisor(at: { lon: number; lat: number }): void;
@@ -179,6 +192,7 @@ export const useApp = create<AppState>()(
 
       plan: EMPTY_PLAN,
       planRev: 0,
+      missionId: null,
       plannerOpen: false,
       picking: null,
       route: { status: 'idle' },
@@ -207,7 +221,7 @@ export const useApp = create<AppState>()(
       setLayers: (patch) => set((s) => ({ layers: { ...s.layers, ...patch } })),
       toggleSection: (id) => set((s) => ({ sections: { ...s.sections, [id]: !s.sections[id] } })),
 
-      setPlan: (plan) => editPlan(() => plan),
+      setPlan: (plan, missionId) => set((s) => ({ plan, planRev: s.planRev + 1, missionId: missionId ?? null })),
       openPlanner: (plannerOpen) => set(plannerOpen ? { plannerOpen, placeId: null } : { plannerOpen, picking: null }),
       setPicking: (picking) => set({ picking }),
       openVisor: (visor) => set({ visor, picking: null }),
@@ -257,7 +271,7 @@ export const useApp = create<AppState>()(
       setStyle: (style) => editPlan((p) => ({ ...p, style })),
       setRoundTrip: (roundTrip) => editPlan((p) => ({ ...p, roundTrip })),
       setCampAtNight: (campAtNight) => editPlan((p) => ({ ...p, campAtNight })),
-      clearPlan: () => editPlan((p) => ({ ...EMPTY_PLAN, vehicle: p.vehicle })),
+      clearPlan: () => set((s) => ({ plan: { ...EMPTY_PLAN, vehicle: s.plan.vehicle }, planRev: s.planRev + 1, missionId: null })),
     };
   }),
 );

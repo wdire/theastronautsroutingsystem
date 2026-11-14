@@ -5,21 +5,22 @@ import { useApp } from '@/store';
 import { planRoutes, STYLES, type RoutingDeps } from './routing';
 
 type ComputeTrip = (path: PathPoint[], opts: TripOptions) => TripResult;
+type DaylightDeparture = NonNullable<RoutingDeps['daylightDeparture']>;
 
 /**
- * The trip computer is looked up rather than imported, so the planner works, with shapes only,
- * in a build that does not have it yet, and picks it up without a code change once it exists.
+ * The budget engines are looked up rather than imported, so the planner works, with shapes only, in a
+ * build that does not have them, and picks them up without a code change once they exist.
  */
 const tripModules = import.meta.glob<{ computeTrip?: ComputeTrip }>('../engines/tripComputer.ts');
+const departureModules = import.meta.glob<{ daylightDeparture?: DaylightDeparture }>('../engines/departure.ts');
 
-async function loadComputeTrip(): Promise<ComputeTrip | undefined> {
-  const load = Object.values(tripModules)[0];
-  if (!load) return undefined;
-  try {
-    return (await load()).computeTrip;
-  } catch {
-    return undefined;
-  }
+async function loadBudget(): Promise<{ computeTrip?: ComputeTrip; daylightDeparture?: DaylightDeparture }> {
+  const [trip, departure] = await Promise.all(
+    [Object.values(tripModules)[0], Object.values(departureModules)[0]].map((load) => (load ? load().catch(() => null) : null)),
+  );
+  const computeTrip = (trip as { computeTrip?: ComputeTrip } | null)?.computeTrip;
+  const daylightDeparture = (departure as { daylightDeparture?: DaylightDeparture } | null)?.daylightDeparture;
+  return { ...(computeTrip ? { computeTrip } : {}), ...(daylightDeparture ? { daylightDeparture } : {}) };
 }
 
 /**
@@ -58,7 +59,7 @@ export function startPlanner(): () => void {
       return;
     }
     s.setRoute({ status: 'routing', rev, progress: 0 });
-    const computeTrip = await loadComputeTrip();
+    const budget = await loadBudget();
     const deps: RoutingDeps = {
       loadGrid: (box, maxCells) => loadGrid(box, maxCells),
       route: (style, request, grid, onProgress) => routerFor(style).route(request, grid, onProgress),
@@ -66,11 +67,11 @@ export function startPlanner(): () => void {
       onProgress: (r, progress) => {
         if (r === running) useApp.getState().setRoute({ status: 'routing', rev: r, progress });
       },
-      ...(computeTrip ? { computeTrip } : {}),
+      ...budget,
     };
     try {
       const result = await planRoutes(
-        { rev, plan: s.plan, departUtcMs: s.departUtcMs ?? s.utcMs, scenario: s.scenario, hazards: [] },
+        { rev, plan: s.plan, departUtcMs: s.departUtcMs ?? s.utcMs, autoDepart: s.departUtcMs === null, scenario: s.scenario, hazards: [] },
         deps,
       );
       if (result && rev === running && !disposed) useApp.getState().setRoute(result);

@@ -148,6 +148,32 @@ export function addRouteLayers(map: MapLibreMap): () => void {
   map.on('mouseenter', 'route-line', pointer);
   map.on('mouseleave', 'route-line', noPointer);
 
+  // The places on the route a crew must know: where turning back stops being possible, where the air ends.
+  let marks: Marker[] = [];
+  const clearMarks = () => {
+    for (const m of marks) m.remove();
+    marks = [];
+  };
+  const drawMarks = (route: RouteAlternative) => {
+    clearMarks();
+    const add = (index: number | null, kind: 'no-return' | 'o2-out' | 'walkback', text: string) => {
+      const p = index === null ? undefined : route.path[index];
+      if (!p) return;
+      const el = document.createElement('div');
+      el.className = `route-mark route-mark-${kind}`;
+      const ring = document.createElement('span');
+      ring.className = 'route-mark-ring';
+      const label = document.createElement('span');
+      label.className = 'map-label ring-label';
+      label.textContent = text;
+      el.append(ring, label);
+      marks.push(new Marker({ element: el, anchor: 'left', offset: [-7, 0] }).setLngLat([p[0], p[1]]).addTo(map));
+    };
+    add(route.trip.pointOfNoReturnIndex, 'no-return', 'Point of no return');
+    add(route.trip.walkbackIndex, 'walkback', 'Walk-home limit');
+    add(route.trip.o2OutIndex, 'o2-out', 'Oxygen runs out');
+  };
+
   const drawRoutes = () => {
     const s = useApp.getState();
     const alt = map.getSource<GeoJSONSource>(SRC_ALT);
@@ -160,6 +186,7 @@ export function addRouteLayers(map: MapLibreMap): () => void {
       if (!stale) {
         alt.setData(EMPTY);
         main.setData(EMPTY);
+        clearMarks();
       }
       return;
     }
@@ -172,6 +199,7 @@ export function addRouteLayers(map: MapLibreMap): () => void {
     }
     const vehicle = VEHICLES[s.plan.vehicle];
     main.setData(line(chosen.path));
+    drawMarks(chosen);
     map.setPaintProperty('route-line', 'line-gradient', slopeGradient(chosen.path, vehicle.comfortSlopeDeg, vehicle.blockSlopeDeg));
     map.setPaintProperty('route-line', 'line-opacity', 1);
   };
@@ -188,6 +216,7 @@ export function addRouteLayers(map: MapLibreMap): () => void {
     map.off('mouseenter', 'route-line', pointer);
     map.off('mouseleave', 'route-line', noPointer);
     for (const m of markers) m.remove();
+    clearMarks();
     for (const id of ['route-line', 'route-casing', 'route-alt', 'route-alt-casing']) if (map.getLayer(id)) map.removeLayer(id);
     for (const id of [SRC_ROUTE, SRC_ALT]) if (map.getSource(id)) map.removeSource(id);
   };

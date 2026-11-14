@@ -36,10 +36,18 @@ export function startFlyover(map: MapLibreMap, route: RouteAlternative, names: r
   let bearing = bearingAt(0);
   let lastMs = 0;
 
+  let lastReport = '';
   const report = (d: number) => {
     let next = stopIndices.findIndex((index, i) => i > 0 && (along[index] ?? 0) > d + 1);
     if (next < 0) next = stopIndices.length - 1;
-    useApp.getState().setFlyover({ next: names[next] ?? (next === stopIndices.length - 1 ? 'the end of the route' : `stop ${next}`), remainingM: Math.max(0, (along[stopIndices[next] ?? path.length - 1] ?? distM) - d), progress: d / distM });
+    const name = names[next] ?? (next === stopIndices.length - 1 ? 'the end of the route' : `stop ${next}`);
+    // To the nearest 10 m and half a percent: the bar is redrawn a few times a second, not every frame.
+    const remainingM = Math.round(Math.max(0, (along[stopIndices[next] ?? path.length - 1] ?? distM) - d) / 10) * 10;
+    const progress = Math.round((d / distM) * 200) / 200;
+    const key = `${name}|${remainingM}|${progress}`;
+    if (key === lastReport) return;
+    lastReport = key;
+    useApp.getState().setFlyover({ next: name, remainingM, progress });
   };
 
   const end = (returnCamera: boolean) => {

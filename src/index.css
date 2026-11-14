@@ -363,3 +363,26 @@
 .route-pin:active {
   cursor: grabbing;
 }
+
+/* Marks on the route: a ring and a name. They inform; they are not controls. */
+.route-mark {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  pointer-events: none;
+}
+.route-mark-ring {
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  border: 2.5px solid var(--caution);
+  background: rgb(14 26 37 / 0.55);
+  box-shadow: 0 1px 4px rgb(0 0 0 / 0.6);
+}
+.route-mark-walkback .route-mark-ring {
+  border-style: dashed;
+}
+.route-mark-o2-out .route-mark-ring {
+  border-color: var(--warning);
+  background: var(--warning);
+}
