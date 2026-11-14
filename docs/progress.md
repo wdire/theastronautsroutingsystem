@@ -10,7 +10,7 @@ Plan: docs/superpowers/plans/2026-11-14-areo.md. One line per task, then rulings
 - [ ] 6 Router wiring, route card, mission editor: planner panel (vehicle, start, stops with drag reorder, tasks with minutes, undo, round trip, pick on map), routing per leg in 3 styles with stale-run dropping (unit tested), route and pins on the map, alternatives. Left: budget tiles, timing card, profile strip, briefing (all need tripComputer), templates from missions, click-the-route-to-add-a-stop, draggable pins, e2e tests.
 - [ ] 7 Simulation, alerts, base, run panel
 - [ ] 8 Visor and Rover View: DONE: three ground layers with shader holes and per-variant program keys, eye-level grading, near ground detail shader (sand, ripples, grains, bedded and jointed rock), instanced rocks (stable hash, slope weighted), sky with sun disc, blue sunset aureole and stars, sun shadows, first-person walking, Rover View screen (compass tape, readout, time presets, WebGL failure message), quality tiers. LEFT: crew and vehicles with NASA models and the rigged Z2 suit, chase and orbit cameras, route guides, mission HUD (O2, power, dose, alerts, chat, mini map), contact shadows, dust motes, moons, on-screen pad for touch, photo cards near Perseverance stops, e2e test.
-- [ ] 9 Map look, layers, Discover, flyover
+- [ ] 9 Map look, layers, Discover, flyover: DONE: relief curve with chip, sun lighting, labels (DOM markers, decluttered), Perseverance track, overlays (geology with legend, CRISM olivine and carbonate, slope by vehicle), Layers, Discover (follow Perseverance by sol with live raw photos, places, samples), Missions (4 templates), How it works. LEFT: one-time tilt at zoom 10, walking range rings, flyover, validation against Perseverance, phone bottom sheets polish, e2e.
 - [ ] 10 Space weather, exports, validation
 - [ ] 11 Docs, phone pass, full suite
 
@@ -25,3 +25,5 @@ Plan: docs/superpowers/plans/2026-11-14-areo.md. One line per task, then rulings
   writing marsTime, environment, metabolic and vehicles (72 tests pass). `src/engines/tripComputer.ts` and
   `src/engines/departure.ts` are not written (a tripComputer.test.ts exists). The main session does not write
   them either; the team decides how (new session or another model). Tasks 6, 7 and the exports in 10 wait on them.
+- Map night dimming floors at 0.6 (lighting model says 0.4) and the base image gets contrast +0.28: Jezero is dark basalt and a visitor arriving at Martian night must still read the map. A Full daylight switch is in Layers. Cost if wrong: one constant in src/map/terrain.ts.
+- Base and Crew dock tabs are left out until the simulation exists (they would be empty). Rover track content lives in Discover. Cost if wrong: two entries in src/ui/dock/tabs.ts.

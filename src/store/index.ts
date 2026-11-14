@@ -4,7 +4,7 @@ import type { MissionPlan, RouteAlternative, RouteStyle, Scenario, Stop, Task, T
 
 export type Mode = 'globe' | 'map';
 export type Theme = 'dark' | 'light';
-export type DockTab = 'layers' | 'discover' | 'missions' | 'rover' | 'base' | 'crew' | 'how';
+export type DockTab = 'layers' | 'discover' | 'missions' | 'how';
 
 export interface Camera {
   lon: number;
@@ -39,6 +39,21 @@ let idCounter = 0;
 export function newId(prefix: string): string {
   idCounter += 1;
   return `${prefix}${Date.now().toString(36)}${idCounter.toString(36)}`;
+}
+
+export type Overlay = 'none' | 'geology' | 'olivine' | 'carbonate' | 'slope';
+
+export interface LayerState {
+  /** Official feature names. */
+  names: boolean;
+  /** Places Perseverance studied and the samples it took. */
+  rover: boolean;
+  /** The line of Perseverance's drive. */
+  traverse: boolean;
+  /** One coloured overlay at a time. */
+  overlay: Overlay;
+  /** Light the map as at midday whatever the hour, so the ground is always readable. */
+  daylight: boolean;
 }
 
 export type RouteState =
@@ -82,6 +97,7 @@ export interface AppState {
 
   /* ui */
   dock: DockTab | null;
+  layers: LayerState;
   placeId: string | null;
   /** Which detail sections the visitor has opened, by id. Kept for the visit. */
   sections: Record<string, boolean>;
@@ -101,6 +117,7 @@ export interface AppState {
   toggleDock(tab: DockTab): void;
   openPlace(id: string | null): void;
   toggleSection(id: string): void;
+  setLayers(patch: Partial<LayerState>): void;
 
   setPlan(plan: MissionPlan): void;
   openPlanner(open: boolean): void;
@@ -155,6 +172,7 @@ export const useApp = create<AppState>()(
       clockPaused: false,
 
       dock: null,
+      layers: { names: true, rover: true, traverse: true, overlay: 'none', daylight: false },
       placeId: null,
       sections: {},
 
@@ -170,6 +188,7 @@ export const useApp = create<AppState>()(
       openDock: (dock) => set({ dock }),
       toggleDock: (tab) => set((s) => ({ dock: s.dock === tab ? null : tab })),
       openPlace: (placeId) => set({ placeId }),
+      setLayers: (patch) => set((s) => ({ layers: { ...s.layers, ...patch } })),
       toggleSection: (id) => set((s) => ({ sections: { ...s.sections, [id]: !s.sections[id] } })),
 
       setPlan: (plan) => editPlan(() => plan),

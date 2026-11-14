@@ -258,3 +258,62 @@
 .maplibregl-canvas.is-picking {
   cursor: crosshair;
 }
+
+/* Names on the map. Landforms in italics, rover places upright with a dot, samples smaller. */
+.map-label {
+  padding: 2px 3px;
+  border: 0;
+  background: none;
+  color: #fff7ec;
+  font: 500 12.5px/1.1 var(--font-sans);
+  white-space: nowrap;
+  text-shadow: 0 0 3px rgb(0 0 0 / 0.95), 0 1px 2px rgb(0 0 0 / 0.9), 0 0 8px rgb(0 0 0 / 0.5);
+  transition: opacity 200ms ease-out;
+}
+.map-label.is-hidden {
+  opacity: 0 !important;
+  pointer-events: none;
+}
+.map-label:hover,
+.map-label:focus-visible {
+  color: var(--primary);
+}
+.map-label-feature {
+  font-style: italic;
+  font-size: 13.5px;
+  letter-spacing: 0.04em;
+  font-stretch: 105%;
+}
+.map-label-place::before,
+.map-label-sample::before {
+  content: '';
+  display: inline-block;
+  width: 7px;
+  height: 7px;
+  margin-right: 5px;
+  border-radius: 50%;
+  background: #fff7ec;
+  box-shadow: 0 0 0 1.5px rgb(0 0 0 / 0.7);
+  vertical-align: 1px;
+}
+.map-label-sample {
+  font-size: 11.5px;
+  font-weight: 400;
+  color: #efe3d2;
+}
+.map-label-sample::before {
+  width: 5px;
+  height: 5px;
+  background: #9cc4ea;
+}
+
+/* Where Perseverance was on the sol chosen in Discover. */
+.rover-dot {
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  background: #fbf4ea;
+  border: 3px solid #0e1a25;
+  box-shadow: 0 0 0 2px #fbf4ea, 0 0 0 9px rgb(251 244 234 / 0.25), 0 2px 5px rgb(0 0 0 / 0.6);
+  pointer-events: none;
+}

@@ -1,4 +1,3 @@
-import type { ReactNode } from 'react';
 import { useApp } from '@/store';
 import { DockPanel, DockRail } from '@/ui/dock/Dock';
 import { MapButtons } from '@/ui/mapctl/MapButtons';
@@ -10,19 +9,19 @@ import { PlaceCard } from '@/ui/place/PlaceCard';
 import { ReliefChip } from '@/ui/mapctl/ReliefChip';
 import { ClockMenu } from '@/ui/clock/ClockMenu';
 import { Planner } from '@/ui/planner/Planner';
+import { LayersPanel } from '@/ui/panels/LayersPanel';
+import { DiscoverPanel } from '@/ui/panels/DiscoverPanel';
+import { MissionsPanel } from '@/ui/panels/MissionsPanel';
+import { HowPanel } from '@/ui/panels/HowPanel';
 import { Route } from 'lucide-react';
 import { useIsPhone } from '@/ui/hooks/useMediaQuery';
-
-function EmptyPanel({ children }: { children: ReactNode }) {
-  return <p className="px-4 py-5 text-sm leading-relaxed text-muted-foreground">{children}</p>;
-}
 
 function DockContent() {
   const dock = useApp((s) => s.dock);
   if (!dock) return null;
   return (
     <DockPanel tab={dock}>
-      <EmptyPanel>This panel is being built.</EmptyPanel>
+      {dock === 'layers' ? <LayersPanel /> : dock === 'discover' ? <DiscoverPanel /> : dock === 'missions' ? <MissionsPanel /> : <HowPanel />}
     </DockPanel>
   );
 }

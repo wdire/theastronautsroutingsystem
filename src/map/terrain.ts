@@ -59,13 +59,17 @@ export function addTerrain(map: MapLibreMap): () => void {
 
   const applyLight = () => {
     const c = map.getCenter();
-    const sun = sunPosition(useApp.getState().utcMs, c.lat, c.lng);
-    const light = mapLighting(sun.elevDeg, sun.azDeg);
+    const app = useApp.getState();
+    const sun = sunPosition(app.utcMs, c.lat, c.lng);
+    // "Full daylight" in the Layers panel lights the map from the north-west at mid-morning height.
+    const light = app.layers.daylight ? mapLighting(42, 315) : mapLighting(sun.elevDeg, sun.azDeg);
     // On the globe the planet is shown fully lit: night would hide the place the visitor came to see.
     const zoomedIn = map.getZoom() >= 6;
     map.setPaintProperty('hillshade', 'hillshade-illumination-direction', light.direction);
     map.setPaintProperty('hillshade', 'hillshade-exaggeration', zoomedIn ? light.strength : 0.35);
-    map.setPaintProperty('base', 'raster-brightness-max', zoomedIn ? light.brightness : 1);
+    // Night is dimmed to 0.6, not the 0.4 of the lighting model: a first-time visitor who arrives
+    // during the Martian night still has to be able to read the map.
+    map.setPaintProperty('base', 'raster-brightness-max', zoomedIn ? Math.max(0.6, light.brightness) : 1);
     map.setSky({
       'sky-color': light.sky,
       'horizon-color': light.horizon,
@@ -88,7 +92,12 @@ export function addTerrain(map: MapLibreMap): () => void {
   map.on('zoom', onZoom);
   map.on('moveend', applyLight);
   // The clock moves every second; the sun does not move visibly that fast.
-  const unsubscribe = useApp.subscribe((s) => Math.floor(s.utcMs / 60_000), applyLight);
+  const offClock = useApp.subscribe((s) => Math.floor(s.utcMs / 60_000), applyLight);
+  const offDaylight = useApp.subscribe((s) => s.layers.daylight, applyLight);
+  const unsubscribe = () => {
+    offClock();
+    offDaylight();
+  };
   applyRelief();
   applyLight();
 
