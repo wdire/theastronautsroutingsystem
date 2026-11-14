@@ -16,7 +16,7 @@ import { StopList } from './StopList';
 import { stopLabel } from '@/planner/labels';
 import { planLocked, useCrew } from '@/net/state';
 import { NET_ENABLED } from '@/net/config';
-import { startsAtBase } from '@/planner/base';
+import { startsAtBase, withBase } from '@/planner/base';
 import { useIsPhone } from '@/ui/hooks/useMediaQuery';
 
 // Who goes: loaded with the crew code, only when there is a crew server.
@@ -266,6 +266,7 @@ export function Planner() {
   const stops = useApp((s) => s.plan.stops);
   const base = useApp((s) => s.base);
   const phone = useIsPhone();
+  const onCrewMission = useCrew((s) => s.current !== null);
   const running = useApp((s) => s.world?.run?.status === 'running');
   const atMyBase = start !== null && startsAtBase({ start, stops, roundTrip: true, vehicle: 'foot', style: 'safest', campAtNight: false }, base);
   const openPlanner = useApp((s) => s.openPlanner);
@@ -313,10 +314,21 @@ export function Planner() {
           </div>
           <div className="flex items-center gap-2 rounded-md border py-1.5 pr-1 pl-3">
             <House className="size-4 shrink-0 text-muted-foreground" aria-hidden />
-            <span className="min-w-0 flex-1 truncate text-[13px] font-medium">{atMyBase ? base.name : start ? `${stopLabel(start)}, the commander's base` : base.name}</span>
+            <span className="min-w-0 flex-1 truncate text-[13px] font-medium">{atMyBase || !start ? base.name : stopLabel(start)}</span>
             {atMyBase && !running ? <PickButton target="base">Move base</PickButton> : null}
+            {!atMyBase && !running && !onCrewMission ? (
+              <button type="button" onClick={() => useApp.getState().setPlan(withBase(useApp.getState().plan, base), useApp.getState().missionId ?? undefined)} className="inline-flex h-8 items-center rounded-md border px-2.5 text-[13px] font-medium hover:bg-secondary">
+                Use {base.name}
+              </button>
+            ) : null}
           </div>
-          <p className="mt-1.5 text-xs text-muted-foreground">Every mission leaves the base and comes back to it.</p>
+          <p className="mt-1.5 text-xs text-muted-foreground">
+            {atMyBase
+              ? 'Every mission leaves the base and comes back to it.'
+              : onCrewMission
+                ? 'The commander’s base: the crew leaves from it and comes back to it.'
+                : 'A forward station: drones and robots work from where they are kept, and come back to it.'}
+          </p>
         </div>
 
         <div className="px-4 pt-4">

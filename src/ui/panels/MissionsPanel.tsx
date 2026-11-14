@@ -10,8 +10,9 @@ const ICON = { foot: Footprints, openRover: Car, pressRover: Caravan, robotRover
 
 async function load(mission: Mission): Promise<void> {
   const app = useApp.getState();
-  // Every mission leaves from the visitor's base and comes back to it.
-  const plan = withBase(toPlan(mission), app.base);
+  // A crewed mission leaves from the visitor's base and comes back to it. A drone or robot works from the
+  // forward station the mission names (the helicopter cannot fly to Belva and back from the base).
+  const plan = VEHICLES[mission.vehicle].crew > 0 ? withBase(toPlan(mission), app.base) : toPlan(mission);
   app.setPlan(plan, mission.id);
   app.openPlanner(true);
   // Frame the whole mission.

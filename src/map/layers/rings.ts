@@ -53,6 +53,13 @@ export function addRangeRings(map: MapLibreMap): () => void {
   let labels: Marker[] = [];
   let labelFor: (h: number) => string = String;
 
+  // Far out (or across the planet, where the globe can leave a marker floating) the rings are too small to name.
+  const fitLabels = () => {
+    const hide = map.getZoom() < 9;
+    for (const m of labels) m.getElement().style.display = hide ? 'none' : '';
+  };
+  map.on('zoom', fitLabels);
+
   const clear = () => {
     map.getSource<GeoJSONSource>(SRC)?.setData(EMPTY);
     for (const m of labels) m.remove();
@@ -78,6 +85,7 @@ export function addRangeRings(map: MapLibreMap): () => void {
       el.textContent = labelFor(ring.hours);
       labels.push(new Marker({ element: el, anchor: 'left', offset: [5, 0] }).setLngLat([east[0], east[1]]).addTo(map));
     }
+    fitLabels();
     map.getSource<GeoJSONSource>(SRC)?.setData({ type: 'FeatureCollection', features });
   };
 
@@ -109,6 +117,7 @@ export function addRangeRings(map: MapLibreMap): () => void {
   const off = useApp.subscribe((s) => `${s.plan.start?.lon},${s.plan.start?.lat}|${s.plan.vehicle}|${s.layers.rings}`, update);
   return () => {
     off();
+    map.off('zoom', fitLabels);
     run += 1;
     worker.terminate();
     clear();

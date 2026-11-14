@@ -24,9 +24,9 @@ test('a two-leg mission finds, merges and labels its routes', async ({ page }) =
   expect(route?.stops).toBe(4);
   expect(route?.dist).toBeGreaterThan(5000);
   expect(route?.dist).toBeLessThan(14_000);
-  // A round trip ends where it began.
-  expect(route?.ends[0]?.[0]).toBeCloseTo(77.4509, 2);
-  expect(route?.ends[1]?.[0]).toBeCloseTo(77.4509, 2);
+  // Every mission leaves the visitor's base (the default one here, whatever the link said) and comes back to it.
+  expect(route?.ends[0]?.[0]).toBeCloseTo(77.44, 2);
+  expect(route?.ends[1]?.[0]).toBeCloseTo(77.44, 2);
   for (const label of route?.labels ?? []) await expect(plan.getByText(label, { exact: false }).first()).toBeVisible();
   await expect(plan.getByText('Distance')).toBeVisible();
 });

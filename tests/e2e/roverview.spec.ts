@@ -64,7 +64,7 @@ test('Rover View opens beside Perseverance, with the NASA model on the ground an
   // The rover stands on the ground the viewer stands on, within the slope between them.
   expect(Math.abs((scene?.eyeY ?? 99) - 1.7 - (scene?.roverY ?? 0))).toBeLessThan(3);
   expect(scene?.ids).toContain('ingenuity');
-  // No mission start is set, so no base is drawn.
-  expect(scene?.ids).not.toContain('habitat');
+  // The visitor's base is drawn where it stands, about 12 km east on the crater floor: not here beside the rover.
+  expect(scene?.ids).toContain('habitat');
   await expect(view.getByText(/Perseverance, standing where it last reported/)).toBeVisible();
 });

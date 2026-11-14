@@ -13,7 +13,9 @@ test('on a phone the panels are sheets over a bottom bar, and nothing spills off
   await page.waitForFunction(() => window.__areo?.getState().mode === 'map' && Boolean(window.__areoMap));
 
   const nav = page.getByRole('navigation', { name: 'Panels' });
-  await expect(nav.getByRole('button')).toHaveText(['Plan', 'Layers', 'Discover', 'Missions', 'How']);
+  // The Crew tab is there when the app has a crew server to talk to.
+  const crew = await page.evaluate(() => window.__areoCrew?.getState().enabled === true);
+  await expect(nav.getByRole('button')).toHaveText(['Plan', 'Layers', 'Discover', 'Missions', ...(crew ? ['Crew'] : []), 'How']);
   // Every bar item is a full touch target.
   for (const box of await nav.getByRole('button').evaluateAll((els) => els.map((el) => el.getBoundingClientRect().toJSON() as DOMRect))) {
     expect(box.height).toBeGreaterThanOrEqual(44);
@@ -52,13 +54,13 @@ test('on a phone, picking a point on the map moves the mission plan out of the w
   const plan = page.getByRole('region', { name: 'Mission plan' });
   await expect(plan).toBeVisible();
 
-  await plan.getByRole('button', { name: /on the map/i }).first().click();
+  await plan.getByRole('button', { name: 'Add a stop' }).click();
   await expect(page.getByRole('status')).toContainText('Tap the map');
   await expect(page.getByRole('button', { name: /Mission plan: small/ })).toBeVisible();
   // The sheet is down at its small stop: most of the map can be tapped.
   await expect.poll(() => sheetTop(page, /Mission plan: small/)).toBeGreaterThan(600);
 
   await page.touchscreen.tap(195, 330);
-  await expect.poll(() => page.evaluate(() => window.__areo?.getState().plan.start !== null)).toBe(true);
+  await expect.poll(() => page.evaluate(() => window.__areo?.getState().plan.stops.length)).toBe(1);
   await expect(page.getByRole('button', { name: /Mission plan: half height/ })).toBeVisible();
 });

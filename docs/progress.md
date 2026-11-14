@@ -36,6 +36,24 @@ new folder under `src/ui`, or Tailwind misses the new classes); screenshots with
 The model that wrote most of this stopped on the trip-budget content; Opus subagents wrote `tripComputer.ts`,
 `departure.ts`, `export.ts`, `validate.ts`, `missions.ts`, `alerts.ts` and `src/sim/*` without trouble.
 
+## Fifth session (2026-11-15): bases, one place to plan, the whole planet in search
+
+Design: `docs/superpowers/specs/2026-11-15-bases-panels-search-design.md`.
+- Dust devils keep 120 m clear of every stop, the base and the route's ends (`clearDevilNear` in `src/sim/events.ts`);
+  a reroute drops older zones over the crew or a place it must reach. Before, the default mission's devil covered
+  Witch Hazel Hill and Route around it always failed.
+- Base (`src/planner/base.ts`, `store.base`, localStorage `areo.base.v1`): default Jezero Station at 77.44 E,
+  18.428 N (the most level ground near the landing site). Every plan starts at the base with round trip on;
+  templates and shared links are rebased. Moved by picking (`picking: 'base'`, `src/planner/moveBase.ts`): inside
+  the region, slope under 8 degrees, not during a run. Map badge `src/map/layers/base.ts`; Rover View draws the
+  habitat, SEV (left out while a run drives it), and drawn solar array, mast and pad (`src/visor/baseProps.ts`).
+- Left column when idle is `src/ui/planner/Home.tsx` (base, Plan a mission, your mission, missions to join).
+  The planner has a Crew section (`src/ui/crew/PlannerCrew.tsx`); the Crew tab is the current mission, or "You are
+  not on a mission" plus `JoinList`. Start is disabled while the trip is not feasible.
+- Search loads `public/data/mars-names.json` (1,929 IAU names, built by `tools/build_names.py`) once typing starts.
+  `public/data` is not watched by Vite: restart the dev server after adding a file there.
+- Place cards show pictures live from images-api.nasa.gov (`src/data/nasaImages.ts`).
+
 ## Fourth session (2026-11-14, night): crew missions, relief, descent
 
 The team asked for: crews that are really chosen (missions, invites, roles, tasks, notes, a debrief; other
