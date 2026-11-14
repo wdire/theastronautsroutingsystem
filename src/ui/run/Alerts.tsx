@@ -37,7 +37,7 @@ export function Alerts({ inVisor = false }: { inVisor?: boolean }) {
       className={cn(
         'panel pointer-events-auto absolute left-1/2 w-[min(27rem,calc(100vw-1.5rem))] -translate-x-1/2 border-l-4 p-3.5',
         look.border,
-        centred ? 'top-[26%] shadow-2xl' : inVisor ? 'top-16' : 'top-3 max-md:top-[7.75rem]',
+        centred ? 'top-[26%] shadow-2xl' : inVisor ? 'top-16 max-md:top-[9.75rem]' : 'top-3 max-md:top-[7.75rem]',
       )}
     >
       <div className="flex items-start gap-2.5">

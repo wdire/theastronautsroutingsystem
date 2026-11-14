@@ -60,6 +60,54 @@ export function HowPanel() {
         </P>
         <Limits>Nobody has walked on Mars. These are Earth and Apollo figures scaled, and they are estimates.</Limits>
       </Section>
+      <Section id="how-budget" title="The trip budget" hint="Time, oxygen, power, water and dose along a route">
+        <P>
+          The budget walks the route with the clock running. Speed comes from the slope under each stretch. On foot, oxygen follows the effort of walking that
+          slope; seated in a rover the crew breathes at rest; work at a stop costs more. A vehicle spends energy to roll and to climb, runs its systems, and
+          gains a little from its solar panels, less through dust.
+        </P>
+        <P>
+          A plan works if nothing runs out and it keeps a fifth of the oxygen in reserve. The point of no return is the last place from which the walk home,
+          over the same ground the other way, still leaves that reserve.
+        </P>
+        <P>A plan made with no hour chosen leaves on the first morning the whole trip fits in daylight, half an hour after sunrise.</P>
+        <Limits>
+          Suit air, scrubber life, battery sizes and water use are planning figures from published NASA studies and from Apollo, not measurements from Mars. Dust on
+          the solar panels and the rover resting at night are assumptions.
+        </Limits>
+      </Section>
+      <Section id="how-range" title="Walking range and the walk-home limit" hint="The dashed rings round the start">
+        <P>
+          The rings show how far two people in suits get on foot in 1, 2 and 4 hours, timed step by step over the real ground. Steep ground pulls a ring in.
+        </P>
+        <P>
+          A crewed rover gets one ring: the furthest point from which its crew could walk home on suit air if the rover failed. Apollo crews drove by the
+          same rule.
+        </P>
+      </Section>
+      <Section id="how-mission" title="Running a mission" hint="The simulation, its events and the base">
+        <P>
+          Start plays the budget back in simulated time: the crew is where the budget says it is at each moment, and has what the budget says it has left. Nobody
+          is on Mars; nothing here is telemetry.
+        </P>
+        <P>
+          Events are drawn from a fixed sequence for each plan, so the same plan meets the same dust devil. The app also looks ahead along the route and warns of
+          steep ground, the point of no return, sunset and low reserves before the crew reaches them.
+        </P>
+        <P>
+          Alerts come in four levels: note, advisory, caution and warning. A warning holds the mission until it is answered. A new route is drawn on the map with
+          what it costs before the crew takes it.
+        </P>
+        <P>The base answers from the crew’s own numbers by fixed rules. It is not a language model and knows nothing else.</P>
+        <Limits>Dust devils, storms and particle events are illustrative: their timing and size are invented, not forecast.</Limits>
+      </Section>
+      <Section id="how-validate" title="Checked against Perseverance" hint="How close the planner comes to a real drive">
+        <P>
+          In Discover, the app routes five stretches of Perseverance’s drive between the same two ends and measures how far its line lies from the rover’s: the
+          typical distance, and the share of the plan within 300 m.
+        </P>
+        <Limits>The rover detoured for science and for hazards the size of a wheel. A gap does not always mean the planner is wrong.</Limits>
+      </Section>
       <Section id="how-view" title="Rover View" hint="What is real and what is drawn in">
         <P>
           The shape of the ground is the real terrain model, at true scale. Its colour is the orbital image, shifted to the butterscotch tone the rovers'

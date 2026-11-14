@@ -376,7 +376,7 @@ export async function mountVisor(canvas: HTMLCanvasElement, options: VisorOption
         const dist = party.sizeM * (orbit ? 2.1 : 1.5) + (orbit ? 6 : 3.5);
         pos.x = f.x + Math.sin(away) * dist;
         pos.z = f.z - Math.cos(away) * dist;
-        eyeAbove = orbit ? 3.6 : 2.5;
+        eyeAbove = orbit ? 3.8 : 2.8;
         // Look at the party's shoulders from wherever the camera has ended up.
         viewYaw = away + Math.PI;
         viewPitch = Math.atan2(eyeY - (f.y + 1.3), dist) + pitch;

@@ -6,7 +6,9 @@ import type { GeologyData } from '@/engines/geology';
 import { marsTime } from '@/engines/marsTime';
 import type { RouteAlternative, TripResult, TripWarning, Vehicle } from '@/engines/types';
 import { distanceM } from '@/lib/geo';
-import { fmtClock, fmtDeg, fmtDistance, fmtDuration, fmtNumber, fmtPercent } from '@/lib/format';
+import { cmesDuring } from '@/engines/spaceWeather';
+import { useSpaceWeather } from '@/ui/hooks/useSpaceWeather';
+import { fmtClock, fmtDeg, fmtDistance, fmtDuration, fmtNumber, fmtPercent, fmtUtc } from '@/lib/format';
 import { cn } from '@/lib/cn';
 import { SEVERITY, SEVERITY_ORDER } from '@/ui/alerts/severity';
 import { Section } from '@/ui/shell/Section';
@@ -86,6 +88,23 @@ function Warnings({ warnings, skipFirst }: { warnings: readonly TripWarning[]; s
   );
 }
 
+/** A live warning: NASA forecasts a solar storm cloud at Mars while this crew would be out. */
+function SolarStormNote({ departUtcMs, arriveUtcMs }: { departUtcMs: number; arriveUtcMs: number }) {
+  const weather = useSpaceWeather();
+  const cme = weather ? cmesDuring(weather, departUtcMs, arriveUtcMs)[0] : undefined;
+  if (!cme) return null;
+  const look = SEVERITY.caution;
+  return (
+    <p className={cn('mt-3 flex items-start gap-2 rounded-md border p-2.5 text-[12.5px] leading-relaxed', look.border, look.bg)}>
+      <look.icon className={cn('mt-0.5 size-3.5 shrink-0', look.text)} aria-hidden />
+      <span>
+        <span className="font-medium">Live from NASA:</span> a solar storm cloud is forecast to reach Mars on {fmtUtc(cme.arrivalUtcMs)}, while this crew is out. Expect a higher radiation dose than the
+        budget shows, or leave on another day.
+      </span>
+    </p>
+  );
+}
+
 function Briefing({ alt, vehicle }: { alt: RouteAlternative; vehicle: Vehicle }) {
   const [geo, setGeo] = useState<GeologyData | null>(null);
   useEffect(() => {
@@ -143,6 +162,7 @@ export function Budget({ alt, vehicle }: { alt: RouteAlternative; vehicle: Vehic
       </dl>
       <Profile path={alt.path} stopIndices={alt.stopIndices} trip={trip} comfortDeg={vehicle.comfortSlopeDeg} blockDeg={vehicle.blockSlopeDeg} />
       <Warnings warnings={trip.warnings} skipFirst={!trip.feasible} />
+      <SolarStormNote departUtcMs={(t.arriveUtcMs ?? 0) - t.durationS * 1000} arriveUtcMs={t.arriveUtcMs} />
       <div className="-mx-4 mt-3">
         <Section id="route-briefing" title="Briefing" hint="The route in a few sentences">
           <Briefing alt={alt} vehicle={vehicle} />

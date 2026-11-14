@@ -1,4 +1,4 @@
-import { Globe2, Link2, Menu, Moon, Sun } from 'lucide-react';
+import { Globe2, Link2, Menu, Moon, Sun, Volume2, VolumeX } from 'lucide-react';
 import { toast } from 'sonner';
 import {
   DropdownMenu,
@@ -7,11 +7,9 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '@/ui/components/ui/dropdown-menu';
-import { DOCK_TABS } from '@/ui/dock/tabs';
 import { getMap } from '@/map/instance';
 import { flyOut } from '@/map/camera';
 import { useApp } from '@/store';
-import { useIsPhone } from '@/ui/hooks/useMediaQuery';
 
 async function copyLink(): Promise<void> {
   try {
@@ -25,9 +23,8 @@ async function copyLink(): Promise<void> {
 /** The menu behind the button in the search box. On a phone it also holds the panel tabs. */
 export function MainMenu() {
   const theme = useApp((s) => s.theme);
+  const spoken = useApp((s) => s.spokenAlerts);
   const setTheme = useApp((s) => s.setTheme);
-  const openDock = useApp((s) => s.openDock);
-  const phone = useIsPhone();
 
   return (
     <DropdownMenu>
@@ -41,17 +38,6 @@ export function MainMenu() {
         </button>
       </DropdownMenuTrigger>
       <DropdownMenuContent align="start" sideOffset={10} alignOffset={-4} className="w-60">
-        {phone ? (
-          <>
-            {DOCK_TABS.map((tab) => (
-              <DropdownMenuItem key={tab.id} onSelect={() => openDock(tab.id)}>
-                <tab.icon aria-hidden />
-                {tab.title}
-              </DropdownMenuItem>
-            ))}
-            <DropdownMenuSeparator />
-          </>
-        ) : null}
         <DropdownMenuItem
           onSelect={() => {
             const map = getMap();
@@ -66,6 +52,10 @@ export function MainMenu() {
           Copy a link to this view
         </DropdownMenuItem>
         <DropdownMenuSeparator />
+        <DropdownMenuItem onSelect={() => useApp.setState({ spokenAlerts: !spoken })}>
+          {spoken ? <VolumeX aria-hidden /> : <Volume2 aria-hidden />}
+          {spoken ? 'Stop speaking alerts' : 'Speak mission alerts aloud'}
+        </DropdownMenuItem>
         <DropdownMenuItem onSelect={() => setTheme(theme === 'dark' ? 'light' : 'dark')}>
           {theme === 'dark' ? <Sun aria-hidden /> : <Moon aria-hidden />}
           {theme === 'dark' ? 'Light panels' : 'Dark panels'}

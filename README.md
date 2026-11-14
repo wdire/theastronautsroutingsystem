@@ -27,14 +27,20 @@ point and look around.
   to rest, and an illustrative base (habitat, crew in Z-2 suits, pressurised rover) at a mission's start.
 - The Mars clock reads NASA's DONKI database every half hour and says when a solar storm cloud is forecast
   at Mars.
+- The trip budget says whether a plan works: time, oxygen or battery, water, radiation dose, a height
+  profile, and the point of no return. A plan made at night leaves the first morning it fits in daylight.
+- Start runs the mission in simulated time at 1x to 100x. A run panel follows the crew; alerts in four
+  levels warn before trouble; a dust devil on the route offers a way round that is drawn before it is taken;
+  the base answers on the radio. Ride along opens the 3D view on the crew with a helmet display.
+- Walking range rings, a flight along the route, GPX, GeoJSON and a printable cuff card, and a check of the
+  planner against five stretches of Perseverance's real drive.
 - On a phone there is a bottom bar, one sheet with three heights, and a thumb pad for walking in Rover View.
 
-## What is not built yet
+## What is not built
 
-- The trip budget: time, oxygen, power, water and radiation along a route.
-- Running a mission in simulated time, with warnings, re-routing and a base on the radio. It needs the budget.
-- The helmet display over the 3D view, and crews that walk (the suit model stands still).
-- GPX and cuff-card exports, and the check of the router against Perseverance's real drive.
+- A second tab as a base console. The channel that would keep two tabs in step exists; the screen does not.
+- Sound effects, the moons and dust in the 3D view, and photo cards beside the rover's stops there.
+- A limit for cold: the temperature is worked out along a route and shown, and nothing acts on it.
 
 `docs/progress.md` has the detail.
 

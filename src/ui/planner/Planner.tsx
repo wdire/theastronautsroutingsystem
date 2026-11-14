@@ -237,7 +237,7 @@ function RouteResult() {
       <Exports alt={chosen} hasBudget={route.hasBudget} />
       {!route.hasBudget ? (
         <p className="mt-3 text-xs leading-relaxed text-faint">
-          The route follows the real terrain at {fmtNumber(route.cellM)} m detail. Time, oxygen, power and radiation for it are not part of this build yet.
+          The route follows the real terrain at {fmtNumber(route.cellM)} m detail. The trip budget did not load, so there is no time, oxygen, power or radiation for it.
         </p>
       ) : null}
     </div>

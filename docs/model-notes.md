@@ -43,6 +43,32 @@ curve is applied. Orbital colour is regraded to the tone rover cameras record (`
 Rocks, ripples, grains and rock layering are procedural: placed by a hash of position so they are stable,
 more and larger on steep ground, and labelled in the view as drawn in.
 
-## Not built yet
-The trip computer (time, oxygen, power, water and dose along a route), the mission simulation that depends on
-it, live space weather, exports and the validation against Perseverance's drive. See `docs/progress.md`.
+## The trip budget
+`src/engines/tripComputer.ts` integrates along the route with the clock advancing. Speed is taken from the grade
+measured over at least 450 m. Walkers spend oxygen at the Pandolf rate for each stretch; seated crew at 150 W;
+work at a stop at 300 W. Vehicles spend rolling and grade energy and a hotel load, and recharge from the sun by
+its angle and the dust optical depth. A 20% reserve of oxygen is kept. The point of no return costs the walk
+back over the same ground the other way. `departure.ts` moves a start to 30 minutes after a sunrise from which
+the trip ends 15 minutes before sunset.
+
+Where it stops being reliable: suit air (0.9 kg a person), scrubber life (8 h), battery sizes and water use are
+planning figures, not measurements. Dust loss on panels (60% of the clear-sky loss per unit of optical depth),
+the water rates and the robot rover sleeping at night are assumptions marked in the code. There is no limit for
+cold: the temperature is reported in each sample and not acted on. A trip is cut off after 60 sols.
+
+## The simulation
+`src/sim` plays a trip budget back: position and consumables at a time are read from the budget's samples, so
+the mission cannot drift from what the plan said. After a reroute the new budget starts from full tanks and
+what was already spent is carried, so oxygen and dose stay continuous. Events come from a seeded generator:
+the same plan meets the same events. Their timing and size are invented. The base's replies are rules over the
+crew's state.
+
+## Validation
+`src/engines/validate.ts` resamples a planned track every 50 m and the rover's track every 20 m and reports the
+median and 90th percentile distance from the plan to the track and the share within 300 m. The rover left the
+easy line for science and for hazards no orbital image shows, so this measures agreement, not error.
+
+## Not built
+A second tab as a base console (`src/sim/sync.ts` has the channel; there is no screen for it), sound effects,
+moons and dust motes in the 3D view, photo cards beside the rover's stops in the 3D view, and a limit for cold.
+See `docs/progress.md`.

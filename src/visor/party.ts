@@ -183,7 +183,7 @@ export function createParty(scene: Scene, vehicle: VehicleId, heightAt: (x: numb
     /** Eye height of whoever the first-person camera sits in, m. */
     eyeM: VEHICLES[vehicle].eyeHeightM,
     /** How much room the party takes, for the chase camera's distance. */
-    sizeM: walkers ? 2 : Math.max(...(MODELS[model].stance ? [MODELS[model].stance.length, MODELS[model].stance.width] : [1.5])) + 2,
+    sizeM: walkers ? 2 + FILE_GAP_M : Math.max(...(MODELS[model].stance ? [MODELS[model].stance.length, MODELS[model].stance.width] : [1.5])) + 2,
     dispose(): void {
       disposed = true;
       for (const m of members) {

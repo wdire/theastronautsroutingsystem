@@ -171,7 +171,7 @@ export function RunPanel() {
       ) : (
         <>
           <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
-            <div className="min-w-0 flex-1">
+            <div className="min-w-0 flex-1 max-md:basis-full">
               <p className="truncate text-[13.5px] font-semibold" aria-live="polite">
                 {stateWords(run, crew, prog.nextName)}
               </p>
