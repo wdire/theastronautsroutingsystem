@@ -64,7 +64,7 @@ def main() -> int:
     add_source(
         id="ground-detail-textures",
         name="Close-up ground detail (ambientCG Ground079S, Ground110, Rock062)",
-        mission="ambientCG (Lennart Demes)",
+        mission="ambientCG",
         product=", ".join(f"{a} ({w})" for a, w in MATERIALS.values()),
         url="https://ambientcg.com/",
         licence="CC0 1.0 (public domain dedication)",

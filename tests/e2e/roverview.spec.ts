@@ -15,11 +15,12 @@ test('Rover View stands on the ground, above it, and leaves the clock as it foun
   const view = page.getByRole('region', { name: 'Rover View' });
   await expect(view).toBeVisible();
   await page.waitForFunction(() => window.__areoVisor?.getState().ready === true, undefined, { timeout: 200_000 });
+  // It opens on the package, then HiRISE's own 1 m model arrives from USGS and replaces it.
+  await page.waitForFunction(() => window.__areoVisor?.getState().groundSource === 'HiRISE 1 m DTM', undefined, { timeout: 200_000 });
   const state = await page.evaluate(() => window.__areoVisor?.getState());
   // On Jezero's floor, on the finest terrain model, in daylight.
   expect(state?.elev).toBeGreaterThan(-2700);
   expect(state?.elev).toBeLessThan(-2300);
-  expect(state?.groundSource).toBe('HiRISE 1 m DTM');
   expect(state?.sunElevDeg).toBeGreaterThan(5);
   await expect(view.getByText(/Ground from the HiRISE 1 m DTM/)).toBeVisible();
 

@@ -6,6 +6,10 @@ that run side by side never fight over one file.
     python tools/sources.py --merge
 
 builds public/data/sources.json from every file in tools/sources.d, sorted by id.
+
+    python tools/sources.py --merge --docs
+
+also writes docs/data-sources.md from it.
 """
 
 from __future__ import annotations
@@ -75,11 +79,37 @@ def merge() -> list[dict]:
     return entries
 
 
+DOCS = ROOT / "docs" / "data-sources.md"
+
+
+def write_docs(entries: list[dict]) -> None:
+    """docs/data-sources.md: a table of every dataset, then its notes, ordered by name."""
+    rows = sorted(entries, key=lambda e: e["name"].lower())
+    cell = lambda v: str(v).replace("|", "\\|").replace("\n", " ")
+    lines = [
+        "# Data sources",
+        "",
+        "Every dataset in the app, where it came from and under what terms. This file is generated from",
+        "`public/data/sources.json`, which the tools under `tools/` write as they fetch each product",
+        "(`python tools/sources.py --merge --docs`).",
+        "",
+        "| Dataset | Mission | Product | Licence | Retrieved |",
+        "|---|---|---|---|---|",
+    ]
+    lines += [f"| [{cell(e['name'])}]({e['url']}) | {cell(e['mission'])} | {cell(e['product'])} | {cell(e['licence'])} | {e['retrieved']} |" for e in rows]
+    lines += ["", "## Notes", ""]
+    lines += [f"- **{e['name']}.** {e['notes']}" for e in rows]
+    DOCS.write_text("\n".join(lines) + "\n", encoding="utf-8")
+
+
 if __name__ == "__main__":
     if "--merge" in sys.argv[1:]:
         merged = merge()
         print(f"wrote {MERGED.relative_to(ROOT)}: {len(merged)} sources")
         for e in merged:
             print(f"  {e['id']}: {e['name']}")
+        if "--docs" in sys.argv[1:]:
+            write_docs(merged)
+            print(f"wrote {DOCS.relative_to(ROOT)}")
     else:
         print(__doc__)

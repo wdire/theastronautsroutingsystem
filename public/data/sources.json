@@ -40,6 +40,16 @@
     "retrieved": "2026-11-14"
   },
   {
+    "id": "ground-detail-textures",
+    "name": "Close-up ground detail (ambientCG Ground079S, Ground110, Rock062)",
+    "mission": "ambientCG",
+    "product": "Ground079S (fine regolith with grit and small pebbles), Ground110 (a pebble-strewn pavement), Rock062 (cracked, weathered bedrock)",
+    "url": "https://ambientcg.com/",
+    "licence": "CC0 1.0 (public domain dedication)",
+    "notes": "Shape only: their surface normals, height and brightness add grain below the 25 cm of HiRISE within a few tens of metres of the viewer in Rover View. They are photographs of Earth materials, drawn in, not measured; the colour comes from the orbital data.",
+    "retrieved": "2026-11-14"
+  },
+  {
     "id": "hrsc-mola-blend-dem",
     "name": "Mars HRSC and MOLA blended digital elevation model, 200 m, version 2",
     "mission": "Mars Express (HRSC) and Mars Global Surveyor (MOLA)",
@@ -116,7 +126,7 @@
     "product": "MMGIS layers M20_traverse.json and M20_waypoints.json",
     "url": "https://science.nasa.gov/mission/mars-2020-perseverance/location-map/",
     "licence": "Public domain (NASA/JPL-Caltech).",
-    "notes": "From https://mars.nasa.gov/mmgis-maps/M20/Layers/json/M20_traverse.json and https://mars.nasa.gov/mmgis-maps/M20/Layers/json/M20_waypoints.json. The drive is thinned to one point every 2 m, and segments the source repeats for drives that ran over several sols are kept once, so the drawn line is a little shorter than the rover's odometry in the waypoints. Heights are metres above the Mars areoid. Covers sols 13 to 2022 (45.246 km).",
+    "notes": "From https://mars.nasa.gov/mmgis-maps/M20/Layers/json/M20_traverse.json and https://mars.nasa.gov/mmgis-maps/M20/Layers/json/M20_waypoints.json. The drive is thinned to one point every 2 m, and segments the source repeats for drives that ran over several sols are kept once, so the drawn line is a little shorter than the rover's odometry in the waypoints. Heights are metres above the Mars areoid. Covers sols 13 to 2022 (45.246 km). The app asks /api/traverse for the current track first (the same steps, cached for six hours) and uses this copy when that does not answer.",
     "retrieved": "2026-11-14"
   },
   {
@@ -146,7 +156,17 @@
     "product": "JEZ_hirise_soc_006_DTM_MOLAtopography_DeltaGeoid_1m_Eqc_latTs0_lon0_blend40",
     "url": "https://planetarymaps.usgs.gov/mosaic/mars2020_trn/HiRISE/JEZ_hirise_soc_006_DTM_MOLAtopography_DeltaGeoid_1m_Eqc_latTs0_lon0_blend40.tif",
     "licence": "Public domain (NASA / USGS); credit the instrument teams named (USGS Astrogeology; Fergason et al. 2020)",
-    "notes": "Elevation at zoom 14, read at 5 m by HTTP ranges (every fifth row, columns averaged in fives). Level-matched to the CTX model beneath it and feathered at its edge.",
+    "notes": "Elevation at zoom 14, read at 5 m by HTTP ranges (every fifth row, columns averaged in fives). Level-matched to the CTX model beneath it and feathered at its edge. Also read live at full resolution by /api/hirise (HTTP ranges, one per row, cut into 512 px tiles and cached for a year): Rover View's close and near ground, and the map's terrain at zoom 15 and 16. Levelled onto the package by the median difference over each patch or tile.",
+    "retrieved": "2026-11-14"
+  },
+  {
+    "id": "m2020-hirise-ortho",
+    "name": "Mars 2020 terrain relative navigation HiRISE orthomosaic of Jezero, 25 cm",
+    "mission": "Mars 2020 / Mars Reconnaissance Orbiter (HiRISE)",
+    "product": "JEZ_hirise_soc_006_orthoMosaic_25cm_Eqc_latTs0_lon0_first",
+    "url": "https://planetarymaps.usgs.gov/mosaic/mars2020_trn/HiRISE/JEZ_hirise_soc_006_orthoMosaic_25cm_Eqc_latTs0_lon0_first.tif",
+    "licence": "Public domain (NASA / USGS); credit the instrument teams named (USGS Astrogeology; Fergason et al. 2020)",
+    "notes": "Read live by /api/hirise from USGS's copy on Amazon S3 (HTTP ranges, one per row; 25 cm to 8 m in six levels, 512 px tiles, cached for a year). One band (HiRISE RED): its brightness, as a ratio to its own local mean, is laid over the orbital colour, in Rover View within 2 km of the viewer and on the map from zoom 15. Not in the package.",
     "retrieved": "2026-11-14"
   },
   {
@@ -176,7 +196,7 @@
     "product": "3D Models/Mars 2020 Perseverance Rover/Mars 2020 Perseverance Rover.glb",
     "url": "https://github.com/nasa/NASA-3D-Resources/tree/master/3D%20Models/Mars%202020%20Perseverance%20Rover",
     "licence": "NASA media, free to use under NASA's media usage guidelines (not copyrighted in the United States).",
-    "notes": "Robotic rover in the visor. Optimised with gltf-transform: meshopt compression, 1024 px WebP textures, meshes simplified by half.",
+    "notes": "Robotic rover in the visor; its six wheels turn as it drives. Optimised with gltf-transform: meshopt compression, 2048 px WebP textures, no mesh simplification.",
     "retrieved": "2026-11-14"
   },
   {
@@ -186,7 +206,7 @@
     "product": "3D Models/Space Exploration Vehicle/Space Exploration Vehicle.glb",
     "url": "https://github.com/nasa/NASA-3D-Resources/tree/master/3D%20Models/Space%20Exploration%20Vehicle",
     "licence": "NASA media, free to use under NASA's media usage guidelines (not copyrighted in the United States).",
-    "notes": "Pressurised rover in the visor. Optimised with gltf-transform: meshopt compression, 1024 px WebP textures, meshes simplified by half.",
+    "notes": "Pressurised rover in the visor; its six wheels turn as it drives. Optimised with gltf-transform: meshopt compression, 2048 px WebP textures, no mesh simplification.",
     "retrieved": "2026-11-14"
   },
   {

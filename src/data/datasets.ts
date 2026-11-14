@@ -134,7 +134,26 @@ function load<T>(path: string): Promise<T> {
 export const loadNames = () => load<NamedFeature[]>('/data/names.json');
 export const loadPlaces = () => load<Place[]>('/data/places.json');
 export const loadSamples = () => load<SampleCore[]>('/data/samples.json');
-export const loadTraverse = () => load<Traverse>('/data/traverses/m20.json');
+/**
+ * Perseverance's drive: NASA's current track through /api/traverse when it answers in time and is
+ * newer, else the copy bundled with the app. Asked once per visit.
+ */
+let traverse: Promise<Traverse> | null = null;
+export function loadTraverse(): Promise<Traverse> {
+  traverse ??= (async () => {
+    const bundled = load<Traverse>('/data/traverses/m20.json');
+    const live = (await tryFetchJson('/api/traverse', AbortSignal.timeout(6000))) as Partial<Traverse> | null;
+    const copy = await bundled.catch(() => null);
+    const newest = (t: Partial<Traverse> | null | undefined) => t?.waypoints?.[t.waypoints.length - 1]?.sol ?? -1;
+    if (live && Array.isArray(live.path) && live.path.length > 1 && Array.isArray(live.waypoints) && newest(live) >= newest(copy)) return live as Traverse;
+    if (copy) return copy;
+    return bundled;
+  })();
+  traverse.catch(() => {
+    traverse = null;
+  });
+  return traverse;
+}
 export const loadCaves = () => load<PointOfInterest[]>('/data/caves.json');
 export const loadSites = () => load<PointOfInterest[]>('/data/sites.json');
 export const loadWeather = () => load<WeatherData>('/data/weather.json');

@@ -10,8 +10,10 @@ point and look around.
 ## What works today
 
 - The app opens on Mars from orbit and flies down to Jezero on one map.
-- The map draws on imagery from Viking, THEMIS, CTX and HiRISE, with elevation down to 1 m around the rover's
-  path. It is lit as at mid-morning so dark ground reads, and can follow the real sun at Jezero instead.
+- The map draws on imagery from Viking, THEMIS, CTX and HiRISE. Over Jezero it keeps sharpening as you zoom in:
+  from zoom 15 its detail comes from the 25 cm HiRISE mosaic and its terrain from HiRISE's 1 m model, both
+  streamed from USGS, down to zoom 19 in 3D at true scale. It is lit as at mid-morning so dark ground reads,
+  and can follow the real sun at Jezero instead.
   Search finds named features, the places Perseverance studied, its samples, and coordinates.
 - Click anywhere for a place card: the rover's own photos if it was there, a short summary and four numbers.
   Geology, modelled conditions, sources and nearby places open on request. Under the modelled conditions are
@@ -22,9 +24,13 @@ point and look around.
 - The layers are the USGS geologic map with its legend, two CRISM mineral maps, slope for the chosen vehicle,
   place names and Perseverance's track.
 - Discover follows Perseverance sol by sol, with the photos it took that day fetched from NASA.
-- Rover View is a 3D view from eye level, built from the same elevation data, with the sky and light of the
-  hour you choose. NASA's 3D models stand in it: Perseverance where it last reported, Ingenuity where it came
-  to rest, and an illustrative base (habitat, crew in Z-2 suits, pressurised rover) at a mission's start.
+- Rover View is a 3D view from eye level, with the sky and light of the hour you choose. Over Jezero the ground
+  under your feet is HiRISE's own 1 m model draped with its 25 cm image, streamed in as you walk; it opens on
+  the coarser package first and sharpens when the tiles arrive. The mouse wheel lifts you up to 150 m for a
+  drone's view. Rocks are scattered where HiRISE shows broken ground and kept off the sand. NASA's 3D models
+  stand in it: Perseverance where it last reported, Ingenuity where it came to rest, and an illustrative base
+  (habitat, crew in Z-2 suits, pressurised rover) at a mission's start. Rover wheels turn as they drive, and the
+  crew walk with their boots planted.
 - The Mars clock reads NASA's DONKI database every half hour and says when a solar storm cloud is forecast
   at Mars.
 - The trip budget says whether a plan works: time, oxygen or battery, water, radiation dose, a height
@@ -78,15 +84,35 @@ The app is a static site plus two small functions under `api/`, set up for Verce
 The tile package under `public/region` is about 100 MB in 8,400 files. Deploying from the Git repository
 has no trouble with that; the Vercel CLI's upload limit on the Hobby plan does.
 
+## Where the data comes from, and how fresh it is
+
+Data that changes is asked for while the app runs. Data that does not change is shipped with the app, because
+its sources are multi-gigabyte files rather than services a browser can ask, and shipping it keeps the app fast
+and working offline.
+
+| What | How it arrives | How fresh |
+|---|---|---|
+| Space weather (solar storms, flares, particle events) | Live from NASA DONKI through `/api/spaceweather` | Re-asked every 30 minutes |
+| Rover weather stations (Perseverance MEDA, Curiosity REMS) | Live through `/api/weather`; `public/data/weather.json` is the fallback and holds each station's long-term extremes | Hourly. These are measurements of past sols; NASA publishes no forecast for Mars. MEDA's feed has not been updated by NASA since April 2024 |
+| Perseverance's track and stops | Live from JPL's MMGIS layers through `/api/traverse`; `public/data/traverses/m20.json` is the fallback | Every six hours. The rover is still driving |
+| Perseverance's raw photos in Discover | Live from NASA's raw images feed, for whichever sol you pick | On request |
+| HiRISE 25 cm imagery and 1 m elevation over Jezero | Live from USGS through `/api/hirise`, cut into tiles | Fixed products: cached for a year |
+| CTX, HiRISE (global) and Viking detail elsewhere | Live from Esri and NASA Mars Trek tile services | Fixed products |
+| Base map and terrain (`public/region`, 100 MB) | Shipped. Built by `tools/build_region.py` from MOLA, HRSC, CTX, THEMIS and Viking mosaics, graded and level-matched | Fixed products |
+| Place names, geology, cave candidates, landing sites | Shipped (`public/data`) | Change rarely; rebuilt with the tools |
+| Named places, samples and their photos | Shipped. Written from NASA's mission pages, which have no API; the photos are one to three chosen frames per place | Historical; `tools/build_places.py` and `tools/build_samples.py` add new ones |
+
 ## Data
 
-All data is from NASA and USGS: MOLA, HRSC, CTX, HiRISE, THEMIS, Viking, CRISM, the Mars 2020 terrain
+All data is from NASA and USGS, apart from three CC0 close-up textures that add grain below what HiRISE can
+see: MOLA, HRSC, CTX, HiRISE, THEMIS, Viking, CRISM, the Mars 2020 terrain
 models, Perseverance's localisation and raw images, the IAU Gazetteer and the USGS geologic map. Each product,
 its source and its licence are listed in [docs/data-sources.md](docs/data-sources.md).
 
 Everything worked out from that data (temperature, dust, radiation, walking effort, routes) is labelled
 "modelled" in the app. [docs/model-notes.md](docs/model-notes.md) says how each model works and where it
-stops being reliable. In Rover View the shape of the ground is real; rocks and fine texture are drawn in.
+stops being reliable. In Rover View the shape of the ground and the HiRISE image on it are real; rocks and the grain below 25 cm
+are drawn in.
 
 NASA does not endorse this project.
 

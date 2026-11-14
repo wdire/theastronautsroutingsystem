@@ -1,7 +1,7 @@
 {
   "id": "ground-detail-textures",
   "name": "Close-up ground detail (ambientCG Ground079S, Ground110, Rock062)",
-  "mission": "ambientCG (Lennart Demes)",
+  "mission": "ambientCG",
   "product": "Ground079S (fine regolith with grit and small pebbles), Ground110 (a pebble-strewn pavement), Rock062 (cracked, weathered bedrock)",
   "url": "https://ambientcg.com/",
   "licence": "CC0 1.0 (public domain dedication)",

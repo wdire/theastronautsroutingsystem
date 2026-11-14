@@ -1,0 +1,10 @@
+{
+  "id": "m2020-hirise-ortho",
+  "name": "Mars 2020 terrain relative navigation HiRISE orthomosaic of Jezero, 25 cm",
+  "mission": "Mars 2020 / Mars Reconnaissance Orbiter (HiRISE)",
+  "product": "JEZ_hirise_soc_006_orthoMosaic_25cm_Eqc_latTs0_lon0_first",
+  "url": "https://planetarymaps.usgs.gov/mosaic/mars2020_trn/HiRISE/JEZ_hirise_soc_006_orthoMosaic_25cm_Eqc_latTs0_lon0_first.tif",
+  "licence": "Public domain (NASA / USGS); credit the instrument teams named (USGS Astrogeology; Fergason et al. 2020)",
+  "notes": "Read live by /api/hirise from USGS's copy on Amazon S3 (HTTP ranges, one per row; 25 cm to 8 m in six levels, 512 px tiles, cached for a year). One band (HiRISE RED): its brightness, as a ratio to its own local mean, is laid over the orbital colour, in Rover View within 2 km of the viewer and on the map from zoom 15. Not in the package.",
+  "retrieved": "2026-11-14"
+}

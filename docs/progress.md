@@ -36,6 +36,33 @@ new folder under `src/ui`, or Tailwind misses the new classes); screenshots with
 The model that wrote most of this stopped on the trip-budget content; Opus subagents wrote `tripComputer.ts`,
 `departure.ts`, `export.ts`, `validate.ts`, `missions.ts`, `alerts.ts` and `src/sim/*` without trouble.
 
+## Third session (2026-11-14, evening): realism pass
+
+The team asked for Rover View, the models and the map to look like NASA's own 3D work, and for the data to
+be live wherever it changes. Done:
+- `/api/hirise` (Node function, region pdx1 in vercel.json) cuts 512 px tiles from USGS's Mars 2020 HiRISE
+  mosaics of Jezero (25 cm ortho, 1 m DTM) by HTTP ranges; cached for a year. The dev server keeps immutable
+  API answers on disk under `tools/.cache/api`. Cold tiles take about 5 s from Turkey; on Vercel next to S3
+  they should take well under one.
+- Rover View: a fourth ground layer (`close`, 256 m, 0.5 m triangles, HiRISE 1 m model and 25 cm image); the
+  near layer uses HiRISE at 4 m and 2 m. Both open on the package and are rebuilt with HiRISE when its tiles
+  arrive. Close-up grain from three CC0 ambientCG materials (`tools/build_ground_textures.py`). Rock density
+  follows HiRISE roughness. N8AO ambient occlusion, SMAA, a PMREM sky environment map, a colour grade toward
+  Mastcam-Z. Mouse wheel lifts the eye to 150 m. n8ao imports `postprocessing`, which does not accept three
+  0.187: it is aliased to `src/lib/shims/postprocessing.ts`.
+- Models: Perseverance and the SEV rebuilt at full detail with named parts kept (the SEV's texture had been
+  torn by simplifying); wheels are cut out on load (`src/visor/wheels.ts`) and roll with distance. The Z-2
+  crew walk with two-bone IK and planted boots; standing crew breathe and look about.
+- Map: HiRISE detail over Jezero from zoom 15, HiRISE terrain to zoom 16, max zoom 19, relief at true scale
+  past 16.5. The map's terrain is lifted 2.6 km (`MAP_DATUM_LIFT_M`): with Jezero 2.5 km below the datum the
+  globe camera drew nothing when close in and tilted.
+- Live track: `/api/traverse` (MMGIS, six-hour cache); the bundled copy is the fallback.
+- README has a table of what is live and what is shipped, and why.
+
+Open from this session: the near layer's image is 2 m (HiRISE level 3) to keep cold loads short; at drone height
+it looks soft beyond 128 m. Rocks are still drawn in, not placed from HiRISE boulders. The Ingenuity rotor still
+does not turn.
+
 ## Ledger
 
 Plan: docs/superpowers/plans/2026-11-14-areo.md. One line per task, then rulings.
