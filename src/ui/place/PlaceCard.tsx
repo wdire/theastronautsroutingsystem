@@ -1,8 +1,9 @@
 import { useIsPhone } from '@/ui/hooks/useMediaQuery';
 import { StationReadings } from './Stations';
 import { useEffect, useState, type ReactNode } from 'react';
-import { Binoculars, ExternalLink, Flag, Link2, MapPinPlus, Navigation, X, ZoomIn } from 'lucide-react';
+import { Binoculars, ExternalLink, House, Link2, MapPinPlus, Navigation, X, ZoomIn } from 'lucide-react';
 import { toast } from 'sonner';
+import { moveBaseTo } from '@/planner/moveBase';
 import { useApp } from '@/store';
 import { getMap } from '@/map/instance';
 import { containingFeature, nearby, resolvePlace, typeWord, type Neighbour, type PlaceView } from '@/data/places';
@@ -12,7 +13,7 @@ import { getCoverage } from '@/data/coverage';
 import { unitAt, type GeoUnit } from '@/engines/geology';
 import { conditionsAt } from '@/engines/environment';
 import { marsTime } from '@/engines/marsTime';
-import { LANDING_SITE, REGION, inBox } from '@/lib/constants';
+import { REGION, inBox } from '@/lib/constants';
 import { fmtClock, fmtDeg, fmtDistance, fmtElevation, fmtLatLon, fmtNumber, fmtTemp } from '@/lib/format';
 import { Button } from '@/ui/components/ui/button';
 import { Row, Section } from '@/ui/shell/Section';
@@ -169,13 +170,8 @@ export function PlaceCard() {
 
   const routeHere = () => {
     const s = useApp.getState();
-    if (!s.plan.start) s.setStart({ lon: LANDING_SITE[0], lat: LANDING_SITE[1], name: 'Octavia E. Butler Landing' });
     s.addStop(asWaypoint);
     s.openPlanner(true);
-  };
-  const startHere = () => {
-    useApp.getState().setStart(asWaypoint);
-    useApp.getState().openPlanner(true);
   };
   const addStop = () => {
     useApp.getState().addStop(asWaypoint);
@@ -222,8 +218,8 @@ export function PlaceCard() {
             <Navigation aria-hidden />
             Route here
           </Button>
-          <ActionButton icon={<Flag aria-hidden />} onClick={startHere} disabled={!inRegion}>
-            Start here
+          <ActionButton icon={<House aria-hidden />} onClick={() => void moveBaseTo(v.lon, v.lat)} disabled={!inRegion}>
+            Put the base here
           </ActionButton>
           <ActionButton icon={<MapPinPlus aria-hidden />} onClick={addStop} disabled={!inRegion}>
             Add stop

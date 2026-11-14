@@ -3,6 +3,12 @@ import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
 import { MeshoptDecoder } from 'three/examples/jsm/libs/meshopt_decoder.module.js';
 import { MODELS, type ModelName } from './modelSpecs';
 import { separateWheels } from './wheels';
+import { landingPad, radioMast, solarArray } from './baseProps';
+
+/** The base parts with no model file. */
+function drawn(name: ModelName): Group {
+  return name === 'solar' ? solarArray() : name === 'pad' ? landingPad() : radioMast();
+}
 
 const loader = new GLTFLoader();
 loader.setMeshoptDecoder(MeshoptDecoder);
@@ -36,6 +42,11 @@ export function loadModel(name: ModelName): Promise<Group> {
   let pending = cache.get(name);
   if (!pending) {
     const spec = MODELS[name];
+    if (spec.url === null) {
+      pending = Promise.resolve(drawn(name));
+      cache.set(name, pending);
+      return pending;
+    }
     pending = loader.loadAsync(spec.url).then((gltf) => {
       const inner = gltf.scene;
       inner.scale.multiplyScalar(spec.scale);
@@ -85,6 +96,7 @@ function wheels(group: Group, radius: number, halfWidth: number, zs: number[]): 
 
 /** A plain drawn shape of the right size, shown while the real model downloads. Front to the north. */
 export function standIn(name: ModelName): Group {
+  if (MODELS[name].url === null) return drawn(name);
   const g = new Group();
   g.name = `${name}-stand-in`;
   if (name === 'perseverance') {

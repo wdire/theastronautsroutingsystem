@@ -17,7 +17,7 @@ import { LayersPanel } from '@/ui/panels/LayersPanel';
 import { DiscoverPanel } from '@/ui/panels/DiscoverPanel';
 import { MissionsPanel } from '@/ui/panels/MissionsPanel';
 import { HowPanel } from '@/ui/panels/HowPanel';
-import { Route } from 'lucide-react';
+import { Home } from '@/ui/planner/Home';
 import { useIsPhone, useIsTouch } from '@/ui/hooks/useMediaQuery';
 import { PhoneChrome } from './PhoneChrome';
 import { FlyoverBar } from '@/ui/mapctl/FlyoverBar';
@@ -80,23 +80,12 @@ function DockColumn() {
 function LeftPanel() {
   const placeOpen = useApp((s) => s.placeId !== null);
   const plannerOpen = useApp((s) => s.plannerOpen);
-  const planned = useApp((s) => s.plan.stops.length + (s.plan.start ? 1 : 0));
-  const openPlanner = useApp((s) => s.openPlanner);
   const running = useApp((s) => s.world !== null);
   if (placeOpen) return <PlaceCard />;
   if (plannerOpen) return <Planner />;
   // While a mission runs the plan is not being made: the run panel has the floor.
   if (running) return null;
-  return (
-    <button
-      type="button"
-      onClick={() => openPlanner(true)}
-      className="panel flex h-11 items-center gap-2.5 self-start px-3.5 text-[13.5px] font-semibold transition-colors hover:bg-secondary"
-    >
-      <Route className="size-4 text-primary" aria-hidden />
-      {planned > 0 ? 'Open the mission plan' : 'Plan a mission'}
-    </button>
-  );
+  return <Home />;
 }
 
 function PickingHint() {
@@ -106,7 +95,7 @@ function PickingHint() {
   const verb = touch ? 'Tap' : 'Click';
   return (
     <div role="status" className="panel pointer-events-none absolute top-3 left-1/2 flex h-10 -translate-x-1/2 items-center gap-2 px-3.5 text-[13px] font-medium whitespace-nowrap max-md:top-[7.75rem]">
-      {picking === 'start' ? `${verb} the map to set the start.` : picking === 'stop' ? `${verb} the map to add a stop.` : `${verb} the map where you want to stand.`}
+      {picking === 'base' ? `${verb} the map where the base should stand.` : picking === 'stop' ? `${verb} the map to add a stop.` : `${verb} the map where you want to stand.`}
       {touch ? null : <span className="text-muted-foreground">Esc cancels</span>}
     </div>
   );

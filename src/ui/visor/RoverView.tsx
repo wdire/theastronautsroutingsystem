@@ -92,7 +92,7 @@ export default function RoverView() {
       app.setClockPaused(true);
     }
     // The scene’s rovers and base are worked out first, so the view can open beside one, not inside it.
-    void Promise.all([import('@/visor'), sceneProps(app.plan)])
+    void Promise.all([import('@/visor'), sceneProps(app.world?.run?.plan ?? app.plan, app.world?.run?.vehicle ?? null)])
       .then(async ([{ mountVisor }, props]) => {
         const stand = mission ? { lon, lat, headingDeg: 0 } : standpoint(lon, lat, props);
         const handle = await mountVisor(canvas, {

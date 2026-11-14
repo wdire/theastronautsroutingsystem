@@ -1,7 +1,8 @@
-export type ModelName = 'perseverance' | 'ingenuity' | 'sev' | 'habitat' | 'z2';
+export type ModelName = 'perseverance' | 'ingenuity' | 'sev' | 'habitat' | 'z2' | 'solar' | 'pad' | 'mast';
 
 export interface ModelSpec {
-  url: string;
+  /** The NASA model to load; null for the parts of a base drawn here (src/visor/baseProps.ts). */
+  url: string | null;
   /** The file's units to metres. */
   scale: number;
   /** Turn about the vertical so the model's front faces north (-z) before any heading is applied. */
@@ -34,6 +35,10 @@ export const MODELS: Record<ModelName, ModelSpec> = {
   // Modelled in centimetres.
   habitat: { url: '/models/habitat.glb', scale: 0.03, yawDeg: 0, stance: null, clearM: 8 },
   z2: { url: '/models/z2.glb', scale: 1, yawDeg: 180, stance: null, clearM: 0.8 },
+  // Drawn, not loaded. Wide things lean with the ground under their corners, as a vehicle on its wheels does.
+  solar: { url: null, scale: 1, yawDeg: 0, stance: { width: 12.8, length: 8.6 }, clearM: 8.5 },
+  pad: { url: null, scale: 1, yawDeg: 0, stance: { width: 16, length: 16 }, clearM: 10 },
+  mast: { url: null, scale: 1, yawDeg: 0, stance: null, clearM: 1.2 },
 };
 
 /** Something that stands on the ground at a real place: a rover, the habitat, a parked vehicle. */

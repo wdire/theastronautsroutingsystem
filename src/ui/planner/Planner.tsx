@@ -1,4 +1,5 @@
-import { Bot, Car, Caravan, Check, ChevronDown, Flag, Footprints, Helicopter, MousePointerClick, Plus, TriangleAlert, X, Plane, Play } from 'lucide-react';
+import { lazy, Suspense } from 'react';
+import { Bot, Car, Caravan, Check, ChevronDown, Footprints, Helicopter, House, MousePointerClick, Move, Plus, TriangleAlert, X, Plane, Play } from 'lucide-react';
 import { flySelectedRoute } from '@/map/flyover';
 import { startMission } from '@/sim/controller';
 import { Budget } from './Budget';
@@ -9,13 +10,16 @@ import type { RouteAlternative, VehicleId } from '@/engines/types';
 import { VEHICLES } from '@/engines/vehicles';
 import { useApp } from '@/store';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/ui/components/ui/dropdown-menu';
-import { Switch } from '@/ui/components/ui/switch';
 import { fmtDeg, fmtDistance, fmtDuration, fmtNumber } from '@/lib/format';
-import { LANDING_SITE } from '@/lib/constants';
 import { cn } from '@/lib/cn';
 import { StopList } from './StopList';
 import { stopLabel } from '@/planner/labels';
 import { planLocked, useCrew } from '@/net/state';
+import { NET_ENABLED } from '@/net/config';
+import { startsAtBase } from '@/planner/base';
+
+// Who goes: loaded with the crew code, only when there is a crew server.
+const PlannerCrew = lazy(() => import('@/ui/crew/PlannerCrew'));
 
 const VEHICLE_ICON = { foot: Footprints, openRover: Car, pressRover: Caravan, robotRover: Bot, heli: Helicopter } as const;
 const VEHICLE_ORDER: readonly VehicleId[] = ['foot', 'openRover', 'pressRover', 'robotRover', 'heli'];
@@ -61,7 +65,7 @@ function VehiclePicker() {
   );
 }
 
-function PickButton({ target, children }: { target: 'start' | 'stop'; children: React.ReactNode }) {
+export function PickButton({ target, children }: { target: 'base' | 'stop'; children: React.ReactNode }) {
   const picking = useApp((s) => s.picking);
   const setPicking = useApp((s) => s.setPicking);
   const active = picking === target;
@@ -75,7 +79,7 @@ function PickButton({ target, children }: { target: 'start' | 'stop'; children: 
         active ? 'border-primary/60 bg-primary/15 text-foreground' : 'text-foreground/90 hover:bg-secondary',
       )}
     >
-      {active ? <MousePointerClick className="size-3.5 text-primary" aria-hidden /> : <Plus className="size-3.5 text-muted-foreground" aria-hidden />}
+      {active ? <MousePointerClick className="size-3.5 text-primary" aria-hidden /> : target === 'base' ? <Move className="size-3.5 text-muted-foreground" aria-hidden /> : <Plus className="size-3.5 text-muted-foreground" aria-hidden />}
       {active ? 'Click the map' : children}
     </button>
   );
@@ -225,8 +229,11 @@ function RouteResult() {
         {route.hasBudget && !missionRunning && !locked ? (
           <button
             type="button"
+            // A plan that runs out of air, battery or daylight is not flown: the crew would not come back.
+            disabled={!chosen.trip.feasible}
+            title={chosen.trip.feasible ? undefined : 'This plan does not work as it stands. Change it until it does.'}
             onClick={() => (crewStart ? void crewStart() : startMission())}
-            className="inline-flex h-9 items-center gap-2 rounded-md bg-primary px-3.5 text-[13px] font-semibold text-primary-foreground transition-opacity hover:opacity-90 pointer-coarse:h-11"
+            className="inline-flex h-9 items-center gap-2 rounded-md bg-primary px-3.5 text-[13px] font-semibold text-primary-foreground transition-opacity hover:opacity-90 disabled:pointer-events-none disabled:opacity-40 pointer-coarse:h-11"
           >
             <Play className="size-4" aria-hidden />
             Start the mission
@@ -255,9 +262,9 @@ function RouteResult() {
 export function Planner() {
   const start = useApp((s) => s.plan.start);
   const stops = useApp((s) => s.plan.stops);
-  const roundTrip = useApp((s) => s.plan.roundTrip);
-  const setRoundTrip = useApp((s) => s.setRoundTrip);
-  const setStart = useApp((s) => s.setStart);
+  const base = useApp((s) => s.base);
+  const running = useApp((s) => s.world?.run?.status === 'running');
+  const atMyBase = start !== null && startsAtBase({ start, stops, roundTrip: true, vehicle: 'foot', style: 'safest', campAtNight: false }, base);
   const openPlanner = useApp((s) => s.openPlanner);
   const clearPlan = useApp((s) => s.clearPlan);
   const locked = useCrew(planLocked);
@@ -289,30 +296,24 @@ export function Planner() {
         <div className="px-4 pt-3.5">
           <VehiclePicker />
         </div>
+        </fieldset>
+        {NET_ENABLED && !running ? (
+          <Suspense fallback={null}>
+            <PlannerCrew />
+          </Suspense>
+        ) : null}
+        <fieldset disabled={locked} className="min-w-0 disabled:[&_button]:opacity-60">
 
         <div className="px-4 pt-4">
           <div className="mb-2 flex items-baseline justify-between">
-            <h3 className="text-xs font-medium text-muted-foreground">Start</h3>
+            <h3 className="text-xs font-medium text-muted-foreground">From and back to</h3>
           </div>
-          {start ? (
-            <div className="flex items-center gap-2 rounded-md border py-1.5 pr-1 pl-3">
-              <Flag className="size-4 shrink-0 text-muted-foreground" aria-hidden />
-              <span className="min-w-0 flex-1 truncate text-[13px] font-medium">{stopLabel(start)}</span>
-              <PickButton target="start">Change</PickButton>
-            </div>
-          ) : (
-            <div className="flex flex-wrap gap-1.5">
-              <button
-                type="button"
-                onClick={() => setStart({ lon: LANDING_SITE[0], lat: LANDING_SITE[1], name: 'Octavia E. Butler Landing' })}
-                className="inline-flex h-8 items-center gap-1.5 rounded-md border px-2.5 text-[13px] font-medium hover:bg-secondary"
-              >
-                <Flag className="size-3.5 text-muted-foreground" aria-hidden />
-                Perseverance landing site
-              </button>
-              <PickButton target="start">Pick on the map</PickButton>
-            </div>
-          )}
+          <div className="flex items-center gap-2 rounded-md border py-1.5 pr-1 pl-3">
+            <House className="size-4 shrink-0 text-muted-foreground" aria-hidden />
+            <span className="min-w-0 flex-1 truncate text-[13px] font-medium">{atMyBase ? base.name : start ? `${stopLabel(start)}, the commander's base` : base.name}</span>
+            {atMyBase && !running ? <PickButton target="base">Move base</PickButton> : null}
+          </div>
+          <p className="mt-1.5 text-xs text-muted-foreground">Every mission leaves the base and comes back to it.</p>
         </div>
 
         <div className="px-4 pt-4">
@@ -332,13 +333,6 @@ export function Planner() {
               {stops.length === 0 ? 'or search for a place and choose Add stop.' : 'or click the route to add one along the way. Drag a pin to move it.'}
             </span>
           </div>
-          <label className="mt-3 flex cursor-pointer items-center justify-between gap-3 rounded-md py-1 text-[13px]">
-            <span>
-              <span className="font-medium">Return to the start</span>
-              <span className="block text-xs text-muted-foreground">The route comes home after the last stop.</span>
-            </span>
-            <Switch checked={roundTrip} onCheckedChange={setRoundTrip} aria-label="Return to the start" />
-          </label>
         </div>
         </fieldset>
 
@@ -348,7 +342,7 @@ export function Planner() {
         </div>
       </div>
 
-      {(start || stops.length > 0) && !locked ? (
+      {stops.length > 0 && !locked ? (
         <footer className="flex shrink-0 items-center justify-end border-t px-3 py-2">
           <button
             type="button"

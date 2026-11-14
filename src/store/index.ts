@@ -2,6 +2,7 @@ import { create } from 'zustand';
 import { subscribeWithSelector } from 'zustand/middleware';
 import type { DonkiFeed } from '@/engines/spaceWeather';
 import type { NewRoute, World } from '@/sim/types';
+import { baseWaypoint, loadBase, saveBase, startsAtBase, withBase, type Base } from '@/planner/base';
 import type { MissionPlan, RouteAlternative, RouteStyle, Scenario, Stop, Task, TaskKind, VehicleId, Waypoint } from '@/engines/types';
 
 export type Mode = 'globe' | 'map';
@@ -143,6 +144,8 @@ export interface AppState {
   flyover: { next: string; remainingM: number; progress: number } | null;
 
   /* planner */
+  /** The visitor's base: every mission they plan starts there and comes back to it. */
+  base: Base;
   plan: MissionPlan;
   /** Bumped on every change to the plan; routing replies for an older revision are dropped. */
   planRev: number;
@@ -151,7 +154,7 @@ export interface AppState {
   /** The planner panel is showing. */
   plannerOpen: boolean;
   /** What the next click on the map sets, if anything. */
-  picking: 'start' | 'stop' | 'roverView' | null;
+  picking: 'base' | 'stop' | 'roverView' | null;
   route: RouteState;
   /** The spot the 3D ground view is open on, or null while the map shows. */
   visor: VisorAt | null;
@@ -193,8 +196,10 @@ export interface AppState {
 
   /** Replaces the plan. `missionId` when it is one of the ready-made missions, which have a rule for success. */
   setPlan(plan: MissionPlan, missionId?: string): void;
+  /** Moves the base. The plan, unless a mission is under way, now starts and ends there. */
+  setBase(base: Base): void;
   openPlanner(open: boolean): void;
-  setPicking(picking: 'start' | 'stop' | 'roverView' | null): void;
+  setPicking(picking: 'base' | 'stop' | 'roverView' | null): void;
   openVisor(at: VisorAt): void;
   closeVisor(): void;
   setClockPaused(paused: boolean): void;
@@ -218,6 +223,8 @@ export interface AppState {
 function mapStops(plan: MissionPlan, id: string, fn: (s: Stop) => Stop): MissionPlan {
   return { ...plan, stops: plan.stops.map((s) => (s.id === id ? fn(s) : s)) };
 }
+
+const initialBase = loadBase();
 
 export const useApp = create<AppState>()(
   subscribeWithSelector((set, get) => {
@@ -243,7 +250,8 @@ export const useApp = create<AppState>()(
       routingAlertId: null,
       spokenAlerts: false,
 
-      plan: EMPTY_PLAN,
+      base: initialBase,
+      plan: { ...EMPTY_PLAN, start: baseWaypoint(initialBase) },
       planRev: 0,
       missionId: null,
       plannerOpen: false,
@@ -276,6 +284,13 @@ export const useApp = create<AppState>()(
       setLayers: (patch) => set((s) => ({ layers: { ...s.layers, ...patch } })),
       toggleSection: (id) => set((s) => ({ sections: { ...s.sections, [id]: !s.sections[id] } })),
 
+      setBase: (base) => {
+        const old = get().base;
+        saveBase(base);
+        set({ base });
+        // Only a plan made here follows the base; one shared by another commander starts at theirs.
+        if (!get().world?.run && startsAtBase(get().plan, old)) editPlan((p) => withBase(p, base));
+      },
       setPlan: (plan, missionId) => set((s) => ({ plan, planRev: s.planRev + 1, missionId: missionId ?? null })),
       openPlanner: (plannerOpen) => set(plannerOpen ? { plannerOpen, placeId: null } : { plannerOpen, picking: null }),
       setPicking: (picking) => set({ picking }),
@@ -326,7 +341,7 @@ export const useApp = create<AppState>()(
       setStyle: (style) => editPlan((p) => ({ ...p, style })),
       setRoundTrip: (roundTrip) => editPlan((p) => ({ ...p, roundTrip })),
       setCampAtNight: (campAtNight) => editPlan((p) => ({ ...p, campAtNight })),
-      clearPlan: () => set((s) => ({ plan: { ...EMPTY_PLAN, vehicle: s.plan.vehicle }, planRev: s.planRev + 1, missionId: null })),
+      clearPlan: () => set((s) => ({ plan: { ...withBase(EMPTY_PLAN, s.base), vehicle: s.plan.vehicle }, planRev: s.planRev + 1, missionId: null })),
     };
   }),
 );

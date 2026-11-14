@@ -206,7 +206,7 @@ export function usePlanSync(data: MissionData | null): void {
     const offPick = useApp.subscribe(
       (s) => s.picking,
       (p) => {
-        if (p === 'start' || p === 'stop') useApp.setState({ picking: null });
+        if (p === 'stop') useApp.setState({ picking: null });
       },
     );
     const offDepart = useApp.subscribe(

@@ -2,7 +2,9 @@ import type { Map as MapLibreMap, Marker as MarkerType } from 'maplibre-gl';
 import { Marker } from 'maplibre-gl';
 import { loadPlaces, loadSamples } from '@/data/datasets';
 import { resolvePlace } from '@/data/places';
+import { moveBaseTo } from '@/planner/moveBase';
 import { useApp } from '@/store';
+
 
 interface Target {
   key: string;
@@ -55,11 +57,14 @@ export function addPlacePicking(map: MapLibreMap): () => void {
         return;
       }
       s.setPicking(null);
+      if (target === 'base') {
+        void moveBaseTo(e.lngLat.lng, e.lngLat.lat);
+        return;
+      }
       void resolvePlace(key).then((view) => {
         const at = view && view.kind !== 'point' ? { lon: view.lon, lat: view.lat, name: view.name, placeId: view.key } : { lon: e.lngLat.lng, lat: e.lngLat.lat };
         const app = useApp.getState();
-        if (target === 'start') app.setStart(at);
-        else app.addStop(at);
+        app.addStop(at);
       });
       return;
     }

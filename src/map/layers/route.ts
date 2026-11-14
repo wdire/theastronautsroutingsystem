@@ -3,6 +3,7 @@ import type { PathPoint, RouteAlternative } from '@/engines/types';
 import { VEHICLES } from '@/engines/vehicles';
 import { gradesAlong, pathStats } from '@/planner/geometry';
 import { useApp } from '@/store';
+import { startsAtBase } from '@/planner/base';
 
 const SRC_ROUTE = 'route';
 const SRC_ALT = 'route-alternatives';
@@ -105,9 +106,10 @@ export function addRouteLayers(map: MapLibreMap): () => void {
     for (const m of markers) m.remove();
     markers = [];
     const { plan } = useApp.getState();
-    if (plan.start) {
-      // A dragged pin is a point on the ground, no longer the named place it was put on.
-      markers.push(pin('', 'start', plan.start.lon, plan.start.lat, (lon, lat) => useApp.getState().setStart({ lon, lat })));
+    // The visitor's own base has its own marker; a plan shared by another commander starts at theirs.
+    if (plan.start && !startsAtBase(plan, useApp.getState().base)) {
+      const m = new Marker({ element: pinElement('', 'start'), anchor: 'center' }).setLngLat([plan.start.lon, plan.start.lat]).addTo(map);
+      markers.push(m);
     }
     plan.stops.forEach((stop, i) => {
       markers.push(pin(String(i + 1), 'stop', stop.lon, stop.lat, (lon, lat) => useApp.getState().updateStop(stop.id, { lon, lat, name: undefined, placeId: undefined })));

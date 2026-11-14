@@ -3,13 +3,15 @@ import { MISSIONS, toPlan, type Mission } from '@/engines/missions';
 import { VEHICLES } from '@/engines/vehicles';
 import { getMap } from '@/map/instance';
 import { TASK_DEFAULT_MIN, useApp } from '@/store';
+import { withBase } from '@/planner/base';
 import { fmtDuration } from '@/lib/format';
 
 const ICON = { foot: Footprints, openRover: Car, pressRover: Caravan, robotRover: Bot, heli: Helicopter } as const;
 
 async function load(mission: Mission): Promise<void> {
-  const plan = toPlan(mission);
   const app = useApp.getState();
+  // Every mission leaves from the visitor's base and comes back to it.
+  const plan = withBase(toPlan(mission), app.base);
   app.setPlan(plan, mission.id);
   app.openPlanner(true);
   // Frame the whole mission.

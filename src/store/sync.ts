@@ -1,4 +1,5 @@
 import { useApp } from './index';
+import { withBase } from '@/planner/base';
 import { encodeUrlState, takeInitialUrlState, type UrlState } from './url';
 import type { Map as MapLibreMap } from 'maplibre-gl';
 
@@ -11,7 +12,8 @@ export function startUrlSync(map: MapLibreMap): () => void {
   if (initial) {
     const s = useApp.getState();
     if (initial.plan) {
-      s.setPlan({ ...s.plan, ...initial.plan });
+      // A shared link carries the stops; the mission still leaves from this visitor's base.
+      s.setPlan(withBase({ ...s.plan, ...initial.plan }, s.base));
       // A link that carries a plan opens on it.
       if (!initial.place) s.openPlanner(true);
     }

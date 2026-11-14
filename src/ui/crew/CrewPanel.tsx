@@ -2,25 +2,22 @@
  * The Crew panel: who the visitor is to others, invites, the mission they are in (or the ones they could join,
  * or start), who else is online, and the debriefs of missions flown. Loaded only with a crew server.
  */
-import { useMemo, useState } from 'react';
+import { useState } from 'react';
 import { useMutation, useQuery } from 'convex/react';
 import { ArrowRight, FileText, Pencil, Route } from 'lucide-react';
 import { api } from '../../../convex/_generated/api';
 import type { Id } from '../../../convex/_generated/dataModel';
-import { LIMITS, MAX_CREW, SUIT_COLORS, type SuitColor } from '../../../convex/shared';
+import { LIMITS, SUIT_COLORS, type SuitColor } from '../../../convex/shared';
 import { useApp } from '@/store';
-import { stopLabel } from '@/planner/labels';
 import { auth, toastError } from '@/net/client';
 import { cleanName, loadIdentity, saveIdentity } from '@/net/identity';
-import { encodePlan } from '@/net/planSync';
 import { useCrew } from '@/net/state';
 import { OnlineNow } from './Online';
 import { fmtUtc } from '@/lib/format';
 import { cn } from '@/lib/cn';
-import { fmtFromNow, fmtMarsMoment, vehicleName } from './format';
 import { FIELD, Heading, PRIMARY_BTN, QUIET_BTN, StatusChip, Swatch } from './parts';
 import { MissionRoom } from './MissionRoom';
-import { useNow } from './useNow';
+import JoinList from './JoinList';
 
 const SWATCH_NAME: Record<SuitColor, string> = { signal: 'Signal orange', flare: 'Flare red', ochre: 'Ochre', lichen: 'Lichen green', glacier: 'Glacier teal', cobalt: 'Cobalt blue', iris: 'Iris violet', chalk: 'Chalk white' };
 
@@ -143,170 +140,6 @@ function You() {
   );
 }
 
-function Invites() {
-  const me = auth();
-  const invites = useQuery(api.crew.invitesFor, me);
-  const respond = useMutation(api.crew.respond);
-  const [busy, setBusy] = useState<string | null>(null);
-  if (!invites || invites.length === 0) return null;
-  const answer = (missionId: Id<'missions'>, accept: boolean) => {
-    setBusy(missionId);
-    respond({ auth: me, missionId, accept })
-      .catch(toastError)
-      .finally(() => setBusy(null));
-  };
-  return (
-    <section className="border-t px-4 py-4" aria-labelledby="crew-invites">
-      <Heading>
-        <span id="crew-invites">Invites</span>
-      </Heading>
-      <ul className="flex flex-col gap-2">
-        {invites.map((inv) => (
-          <li key={inv.crewId} className="rounded-md border border-primary/40 bg-primary/5 p-3">
-            <p className="text-[13.5px] font-semibold">{inv.title}</p>
-            <p className="mt-0.5 text-xs text-muted-foreground">
-              {inv.commanderName} asks you to join as {inv.role}.
-            </p>
-            <div className="mt-2.5 flex gap-2">
-              <button type="button" className={PRIMARY_BTN} disabled={busy === inv.missionId} onClick={() => answer(inv.missionId, true)}>
-                Accept
-              </button>
-              <button type="button" className={QUIET_BTN} disabled={busy === inv.missionId} onClick={() => answer(inv.missionId, false)}>
-                Decline
-              </button>
-            </div>
-          </li>
-        ))}
-      </ul>
-    </section>
-  );
-}
-
-function CreateMission() {
-  const start = useApp((s) => s.plan.start);
-  const stops = useApp((s) => s.plan.stops.length);
-  const vehicle = useApp((s) => s.plan.vehicle);
-  const create = useMutation(api.missions.create);
-  const [title, setTitle] = useState('');
-  const [objective, setObjective] = useState('');
-  const [busy, setBusy] = useState(false);
-
-  const openPlanner = () => {
-    useApp.getState().openDock(null);
-    useApp.getState().openPlanner(true);
-  };
-
-  return (
-    <section className="border-t px-4 py-4" aria-labelledby="crew-create">
-      <Heading>
-        <span id="crew-create">Create a mission</span>
-      </Heading>
-      {!start ? (
-        <div>
-          <p className="text-[13px] leading-relaxed text-muted-foreground">A crew mission takes the plan from the planner. The plan has no start yet.</p>
-          <button type="button" className={cn(QUIET_BTN, 'mt-2')} onClick={openPlanner}>
-            <Route className="size-3.5 text-muted-foreground" aria-hidden />
-            Open the mission plan
-          </button>
-        </div>
-      ) : (
-        <form
-          className="flex flex-col gap-2"
-          onSubmit={(e) => {
-            e.preventDefault();
-            const s = useApp.getState();
-            setBusy(true);
-            create({
-              auth: auth(),
-              title,
-              objective,
-              planJson: encodePlan({ plan: s.plan, templateId: s.missionId }),
-              vehicle: s.plan.vehicle,
-              ...(s.plan.start?.name ? { siteName: s.plan.start.name.slice(0, LIMITS.siteName) } : {}),
-            })
-              .then(() => {
-                setTitle('');
-                setObjective('');
-              })
-              .catch(toastError)
-              .finally(() => setBusy(false));
-          }}
-        >
-          <input value={title} onChange={(e) => setTitle(e.target.value)} aria-label="Mission title" placeholder="Title, e.g. Delta front survey" maxLength={LIMITS.title} className={FIELD} />
-          <input value={objective} onChange={(e) => setObjective(e.target.value)} aria-label="Objective" placeholder="Objective in one line" maxLength={LIMITS.objective} className={FIELD} />
-          <p className="text-xs leading-relaxed text-muted-foreground">
-            Uses the current plan: {vehicleName(vehicle)} from {stopLabel(start)}, {stops} {stops === 1 ? 'stop' : 'stops'}. You will command it.
-          </p>
-          <div>
-            <button type="submit" className={PRIMARY_BTN} disabled={busy || !title.trim()}>
-              Create the mission
-            </button>
-          </div>
-        </form>
-      )}
-    </section>
-  );
-}
-
-function OpenMissions() {
-  const missions = useQuery(api.missions.list, {});
-  const join = useMutation(api.crew.join);
-  const now = useNow(30_000);
-  const [busy, setBusy] = useState<string | null>(null);
-  const lon = useApp((s) => s.plan.start?.lon ?? 77.45);
-  const open = useMemo(() => (missions ?? []).filter((m) => m.status === 'planning' || m.status === 'underway'), [missions]);
-
-  return (
-    <section className="border-t px-4 py-4" aria-labelledby="crew-open">
-      <Heading aside={open.length > 0 ? `${open.length}` : undefined}>
-        <span id="crew-open">Missions you can join</span>
-      </Heading>
-      {missions === undefined ? (
-        <p className="text-[13px] text-muted-foreground">Loading…</p>
-      ) : open.length === 0 ? (
-        <p className="text-[13px] text-muted-foreground">No missions are being planned right now. Create one and invite whoever is online.</p>
-      ) : (
-        <ul className="flex flex-col gap-2">
-          {open.map((m) => (
-            <li key={m._id} className="rounded-md border p-3">
-              <div className="flex items-start justify-between gap-2">
-                <p className="min-w-0 text-[13.5px] font-semibold">{m.title}</p>
-                <StatusChip status={m.status} />
-              </div>
-              {m.objective ? <p className="mt-0.5 text-[13px] leading-relaxed text-foreground/90">{m.objective}</p> : null}
-              <p className="figure mt-1 text-xs text-muted-foreground">
-                {m.commanderName} commands, {m.crewCount} of {MAX_CREW} crew, {vehicleName(m.vehicle)}
-              </p>
-              {m.plannedStartUtc !== null ? (
-                <p className="figure mt-0.5 text-xs text-muted-foreground">
-                  Departs {fmtMarsMoment(m.plannedStartUtc, lon)}, {fmtFromNow(m.plannedStartUtc, now)}
-                </p>
-              ) : null}
-              {m.open ? (
-                <button
-                  type="button"
-                  className={cn(QUIET_BTN, 'mt-2.5')}
-                  disabled={busy === m._id}
-                  onClick={() => {
-                    setBusy(m._id);
-                    join({ auth: auth(), missionId: m._id })
-                      .catch(toastError)
-                      .finally(() => setBusy(null));
-                  }}
-                >
-                  Join
-                </button>
-              ) : (
-                <p className="mt-2 text-xs text-faint">Closed to new crew. The commander can invite you.</p>
-              )}
-            </li>
-          ))}
-        </ul>
-      )}
-    </section>
-  );
-}
-
 function PastMissions() {
   const mine = useQuery(api.missions.mine, auth());
   const past = mine?.past ?? [];
@@ -360,6 +193,25 @@ function JustEnded({ missionId }: { missionId: Id<'missions'> }) {
   );
 }
 
+/** Off any mission: say so, and point to where missions are made. */
+function NoMission() {
+  const plan = () => {
+    const s = useApp.getState();
+    s.openDock(null);
+    s.openPlanner(true);
+  };
+  return (
+    <section className="border-t px-4 py-4">
+      <p className="text-[13.5px] font-semibold">You are not on a mission</p>
+      <p className="mt-0.5 text-[13px] leading-relaxed text-muted-foreground">Plan one from your base and name it to bring a crew, or join one below. Your crew, roles, tasks and notes show here once you are on one.</p>
+      <button type="button" className={cn(QUIET_BTN, 'mt-2.5')} onClick={plan}>
+        <Route className="size-3.5 text-muted-foreground" aria-hidden />
+        Plan a mission
+      </button>
+    </section>
+  );
+}
+
 export default function CrewPanel() {
   const me = useCrew((s) => s.me);
   const current = useCrew((s) => s.current);
@@ -372,10 +224,9 @@ export default function CrewPanel() {
         <MissionRoom missionId={current.id} />
       ) : (
         <>
-          <Invites />
           {ended ? <JustEnded missionId={ended} /> : null}
-          <CreateMission />
-          <OpenMissions />
+          <NoMission />
+          <JoinList limit={5} />
           <OnlineNow missionId={null} crewIds={new Set()} canInvite={false} />
         </>
       )}

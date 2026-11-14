@@ -237,7 +237,7 @@ function RoleMenu({ row, onRole }: { row: CrewRow; onRole: (role: string) => voi
   );
 }
 
-function RosterBlock({ data }: { data: MissionData }) {
+export function RosterBlock({ data }: { data: MissionData }) {
   const update = useMutation(api.crew.update);
   const remove = useMutation(api.crew.remove);
   const addAndroid = useMutation(api.crew.addAndroid);

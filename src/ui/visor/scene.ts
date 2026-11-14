@@ -34,25 +34,39 @@ async function perseverance(): Promise<PropSpec | null> {
 }
 
 /**
- * What stands in the 3D scene: Perseverance where it last reported, Ingenuity where it came to rest,
- * and, if a mission has a start, an illustrative base there: a habitat, and the mission’s rover.
+ * The base around its airlock door (the point missions leave from): the habitat beside the way out, its solar
+ * array, radio mast and landing pad around it, and the pressurised rover parked by the door. Laid out from the
+ * way out, so the first steps of a route are clear of it.
  */
-export async function sceneProps(plan: MissionPlan): Promise<PropSpec[]> {
+export function baseProps(lon: number, lat: number, outDeg: number): PropSpec[] {
+  const at = (bearing: number, m: number) => destination(lon, lat, outDeg + bearing, m);
+  const [hlon, hlat] = at(90, 26);
+  const [slon, slat] = at(150, 44);
+  const [mlon, mlat] = at(115, 14);
+  const [plon, plat] = at(200, 85);
+  const [vlon, vlat] = at(60, 13);
+  return [
+    { id: 'habitat', model: 'habitat', lon: hlon, lat: hlat, headingDeg: outDeg - 90 },
+    { id: 'base-solar', model: 'solar', lon: slon, lat: slat, headingDeg: 0 },
+    { id: 'base-mast', model: 'mast', lon: mlon, lat: mlat, headingDeg: outDeg },
+    { id: 'base-pad', model: 'pad', lon: plon, lat: plat, headingDeg: 0 },
+    { id: 'vehicle', model: 'sev', lon: vlon, lat: vlat, headingDeg: outDeg },
+  ];
+}
+
+/**
+ * What stands in the 3D scene: Perseverance where it last reported, Ingenuity where it came to rest, and the
+ * base the plan leaves from (the visitor's own, or the commander's on a crew mission).
+ */
+export async function sceneProps(plan: MissionPlan, runningVehicle: MissionPlan['vehicle'] | null = null): Promise<PropSpec[]> {
   const props: PropSpec[] = [{ id: 'ingenuity', model: 'ingenuity', ...INGENUITY_REST, headingDeg: 20 }];
   const rover = await perseverance();
   if (rover) props.push(rover);
   if (plan.start) {
-    const { lon: slon, lat: slat } = plan.start;
     const first = plan.stops[0];
-    const out = first ? bearingDeg(slon, slat, first.lon, first.lat) : 0;
-    // The habitat sits 30 m to the side of the way out, so the first steps of the route are clear.
-    const [hlon, hlat] = destination(slon, slat, out + 90, 30);
-    props.push({ id: 'habitat', model: 'habitat', lon: hlon, lat: hlat, headingDeg: out - 90 });
-    // No crew stands about here: the only people in the scene are a mission's own crew and other visitors.
-    if (plan.vehicle === 'pressRover') {
-      const [vlon, vlat] = destination(slon, slat, out + 70, 13);
-      props.push({ id: 'vehicle', model: 'sev', lon: vlon, lat: vlat, headingDeg: out });
-    }
+    const out = first ? bearingDeg(plan.start.lon, plan.start.lat, first.lon, first.lat) : 0;
+    // The pressurised rover is out with the crew while a mission drives it, and is drawn with them instead.
+    props.push(...baseProps(plan.start.lon, plan.start.lat, out).filter((p) => !(p.id === 'vehicle' && runningVehicle === 'pressRover')));
   }
   return props;
 }
@@ -75,5 +89,5 @@ export function standpoint(lon: number, lat: number, props: readonly PropSpec[])
 export function propCaption(id: string): string {
   if (id === 'perseverance') return "Perseverance, standing where it last reported its position. NASA’s 3D model of the rover.";
   if (id === 'ingenuity') return "Ingenuity, where it came to rest after its last flight in January 2024. NASA’s 3D model.";
-  return "An illustrative base at your mission’s start, built from NASA’s models of a habitat and a pressurised rover. Nothing stands here on Mars.";
+  return "Your base, illustrative: NASA’s models of a habitat and a pressurised rover, with a drawn solar array, radio mast and landing pad. Nothing stands here on Mars yet.";
 }
