@@ -6,6 +6,7 @@ import { loadModel, standIn } from './models';
 import { MODELS, type ModelName } from './modelSpecs';
 import { seatOnWheels } from './props';
 import { cyclesPerMetre, rigSuit, type Suit } from './suit';
+import { rollWheels, wheelsOf } from './wheels';
 
 /** Where the party is asked to be: the crew's place on the route, in scene metres. */
 export interface PartyTarget {
@@ -24,6 +25,10 @@ interface Member {
   z: number;
   heading: number;
   phase: number;
+  /** A vehicle's turning wheels. */
+  wheels: { pivot: Object3D; radius: number }[];
+  /** 0 standing to 1 walking, eased. */
+  walk: number;
 }
 
 const RAD = Math.PI / 180;
@@ -59,11 +64,12 @@ export function createParty(scene: Scene, vehicle: VehicleId, heightAt: (x: numb
     anchor.add(standIn(model));
     anchor.visible = false;
     scene.add(anchor);
-    return { anchor, suit: null, x: 0, z: 0, heading: 0, phase: 0 };
+    return { anchor, suit: null, x: 0, z: 0, heading: 0, phase: 0, wheels: [], walk: 0 };
   });
   let disposed = false;
   let placed = false;
   let firstPerson = false;
+  let clock = 0;
   // The leader's recent footsteps, newest last, for the second walker to follow.
   const trail: { x: number; z: number }[] = [];
 
@@ -74,6 +80,7 @@ export function createParty(scene: Scene, vehicle: VehicleId, heightAt: (x: numb
         const suit = walkers ? rigSuit(loaded) : null;
         const body: Object3D = suit ? suit.root : cloneSkinned(loaded);
         m.suit = suit;
+        m.wheels = suit ? [] : wheelsOf(body);
         m.anchor.clear();
         m.anchor.add(body);
       }
@@ -103,6 +110,7 @@ export function createParty(scene: Scene, vehicle: VehicleId, heightAt: (x: numb
   return {
     /** Moves the party toward its target. `dt` in seconds of real time. */
     update(target: PartyTarget, dt: number): void {
+      clock += dt;
       const lead = members[0];
       if (!lead) return;
       const jump = Math.hypot(target.x - lead.x, target.z - lead.z);
@@ -124,6 +132,7 @@ export function createParty(scene: Scene, vehicle: VehicleId, heightAt: (x: numb
         lead.x += (target.x - lead.x) * k;
         lead.z += (target.z - lead.z) * k;
         const stepM = Math.hypot(lead.x - beforeX, lead.z - beforeZ);
+        rollWheels(lead.wheels, stepM);
         if (stepM > 0.004) {
           // Face the way it actually moves on screen, turning at a rate a body can.
           lead.heading = turnToward(lead.heading, Math.atan2(lead.x - beforeX, -(lead.z - beforeZ)), dt * 3.2);
@@ -159,7 +168,9 @@ export function createParty(scene: Scene, vehicle: VehicleId, heightAt: (x: numb
       }
       for (const m of members) {
         seat(m);
-        m.suit?.pose(m.phase, target.moving ? 1 : 0);
+        // The walk eases in and out rather than snapping between standing and striding.
+        m.walk += ((target.moving ? 1 : 0) - m.walk) * Math.min(1, dt * 3);
+        m.suit?.pose(m.phase, m.walk, 1 / cyclesPerMetre(target.speedMs), clock);
       }
       // Seen through its own eyes, the last in file (or the vehicle) is not drawn: the camera is inside it.
       const rear = members[members.length - 1];
@@ -179,6 +190,14 @@ export function createParty(scene: Scene, vehicle: VehicleId, heightAt: (x: numb
         heading: lead?.heading ?? 0,
         rear: { x: rear?.x ?? 0, z: rear?.z ?? 0, heading: rear?.heading ?? 0 },
       };
+    },
+    /** How far the lead vehicle's first wheel has turned, radians; for the checks. */
+    wheelTurn(): number {
+      return members[0]?.wheels[0]?.pivot.rotation.x ?? 0;
+    },
+    /** How many turning wheels the lead vehicle has. */
+    wheelCount(): number {
+      return members[0]?.wheels.length ?? 0;
     },
     /** Eye height of whoever the first-person camera sits in, m. */
     eyeM: VEHICLES[vehicle].eyeHeightM,

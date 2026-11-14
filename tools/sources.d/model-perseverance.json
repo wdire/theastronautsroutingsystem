@@ -5,6 +5,6 @@
   "product": "3D Models/Mars 2020 Perseverance Rover/Mars 2020 Perseverance Rover.glb",
   "url": "https://github.com/nasa/NASA-3D-Resources/tree/master/3D%20Models/Mars%202020%20Perseverance%20Rover",
   "licence": "NASA media, free to use under NASA's media usage guidelines (not copyrighted in the United States).",
-  "notes": "Robotic rover in the visor. Optimised with gltf-transform: meshopt compression, 1024 px WebP textures, meshes simplified by half.",
+  "notes": "Robotic rover in the visor; its six wheels turn as it drives. Optimised with gltf-transform: meshopt compression, 2048 px WebP textures, no mesh simplification.",
   "retrieved": "2026-11-14"
 }

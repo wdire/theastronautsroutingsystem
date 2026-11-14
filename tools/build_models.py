@@ -2,8 +2,10 @@
 
 Source: github.com/nasa/NASA-3D-Resources ("3D Models/<name>/<name>.glb").
 Each model goes through `npx @gltf-transform/cli optimize` with meshopt
-compression and 1024 px WebP textures. Meshes are simplified by half, except
-the Z2 suit: its thin parts tear, so it is not simplified.
+compression and WebP textures. The rovers keep their full geometry, 2048 px
+textures and their named parts (the app cuts the wheels out of them to turn
+them; simplifying tore the SEV's texture coordinates). The habitat and the
+helicopter are simplified by half; the Z2 suit is not: its thin parts tear.
 
 Run: python tools/build_models.py            (needs Node and npx on PATH)
 """
@@ -23,12 +25,12 @@ GLTF_TRANSFORM = "@gltf-transform/cli@4"
 
 # out name -> (path in the repo, simplify?, what it is used for)
 MODELS_WANTED = {
-    "perseverance": ("3D Models/Mars 2020 Perseverance Rover/Mars 2020 Perseverance Rover.glb", True,
-                     "Robotic rover in the visor."),
+    "perseverance": ("3D Models/Mars 2020 Perseverance Rover/Mars 2020 Perseverance Rover.glb", False,
+                     "Robotic rover in the visor; its six wheels turn as it drives."),
     "ingenuity": ("3D Models/Ingenuity Mars Helicopter/Ingenuity Mars Helicopter.glb", True,
                   "Helicopter in the visor."),
-    "sev": ("3D Models/Space Exploration Vehicle/Space Exploration Vehicle.glb", True,
-            "Pressurised rover in the visor."),
+    "sev": ("3D Models/Space Exploration Vehicle/Space Exploration Vehicle.glb", False,
+            "Pressurised rover in the visor; its six wheels turn as it drives."),
     "habitat": ("3D Models/Habitat Demonstration Unit/Habitat Demonstration Unit (part 1).glb", True,
                 "The base beside the start of a route. Modelled in centimetres: drawn at scale 0.03."),
     "z2": ("3D Models/Z2 Spacesuit/Z2 Spacesuit.glb", False,
@@ -36,14 +38,20 @@ MODELS_WANTED = {
 }
 
 
-def optimize(src, dst, simplify: bool) -> None:
+# Full-detail models: larger textures, and named parts kept apart so the app can find the wheels.
+FULL = {"perseverance", "sev"}
+
+
+def optimize(src, dst, simplify: bool, full: bool) -> None:
     cmd = [
         "npx", "--yes", GLTF_TRANSFORM, "optimize", str(src), str(dst),
         "--compress", "meshopt",
         "--texture-compress", "webp",
-        "--texture-size", "1024",
+        "--texture-size", "2048" if full else "1024",
         "--simplify", "true" if simplify else "false",
     ]
+    if full:
+        cmd += ["--join-named", "false", "--flatten", "false"]
     if simplify:
         cmd += ["--simplify-ratio", "0.5", "--simplify-error", "0.001"]
     print(" ".join(cmd[2:]))
@@ -65,7 +73,7 @@ def main() -> int:
             fetch(url, f"models/{out}.src.glb", timeout=300)
             src = CACHE / "models" / f"{out}.src.glb"
             dst = MODELS / f"{out}.glb"
-            optimize(src, dst, simplify)
+            optimize(src, dst, simplify, out in FULL)
         except Exception as e:
             print(f"FAILED {out}: {e}", file=sys.stderr)
             failed.append(out)
@@ -80,7 +88,8 @@ def main() -> int:
             product=path,
             url=f"{REPO}/tree/master/" + urllib.parse.quote(path.rsplit("/", 1)[0]),
             licence="NASA media, free to use under NASA's media usage guidelines (not copyrighted in the United States).",
-            notes=f"{use} Optimised with gltf-transform: meshopt compression, 1024 px WebP textures, "
+            notes=f"{use} Optimised with gltf-transform: meshopt compression, "
+            + ("2048" if out in FULL else "1024") + " px WebP textures, "
             + ("meshes simplified by half." if simplify else "no mesh simplification."),
         )
     print(f"total {total / 1e6:.2f} MB" + (f"; failed: {', '.join(failed)}" if failed else ""))

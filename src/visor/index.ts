@@ -109,7 +109,7 @@ export interface VisorHandle {
   /** How far the camera is above the drawn ground under it, m. Never negative. */
   eyeAboveGround(): number;
   /** What the last frame cost, for the performance checks. */
-  stats(): { triangles: number; calls: number; rocks: number; layers: string };
+  stats(): { triangles: number; calls: number; rocks: number; layers: string; wheels: [number, number] };
   dispose(): void;
 }
 
@@ -481,10 +481,10 @@ export async function mountVisor(canvas: HTMLCanvasElement, options: VisorOption
         orbitAngle += dt * 0.12;
         const orbit = state.camera === 'orbit';
         const away = (orbit ? orbitAngle : chaseAngle) + yaw;
-        const dist = party.sizeM * (orbit ? 2.1 : 1.5) + (orbit ? 6 : 3.5);
+        const dist = party.sizeM * (orbit ? 1.25 : 0.95) + (orbit ? 3.5 : 2.5);
         pos.x = f.x + Math.sin(away) * dist;
         pos.z = f.z - Math.cos(away) * dist;
-        eyeAbove = orbit ? 3.8 : 2.8;
+        eyeAbove = orbit ? 3.2 : 2.4;
         // Look at the party's shoulders from wherever the camera has ended up.
         viewYaw = away + Math.PI;
         viewPitch = Math.atan2(eyeY - (f.y + 1.3), dist) + pitch;
@@ -649,7 +649,7 @@ export async function mountVisor(canvas: HTMLCanvasElement, options: VisorOption
     props: () => props.list(),
     position: () => ({ x: pos.x, y: pos.y, z: pos.z }),
     eyeAboveGround: () => pos.y - heightAt(pos.x, pos.z),
-    stats: () => ({ triangles: renderer.info.render.triangles, calls: renderer.info.render.calls, rocks: rocks.count(), layers: ORDER.map((k) => `${k}:${layers[k].patch ? (layers[k].patch.hirise ? `hirise ${layers[k].patch.debug}` : 'package') : 'none'}`).join(' ') }),
+    stats: () => ({ triangles: renderer.info.render.triangles, calls: renderer.info.render.calls, rocks: rocks.count(), wheels: party ? [party.wheelCount(), Math.round(party.wheelTurn() * 100) / 100] : [0, 0], layers: ORDER.map((k) => `${k}:${layers[k].patch ? (layers[k].patch.hirise ? `hirise ${layers[k].patch.debug}` : 'package') : 'none'}`).join(' ') }),
     dispose() {
       disposed = true;
       cancelAnimationFrame(raf);

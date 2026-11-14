@@ -10,13 +10,27 @@ export interface ModelSpec {
   stance: { width: number; length: number } | null;
   /** The radius it takes up on the ground, m: rocks and the viewer stay outside it. */
   clearM: number;
+  /**
+   * Wheels to cut out of the model so they can turn: either every triangle of a named node, sorted
+   * into `count` wheels by place, or the triangles inside a cylinder at each of `at` (centres in the
+   * loaded model's own frame: metres, x to the right, front to -z).
+   */
+  wheels?: { radius: number; halfWidth: number } & ({ node: string; count: number } | { at: readonly (readonly [number, number, number])[] });
 }
 
 /** NASA 3D Resources models, optimised by tools/build_models.py. Sizes checked against the real hardware. */
 export const MODELS: Record<ModelName, ModelSpec> = {
-  perseverance: { url: '/models/perseverance.glb', scale: 1, yawDeg: 180, stance: { width: 2.4, length: 2.6 }, clearM: 3.2 },
+  perseverance: { url: '/models/perseverance.glb', scale: 1, yawDeg: 180, stance: { width: 2.4, length: 2.6 }, clearM: 3.2, wheels: { node: 'Wheels_objs', count: 6, radius: 0.265, halfWidth: 0.25 } },
   ingenuity: { url: '/models/ingenuity.glb', scale: 1, yawDeg: 0, stance: null, clearM: 1.2 },
-  sev: { url: '/models/sev.glb', scale: 1, yawDeg: 180, stance: { width: 3.2, length: 3.6 }, clearM: 5 },
+  sev: {
+    url: '/models/sev.glb',
+    scale: 1,
+    yawDeg: 180,
+    stance: { width: 3.2, length: 3.6 },
+    clearM: 5,
+    // Measured on the model: six wheels of 0.5 m radius, their hubs 1.73 m either side of the middle.
+    wheels: { radius: 0.5, halfWidth: 0.3, at: [-1.73, 1.73].flatMap((x) => [-1.305, 0.573, 2.045].map((z) => [x, 0.5, z] as const)) },
+  },
   // Modelled in centimetres.
   habitat: { url: '/models/habitat.glb', scale: 0.03, yawDeg: 0, stance: null, clearM: 8 },
   z2: { url: '/models/z2.glb', scale: 1, yawDeg: 180, stance: null, clearM: 0.8 },

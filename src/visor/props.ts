@@ -157,6 +157,8 @@ export function createProps(scene: Scene, frame: Frame, specs: readonly PropSpec
         if (!item.body) swapBody(item, standIn(item.spec.model));
         if (!item.asked && d < MODEL_WITHIN_M) fetchModel(item);
         if (groundChanged || !item.anchor.visible) item.anchor.visible = seat(item);
+        // A suited crew member stands at ease: breathing, shifting weight, looking about.
+        if (item.suit && d < 120) item.suit.pose(0, 0, 1.3, performance.now() / 1000);
         const shadows = d < SHADOW_WITHIN_M;
         if (shadows !== item.shadows && item.body) {
           item.shadows = shadows;

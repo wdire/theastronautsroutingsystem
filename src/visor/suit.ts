@@ -123,10 +123,45 @@ export interface Suit {
   root: Group;
   /**
    * Poses the suit. `phase` counts step cycles (one cycle is a left and a right step); `stride` is
-   * 0 standing still and 1 at a full walking stride.
+   * 0 standing still and 1 walking; `cycleM` is the ground one cycle covers, so a planted boot stays
+   * where it was put; `timeS` drives breathing and the small movements of someone standing.
    */
-  pose(phase: number, stride: number): void;
+  pose(phase: number, stride: number, cycleM?: number, timeS?: number): void;
   dispose(): void;
+}
+
+/** Thigh and shin lengths of the rig, m: hip to knee and knee to ankle. */
+const THIGH_M = Math.hypot(0.06, 0.38);
+const SHIN_M = Math.hypot(0.03, 0.34);
+/** Share of a cycle each boot is on the ground: long, for a suit this heavy in a third of a g. */
+const STANCE = 0.62;
+const smoothstep01 = (t: number) => t * t * (3 - 2 * t);
+
+/**
+ * Where a boot is in a cycle, relative to the point under its hip: `ahead` m forward, `lift` m up,
+ * and `pitch`, the toe-up angle. On the ground it slides back at walking pace (the body moves over
+ * it); in the air it swings forward on a low arc, heel first.
+ */
+export function footAt(q: number, stepM: number, liftM: number): { ahead: number; lift: number; pitch: number } {
+  const t = ((q % 1) + 1) % 1;
+  if (t < STANCE) {
+    const u = t / STANCE;
+    // Heel strike with the toe up, rolling flat, then onto the toe as it leaves.
+    const pitch = u < 0.15 ? (1 - u / 0.15) * 0.25 : u > 0.8 ? -((u - 0.8) / 0.2) * 0.35 : 0;
+    return { ahead: stepM / 2 - stepM * u, lift: 0, pitch };
+  }
+  const u = (t - STANCE) / (1 - STANCE);
+  return { ahead: -stepM / 2 + stepM * smoothstep01(u), lift: liftM * Math.sin(Math.PI * u) ** 1.3, pitch: -0.35 * (1 - u) + 0.25 * u };
+}
+
+/** Hip and knee angles that put the ankle `ahead` m forward of and `drop` m below the hip (two-bone IK). */
+export function legAngles(ahead: number, drop: number): { hip: number; knee: number } {
+  const reach = Math.min(THIGH_M + SHIN_M - 1e-3, Math.max(0.2, Math.hypot(ahead, drop)));
+  const toTarget = Math.atan2(ahead, drop);
+  const atHip = Math.acos(Math.max(-1, Math.min(1, (THIGH_M ** 2 + reach ** 2 - SHIN_M ** 2) / (2 * THIGH_M * reach))));
+  const atKnee = Math.acos(Math.max(-1, Math.min(1, (THIGH_M ** 2 + SHIN_M ** 2 - reach ** 2) / (2 * THIGH_M * SHIN_M))));
+  // The knee bends forward: the thigh leans ahead of the line to the boot, the shin folds back.
+  return { hip: toTarget + atHip, knee: -(Math.PI - atKnee) };
 }
 
 /** Builds a rigged suit from the loaded model. The model itself is left as it was. */
@@ -221,31 +256,53 @@ export function rigSuit(model: Object3D): Suit | null {
   root.name = 'z2-suit';
   root.add(skinned);
   const pelvisY = bones.pelvis.position.y;
+  const hipY = jointOf('hipL').y;
+  const ankleY = jointOf('ankleL').y;
+  // Each walker breathes and fidgets on its own rhythm.
+  const seed = Math.random() * 100;
 
-  const pose = (phase: number, stride: number): void => {
+  const pose = (phase: number, stride: number, cycleM = 1.3, timeS = 0): void => {
     const s = clamp01(stride);
+    const t = timeS + seed;
     const a = phase * Math.PI * 2;
-    const swing = Math.sin(a);
+    // A boot sweeps back under the body for the stance share of the cycle while the body moves on.
+    const stepM = cycleM * STANCE * s;
+    const liftM = 0.11 * s;
+    // The body is lowest as each heel strikes and highest over a straight leg: two bobs a cycle.
+    const bob = -0.022 * s * (0.5 + 0.5 * Math.cos(2 * a)) - 0.008 * s;
+    // Standing: a slow shift of weight from foot to foot, and breath.
+    const shift = (1 - s) * Math.sin(t * 0.37) * 0.018;
+    const breath = Math.sin(t * 1.7);
+    bones.pelvis.position.set(Math.sin(a) * 0.022 * s + shift, pelvisY + bob + breath * 0.003 * (1 - s), 0);
+    bones.pelvis.rotation.set(0.015 * s, Math.sin(a) * 0.09 * s, -Math.sin(a) * 0.035 * s + shift * 0.8);
+    bones.spine.rotation.set(breath * 0.012 * (1 - s), -Math.sin(a) * 0.07 * s, Math.sin(a) * 0.02 * s);
+    bones.chest.rotation.set(breath * 0.01, -Math.sin(a) * 0.05 * s, 0);
+    // The head holds the horizon while the body turns under it, and looks about when standing.
+    const look = (1 - s) * (Math.sin(t * 0.21) * 0.35 + Math.sin(t * 0.53) * 0.12);
+    bones.head.rotation.set(-0.05 * s + Math.sin(t * 0.17) * 0.06 * (1 - s), -(bones.pelvis.rotation.y + bones.spine.rotation.y + bones.chest.rotation.y) * 0.8 + look, 0);
+
+    const hipDrop = hipY + bob - ankleY;
     for (const side of ['L', 'R'] as const) {
-      const sign = side === 'L' ? 1 : -1;
-      const leg = swing * sign;
-      // The hip swings the leg; the knee bends only while that leg comes forward.
-      bones[`hip${side}`].rotation.x = -leg * 0.46 * s;
-      const lift = Math.max(0, Math.cos(a) * sign);
-      bones[`knee${side}`].rotation.x = lift * 0.6 * s;
-      // The boot stays flat on the ground: it undoes what the hip and knee turned.
-      bones[`ankle${side}`].rotation.x = -(bones[`hip${side}`].rotation.x + bones[`knee${side}`].rotation.x) * 0.9;
-      // Arms hang at ease, lowered from the model's reaching pose, and swing against the legs.
-      bones[`shoulder${side}`].rotation.x = -0.62 + leg * 0.2 * s;
-      bones[`shoulder${side}`].rotation.z = (side === 'L' ? 1 : -1) * 0.1;
-      bones[`elbow${side}`].rotation.x = -0.5 + Math.max(0, -leg) * 0.12 * s;
+      const offset = side === 'L' ? 0 : 0.5;
+      // Phase 0: the left heel strikes.
+      const foot = footAt(phase + offset, stepM, liftM);
+      // Standing, the weight leg is straight and the other bends a little.
+      const rest = (side === 'L' ? 1 : -1) * shift * 1.6;
+      const legs = legAngles(foot.ahead, hipDrop - foot.lift - Math.max(0, rest));
+      // The pelvis turns and tilts; the thigh undoes that so the boot lands where it was aimed.
+      bones[`hip${side}`].rotation.set(legs.hip - bones.pelvis.rotation.x, 0, (side === 'L' ? -1 : 1) * 0.02);
+      bones[`knee${side}`].rotation.set(legs.knee, 0, 0);
+      // The boot meets the ground flat, rolls from heel to toe, and points its toe up in the swing.
+      bones[`ankle${side}`].rotation.set(-(legs.hip + legs.knee) + foot.pitch * s, 0, 0);
+
+      // Arms swing against the legs: the left arm forward as the right leg is.
+      const opposite = footAt(phase + offset + 0.5, 1, 0).ahead;
+      const swing = opposite * 0.42 * s;
+      bones[`shoulder${side}`].rotation.set(-0.62 - swing + breath * 0.008, 0, (side === 'L' ? 1 : -1) * (0.12 + 0.02 * s));
+      // The elbow bends more as the arm comes forward.
+      bones[`elbow${side}`].rotation.set(-0.5 - Math.max(0, swing) * 0.6 - 0.08 * s, 0, 0);
+      bones[`hand${side}`].rotation.set(-0.1 * s, 0, 0);
     }
-    // A small bob twice a cycle, a twist with the stride and a sway over the standing leg.
-    bones.pelvis.position.y = pelvisY - Math.abs(Math.cos(a)) * 0.025 * s;
-    bones.pelvis.rotation.y = swing * 0.07 * s;
-    bones.pelvis.rotation.z = Math.cos(a) * 0.025 * s;
-    bones.spine.rotation.y = -swing * 0.06 * s;
-    bones.chest.rotation.x = 0.03 * s;
   };
   pose(0, 0);
 

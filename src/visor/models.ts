@@ -2,6 +2,7 @@ import { Box3, BoxGeometry, Color, CylinderGeometry, Group, Mesh, MeshPhysicalMa
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
 import { MeshoptDecoder } from 'three/examples/jsm/libs/meshopt_decoder.module.js';
 import { MODELS, type ModelName } from './modelSpecs';
+import { separateWheels } from './wheels';
 
 const loader = new GLTFLoader();
 loader.setMeshoptDecoder(MeshoptDecoder);
@@ -12,14 +13,14 @@ function tame(material: Material): void {
   // Orbital-photo metal reads as a black mirror under a dusty sky with no environment map.
   material.metalness = Math.min(material.metalness, 0.2);
   material.roughness = Math.max(material.roughness, 0.35);
-  // A little self-light so the shaded side is not a silhouette.
+  // A trace of self-light so the shaded side is not a silhouette; the sky's environment map does the rest.
   if (material.map && !material.emissiveMap) {
     material.emissiveMap = material.map;
     material.emissive = new Color(1, 1, 1);
-    material.emissiveIntensity = 0.07;
+    material.emissiveIntensity = 0.025;
   } else if (!material.emissiveMap) {
     material.emissive = material.color.clone();
-    material.emissiveIntensity = 0.07;
+    material.emissiveIntensity = 0.025;
   }
   if (material instanceof MeshPhysicalMaterial) {
     // Transmission makes three.js draw the whole scene a second time; the models read fine without it.
@@ -55,6 +56,7 @@ export function loadModel(name: ModelName): Promise<Group> {
       const root = new Group();
       root.name = name;
       root.add(inner);
+      if (spec.wheels) separateWheels(root, spec.wheels);
       return root;
     });
     cache.set(name, pending);
