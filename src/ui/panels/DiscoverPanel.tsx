@@ -157,7 +157,7 @@ function FollowPerseverance({ traverse, places }: { traverse: Traverse; places: 
           className="inline-flex h-8 items-center gap-1.5 rounded-md border px-2.5 text-[13px] font-medium hover:bg-secondary"
         >
           <Binoculars className="size-3.5 text-muted-foreground" aria-hidden />
-          Stand there
+          {index === stops.length - 1 ? 'Stand beside the rover' : 'Stand there'}
         </button>
         <button type="button" onClick={showFrames} className="inline-flex h-8 items-center rounded-md border px-2.5 text-[13px] font-medium hover:bg-secondary">
           What it saw that sol

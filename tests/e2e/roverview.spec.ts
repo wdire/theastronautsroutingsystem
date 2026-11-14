@@ -40,3 +40,30 @@ test('Rover View stands on the ground, above it, and leaves the clock as it foun
   expect(await page.evaluate(() => window.__areo?.getState().clockLive)).toBe(before);
   expect(await page.evaluate(() => window.__areo?.getState().clockPaused)).toBe(false);
 });
+
+test('Rover View opens beside Perseverance, with the NASA model on the ground and said to be a model', async ({ page }) => {
+  test.setTimeout(240_000);
+  await page.goto('/#c=77.2332,18.4356,15,0,0');
+  await page.waitForFunction(() => window.__areo?.getState().mode === 'map');
+  // Exactly where the rover last reported: the view must step back from it, not open inside it.
+  await page.evaluate(() => window.__areo?.getState().openVisor({ lon: 77.233223, lat: 18.435594 }));
+  const view = page.getByRole('region', { name: 'Rover View' });
+  await page.waitForFunction(() => window.__areoVisor?.getState().ready === true, undefined, { timeout: 200_000 });
+  await page.waitForFunction(() => window.__areoVisor?.props().some((p) => p.id === 'perseverance' && p.seated && p.real), undefined, { timeout: 60_000 });
+
+  const scene = await page.evaluate(() => {
+    const v = window.__areoVisor;
+    const rover = v?.props().find((p) => p.id === 'perseverance');
+    const me = v?.position();
+    if (!rover || !me) return null;
+    return { away: Math.hypot(rover.x - me.x, rover.z - me.z), roverY: rover.y, eyeY: me.y, ids: v?.props().map((p) => p.id) };
+  });
+  expect(scene?.away).toBeGreaterThan(6);
+  expect(scene?.away).toBeLessThan(14);
+  // The rover stands on the ground the viewer stands on, within the slope between them.
+  expect(Math.abs((scene?.eyeY ?? 99) - 1.7 - (scene?.roverY ?? 0))).toBeLessThan(3);
+  expect(scene?.ids).toContain('ingenuity');
+  // No mission start is set, so no base is drawn.
+  expect(scene?.ids).not.toContain('habitat');
+  await expect(view.getByText(/Perseverance, standing where it last reported/)).toBeVisible();
+});

@@ -22,6 +22,9 @@ import { groundQuality } from './groundShader';
 import { createSky } from './sky';
 import { createRocks } from './rocks';
 import { skyState } from './skyModel';
+import { createProps, type PropSpec } from './props';
+
+export type { PropSpec } from './props';
 
 export type Quality = 'auto' | 'high' | 'low';
 
@@ -59,6 +62,14 @@ export interface VisorHandle {
   setQuality(q: Quality): void;
   resize(): void;
   getState(): VisorState;
+  /** The rovers, base and vehicles standing in the scene. Replaces what was there. */
+  setProps(specs: readonly PropSpec[]): void;
+  /** Where each prop stands, in scene metres; for the nearby card and for tests. */
+  props(): { id: string; x: number; z: number; y: number; seated: boolean; real: boolean }[];
+  /** The viewer's place in scene metres (x east, z south). */
+  position(): { x: number; y: number; z: number };
+  /** What the last frame cost, for the performance checks. */
+  stats(): { triangles: number; calls: number; rocks: number };
   dispose(): void;
 }
 
@@ -186,10 +197,12 @@ export async function mountVisor(canvas: HTMLCanvasElement, options: VisorOption
     (x, z) => (layers.near.patch ? fieldSlopeAt(layers.near.patch.field, x, z) : 0),
   );
   let rocksPatch: Patch | null = null;
+  const props = createProps(scene, frame, (x, z) => layers.near.patch?.heightAt(x, z) ?? null);
+  let clearingsChanged = false;
 
   /* ---- viewer ---- */
   const pos = new Vector3(0, EYE_M, 0);
-  let yaw = -((options.headingDeg ?? 0) * Math.PI) / 180;
+  let yaw = ((options.headingDeg ?? 0) * Math.PI) / 180;
   let pitch = -0.06;
   let eyeY = EYE_M;
   const keys = new Set<string>();
@@ -329,7 +342,10 @@ export async function mountVisor(canvas: HTMLCanvasElement, options: VisorOption
     sky.mesh.scale.setScalar(100_000);
 
     // A new near patch means new ground under every rock.
-    rocks.update(pos.x, pos.z, rocksPatch !== layers.near.patch);
+    const groundChanged = rocksPatch !== layers.near.patch;
+    rocks.update(pos.x, pos.z, groundChanged || clearingsChanged);
+    props.update(pos.x, pos.z, groundChanged);
+    clearingsChanged = false;
     rocksPatch = layers.near.patch;
 
     updateLight(now);
@@ -406,6 +422,14 @@ export async function mountVisor(canvas: HTMLCanvasElement, options: VisorOption
     },
     resize,
     getState: () => ({ ...state }),
+    setProps(specs) {
+      props.set(specs);
+      rocks.setClearings(props.clearings());
+      clearingsChanged = true;
+    },
+    props: () => props.list(),
+    position: () => ({ x: pos.x, y: pos.y, z: pos.z }),
+    stats: () => ({ triangles: renderer.info.render.triangles, calls: renderer.info.render.calls, rocks: rocks.count() }),
     dispose() {
       disposed = true;
       cancelAnimationFrame(raf);
@@ -421,6 +445,7 @@ export async function mountVisor(canvas: HTMLCanvasElement, options: VisorOption
       canvas.removeEventListener('webglcontextrestored', onRestored);
       for (const layer of Object.values(layers)) layer.patch?.dispose();
       rocks.dispose();
+      props.dispose();
       sky.dispose();
       renderer.dispose();
     },

@@ -5,6 +5,7 @@ import { nextLtst, marsTime, sunriseSunset } from '@/engines/marsTime';
 import { fmtClock, fmtDeg, fmtDuration, fmtElevation, fmtLatLon } from '@/lib/format';
 import { cn } from '@/lib/cn';
 import type { VisorHandle, VisorState } from '@/visor';
+import { propCaption, sceneProps, standpoint } from './scene';
 
 const TIMES: readonly { label: string; hour: number }[] = [
   { label: 'Morning', hour: 8.5 },
@@ -52,6 +53,8 @@ export default function RoverView() {
   const handleRef = useRef<VisorHandle | null>(null);
   const [state, setState] = useState<VisorState | null>(null);
   const [error, setError] = useState<string | null>(null);
+  /** The thing the viewer is standing near, if any. */
+  const [nearId, setNearId] = useState<string | null>(null);
   const lon = at?.lon;
   const lat = at?.lat;
 
@@ -68,18 +71,33 @@ export default function RoverView() {
       app.setClock(nextLtst(app.utcMs, lon, 10), false);
       app.setClockPaused(true);
     }
-    void import('@/visor')
-      .then(({ mountVisor }) =>
-        mountVisor(canvas, {
-          lon,
-          lat,
+    // The scene's rovers and base are worked out first, so the view can open beside one, not inside it.
+    void Promise.all([import('@/visor'), sceneProps(app.plan)])
+      .then(async ([{ mountVisor }, props]) => {
+        const stand = standpoint(lon, lat, props);
+        const handle = await mountVisor(canvas, {
+          lon: stand.lon,
+          lat: stand.lat,
+          headingDeg: stand.headingDeg,
           utcMs: () => useApp.getState().utcMs,
           scenario: () => useApp.getState().scenario,
           onState: (s) => {
-            if (!cancelled) setState(s);
+            if (cancelled) return;
+            setState(s);
+            const handle = handleRef.current;
+            if (!handle) return;
+            const me = handle.position();
+            let best: { id: string; d: number } | null = null;
+            for (const p of handle.props()) {
+              const d = Math.hypot(p.x - me.x, p.z - me.z);
+              if (p.seated && d < 60 && (!best || d < best.d)) best = { id: p.id, d };
+            }
+            setNearId(best?.id ?? null);
           },
-        }),
-      )
+        });
+        handle.setProps(props);
+        return handle;
+      })
       .then((handle) => {
         if (cancelled) return handle.dispose();
         handleRef.current = handle;
@@ -148,6 +166,7 @@ export default function RoverView() {
               {fmtClock(time.ltstH)} LTST{toSunset > 0 && toSunset < 14 * 3600 ? `, sunset in ${fmtDuration(toSunset)}` : ''}
             </div>
             <div className="font-sans text-white/75">Ground from the {state.groundSource}. Rocks and fine texture are drawn in, not measured.</div>
+            {nearId ? <div className="font-sans text-white/75">{propCaption(nearId)}</div> : null}
           </dl>
 
           <div className="pointer-events-auto absolute bottom-4 left-1/2 flex -translate-x-1/2 flex-col items-center gap-2">
