@@ -2,14 +2,14 @@ import { lazy, Suspense, useEffect } from 'react';
 import { MapView } from '@/map/MapView';
 import { whenMapReady } from '@/map/instance';
 import { startUrlSync } from '@/store/sync';
-import { useSpaceWeatherFeed } from '@/ui/hooks/useSpaceWeather';
 import { Intro } from '@/ui/intro/Intro';
-import { Chrome } from '@/ui/shell/Chrome';
-import { TooltipProvider } from '@/ui/components/ui/tooltip';
-import { Toaster } from '@/ui/components/ui/sonner';
 import { useApp } from '@/store';
 import { cn } from '@/lib/cn';
 
+// The opening screen needs the planet and one button. Search, panels and the planner load beside it,
+// and are there well before the flight down ends.
+const Chrome = lazy(() => import('@/ui/shell/Chrome').then((m) => ({ default: m.Chrome })));
+const Toasts = lazy(() => import('@/ui/shell/Chrome').then((m) => ({ default: m.Toasts })));
 // three.js and the 3D view load only when they are first opened.
 const RoverView = lazy(() => import('@/ui/visor/RoverView'));
 
@@ -26,8 +26,6 @@ export function App() {
   const landed = useApp((s) => s.landed);
   const theme = useApp((s) => s.theme);
   const visorOpen = useApp((s) => s.visor !== null);
-
-  useSpaceWeatherFeed();
 
   useEffect(() => {
     document.documentElement.dataset.theme = theme;
@@ -57,7 +55,6 @@ export function App() {
   const inMap = mode === 'map';
 
   return (
-    <TooltipProvider delayDuration={350} skipDelayDuration={200}>
     <div className="space absolute inset-0 overflow-hidden">
       <MapView />
       <div className={cn('transition-opacity duration-500', mode === 'globe' ? 'opacity-100' : 'opacity-0')}>
@@ -74,15 +71,18 @@ export function App() {
         )}
         inert={!inMap}
       >
-        <Chrome />
+        <Suspense fallback={null}>
+          <Chrome />
+        </Suspense>
       </div>
       {visorOpen ? (
         <Suspense fallback={null}>
           <RoverView />
         </Suspense>
       ) : null}
-      <Toaster position="bottom-center" />
+      <Suspense fallback={null}>
+        <Toasts />
+      </Suspense>
     </div>
-    </TooltipProvider>
   );
 }

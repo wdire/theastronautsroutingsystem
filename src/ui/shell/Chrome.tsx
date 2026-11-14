@@ -1,3 +1,6 @@
+import { useSpaceWeatherFeed } from '@/ui/hooks/useSpaceWeather';
+import { TooltipProvider } from '@/ui/components/ui/tooltip';
+import { Toaster } from '@/ui/components/ui/sonner';
 import { useApp } from '@/store';
 import { DockPanel, DockRail } from '@/ui/dock/Dock';
 import { MapButtons } from '@/ui/mapctl/MapButtons';
@@ -63,6 +66,20 @@ function PickingHint() {
 
 /** Everything drawn over the map once the camera has landed in the region. */
 export function Chrome() {
+  useSpaceWeatherFeed();
+  return (
+    <TooltipProvider delayDuration={350} skipDelayDuration={200}>
+      <ChromeLayout />
+    </TooltipProvider>
+  );
+}
+
+/** Toasts sit outside the chrome layer, which passes the pointer through to the map: an Undo must take a click. */
+export function Toasts() {
+  return <Toaster position="bottom-center" />;
+}
+
+function ChromeLayout() {
   const phone = useIsPhone();
 
   if (phone) {
