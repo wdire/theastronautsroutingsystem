@@ -1,7 +1,9 @@
 import { getCoverage, loadCoverage, nearestTile, tileUrl, type Coverage, type TileRef } from '@/data/coverage';
 import { flatTile, MARS_FLAT, type TileData } from './index';
 import { blendDetail, highPassRadius, luminance, type DetailLayer } from './detail';
-import { CTX, HIRISE, VIKING, warpToTile, type EquirectSource } from './live';
+import { CTX, HIRISE, USGS_HIRISE, VIKING, warpToTile, type EquirectSource } from './live';
+import { insideHirise } from '@/data/hiriseGrid';
+import { pxToLat, pxToLon } from '@/lib/geo';
 
 /** Decoded package tiles kept for upsampling, most recently used last. */
 const bitmapCache = new Map<string, Promise<ImageBitmap>>();
@@ -91,8 +93,16 @@ async function detailLayer(
   return layer;
 }
 
+/** Whether any corner or the middle of a map tile lies on the Jezero HiRISE mosaic. */
+export function tileTouchesHirise(z: number, x: number, y: number): boolean {
+  for (const [fx, fy] of [[0, 0], [1, 0], [0, 1], [1, 1], [0.5, 0.5]] as const) {
+    if (insideHirise(pxToLon((x + fx) * 256, z), pxToLat((y + fy) * 256, z))) return true;
+  }
+  return false;
+}
+
 /**
- * Base imagery for any tile to zoom 17. The package tile if there is one; otherwise the nearest
+ * Base imagery for any tile to zoom 19. The package tile if there is one; otherwise the nearest
  * package ancestor, upsampled for colour, with live detail blended into its brightness:
  * Viking below zoom 9, CTX from 9, and HiRISE on top from 14 wherever an image covers the tile.
  * With no connection the upsampled ancestor is returned as it is, so there is always ground.
@@ -113,7 +123,9 @@ export async function imgTile(_rest: string[], z: number, x: number, y: number, 
     wanted.push(detailLayer(VIKING, z, x, y, pad, highPassRadius(z, ref.z), 0.9, false));
   }
   if (z >= HIRISE_FROM) {
-    wanted.push(detailLayer(HIRISE, z, x, y, pad, highPassRadius(z, Math.max(ref.z, CTX_NATIVE)), 1.1, true));
+    // Over Jezero's own HiRISE mosaic, its 25 cm; elsewhere the sparser global HiRISE layer.
+    const onJezero = tileTouchesHirise(z, x, y);
+    wanted.push(detailLayer(onJezero ? USGS_HIRISE : HIRISE, z, x, y, pad, highPassRadius(z, Math.max(ref.z, CTX_NATIVE)), onJezero ? 1.2 : 1.1, true));
   }
   if (wanted.length === 0 || (typeof navigator !== 'undefined' && navigator.onLine === false)) return canvas.transferToImageBitmap();
 

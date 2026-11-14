@@ -19,7 +19,7 @@ export function baseStyle(): StyleSpecification {
         tiles: ['mars://img/{z}/{x}/{y}'],
         tileSize: 256,
         minzoom: 0,
-        maxzoom: 17,
+        maxzoom: 19,
         attribution: 'NASA / JPL-Caltech / USGS / MSSS / ASU',
       },
       [SOURCE_REGION]: {

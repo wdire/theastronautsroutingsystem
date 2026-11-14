@@ -37,7 +37,7 @@ export function createMap(container: HTMLElement): MapLibreMap {
     center: view.center,
     zoom: view.zoom,
     minZoom: 0.8,
-    maxZoom: 17,
+    maxZoom: 19,
     maxPitch: 80,
     attributionControl: false,
     renderWorldCopies: false,

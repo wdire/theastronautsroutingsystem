@@ -118,7 +118,7 @@ export function decodeUrlState(hash: string): UrlState {
   if (c && c.length >= 3) {
     const lon = finite(c[0], -180, 360);
     const lat = finite(c[1], -85, 85);
-    const zoom = finite(c[2], 0, 17);
+    const zoom = finite(c[2], 0, 19);
     if (lon !== null && lat !== null && zoom !== null) {
       out.camera = { lon, lat, zoom, bearing: finite(c[3], -360, 360) ?? 0, pitch: finite(c[4], 0, 80) ?? 0 };
     }

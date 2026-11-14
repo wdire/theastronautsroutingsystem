@@ -3,7 +3,7 @@ import { reliefExaggeration } from '@/engines/relief';
 import { mapLighting } from '@/engines/lighting';
 import { sunPosition } from '@/engines/marsTime';
 import { useApp } from '@/store';
-import { DEM_MAX_ZOOM } from '@/data/dem';
+import { MAP_DEM_MAX_ZOOM } from './protocol/dem';
 
 const SOURCE_DEM = 'dem';
 const SOURCE_SHADE = 'dem-shade';
@@ -28,7 +28,7 @@ export function onExaggeration(cb: (factor: number) => void): () => void {
  */
 export function addTerrain(map: MapLibreMap): () => void {
   // Terrain and hillshade read the same tiles through two sources, as the library recommends.
-  const dem = { type: 'raster-dem' as const, tiles: DEM_TILES, tileSize: 256, encoding: 'terrarium' as const, maxzoom: DEM_MAX_ZOOM };
+  const dem = { type: 'raster-dem' as const, tiles: DEM_TILES, tileSize: 256, encoding: 'terrarium' as const, maxzoom: MAP_DEM_MAX_ZOOM };
   if (!map.getSource(SOURCE_DEM)) map.addSource(SOURCE_DEM, dem);
   if (!map.getSource(SOURCE_SHADE)) map.addSource(SOURCE_SHADE, dem);
   if (!map.getLayer('hillshade')) {

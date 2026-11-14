@@ -1,4 +1,5 @@
 import { pxToLat, pxToLon } from '@/lib/geo';
+import { HIRISE_LAYERS, HIRISE_TILE, sourceToLonLat, tileUrlFor } from '@/data/hiriseGrid';
 
 /**
  * Live imagery from NASA and USGS services that publish equirectangular tiles. Tiles are fetched,
@@ -13,6 +14,12 @@ export interface EquirectSource {
   /** The source level whose pixels are at least as fine as a Mercator tile at zoom z. */
   levelFor(z: number): number;
   url(level: number, row: number, col: number): string;
+  /** The corner of the source grid, when it is not the whole planet from 180 W, 90 N. */
+  origin?: { lon: number; lat: number };
+  /** Tiles across and down at a level, when the grid is not the whole planet. */
+  size?: (level: number) => { cols: number; rows: number };
+  /** How long to wait for a tile, ms. */
+  timeoutMs?: number;
 }
 
 const ESRI = 'https://astro.arcgis.com/arcgis/rest/services/OnMars';
@@ -36,6 +43,32 @@ export const HIRISE: EquirectSource = {
   maxLevel: 17,
   levelFor: (z) => z - 2,
   url: (l, r, c) => `${ESRI}/HiRISE/MapServer/tile/${l}/${r}/${c}`,
+};
+
+const ORTHO = HIRISE_LAYERS.ortho;
+const ORTHO_LEVELS = ORTHO.maxLevel;
+const [ORTHO_LON0, ORTHO_LAT0] = sourceToLonLat('ortho', 0, 0);
+/** Degrees per source pixel at the coarsest level served. */
+const ORTHO_COARSEST = (ORTHO.res * 2 ** ORTHO_LEVELS * 180) / (Math.PI * 3_396_190);
+
+/**
+ * The Mars 2020 HiRISE mosaic of Jezero at 25 cm (USGS), cut into tiles by /api/hirise. Levels count
+ * up toward the finest here, as for the other sources; /api/hirise counts the other way.
+ */
+export const USGS_HIRISE: EquirectSource = {
+  id: 'usgs-hirise',
+  tileSize: HIRISE_TILE,
+  baseRes: ORTHO_COARSEST,
+  maxLevel: ORTHO_LEVELS,
+  // The finest level no coarser than a map pixel's width.
+  levelFor: (z) => Math.max(0, Math.min(ORTHO_LEVELS, Math.ceil(Math.log2(ORTHO_COARSEST / (360 / (256 * 2 ** z)))))),
+  url: (l, r, c) => tileUrlFor('ortho', ORTHO_LEVELS - l, c, r),
+  origin: { lon: ORTHO_LON0, lat: ORTHO_LAT0 },
+  size: (l) => {
+    const span = HIRISE_TILE * 2 ** (ORTHO_LEVELS - l);
+    return { cols: Math.ceil(ORTHO.width / span), rows: Math.ceil(ORTHO.height / span) };
+  },
+  timeoutMs: 45_000,
 };
 
 /** Viking MDIM 2.1 colour mosaic, 232 m per pixel (NASA Mars Trek). */
@@ -117,15 +150,18 @@ export async function warpToTile(src: EquirectSource, z: number, x: number, y: n
   const size = 256 + 2 * pad;
   const res = src.baseRes / 2 ** level;
   const ts = src.tileSize;
-  const levelCols = Math.round(360 / (res * ts));
-  const levelRows = Math.round(180 / (res * ts));
+  const grid = src.size?.(level) ?? { cols: Math.round(360 / (res * ts)), rows: Math.round(180 / (res * ts)) };
+  const levelCols = grid.cols;
+  const levelRows = grid.rows;
+  const lon0 = src.origin?.lon ?? -180;
+  const lat0 = src.origin?.lat ?? 90;
 
   // Source pixel coordinates of every output column and row. Longitude is linear, latitude is not.
   const sx = new Float64Array(size);
   const sy = new Float64Array(size);
   for (let i = 0; i < size; i += 1) {
-    sx[i] = (pxToLon(x * 256 - pad + i + 0.5, z) + 180) / res - 0.5;
-    sy[i] = (90 - pxToLat(y * 256 - pad + i + 0.5, z)) / res - 0.5;
+    sx[i] = (pxToLon(x * 256 - pad + i + 0.5, z) - lon0) / res - 0.5;
+    sy[i] = (lat0 - pxToLat(y * 256 - pad + i + 0.5, z)) / res - 0.5;
   }
   const col0 = Math.max(0, Math.floor((sx[0] ?? 0) / ts));
   const col1 = Math.min(levelCols - 1, Math.floor(((sx[size - 1] ?? 0) + 1) / ts));
@@ -135,7 +171,7 @@ export async function warpToTile(src: EquirectSource, z: number, x: number, y: n
 
   const jobs: Promise<{ bitmap: ImageBitmap | null; r: number; c: number }>[] = [];
   for (let r = row0; r <= row1; r += 1) {
-    for (let c = col0; c <= col1; c += 1) jobs.push(sourceTile(src, level, r, c, timeoutMs).then((bitmap) => ({ bitmap, r, c })));
+    for (let c = col0; c <= col1; c += 1) jobs.push(sourceTile(src, level, r, c, src.timeoutMs ?? timeoutMs).then((bitmap) => ({ bitmap, r, c })));
   }
   const tiles = await Promise.all(jobs);
   if (tiles.every((t) => !t.bitmap)) return null;

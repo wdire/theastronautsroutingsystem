@@ -9,6 +9,8 @@ const STOPS: readonly (readonly [zoom: number, factor: number])[] = [
   [11.5, 3],
   [13, 2.2],
   [15, 1.6],
+  // Close in, the HiRISE model's own metres are the point: true scale.
+  [16.5, 1],
 ];
 
 export function reliefExaggeration(zoom: number): number {
