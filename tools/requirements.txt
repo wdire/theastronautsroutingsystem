@@ -1,0 +1,12 @@
+# Python packages for the one-off data pipeline under tools/ (Python 3.14).
+#   /opt/homebrew/bin/python3.14 -m venv tools/.venv && tools/.venv/bin/pip install -r tools/requirements.txt
+numpy==2.5.4
+pillow==13.0.0
+shapely==2.2.0
+# Tile package (region.py, build_region.py, build_crism.py, check_region.py, fix_region_edges.py)
+scipy==1.18.1
+requests==2.34.2
+certifi==2026.10.23
+charset-normalizer==3.5.2
+idna==3.20
+urllib3==2.8.0

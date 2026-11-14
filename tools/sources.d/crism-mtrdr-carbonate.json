@@ -5,6 +5,6 @@
   "product": "MRO-M-CRISM-5-RDR-MPTARGETED-V1.0 browse products BRCR2J_MTR3: HRL000040FF, HRL00010963, HRL000116C6, FRT000047A3, FRT00005850, FRT00005C5E, FRT000066A4, FRT0001182A, FRT000161EF, FRT0001642E, FRT000165F7, FRT00016A73, FRT00017103, FRT000174F4, FRT00017B1B, FRT00018781, FRT0001C558, FRT0001ECBA, FRT0001FB74, FRT00020C77, FRT00021DA6",
   "url": "https://pds-geosciences.wustl.edu/mro/mro-m-crism-5-rdr-mptargeted-v1/",
   "licence": "Public domain (NASA/JPL/JHUAPL; PDS Geosciences Node; Seelos et al. 2016, Viviano-Beck et al. 2014)",
-  "notes": "Spectral overlay, zoom 9 to 12: red, green, blue are the summary parameters MIN2295_2480, MIN2345_2537, CINDEX2; carbonate indicators: magnesium carbonate shows yellow to white. Each image keeps the CRISM team's own stretch, so colours are not comparable between images. Found through the PDS Orbital Data Explorer. Covers 13% of its tile area.",
+  "notes": "Spectral overlay, zoom 9 to 12: red, green, blue are the summary parameters MIN2295_2480, MIN2345_2537, CINDEX2; carbonate indicators: magnesium carbonate shows yellow to white. Each image keeps the CRISM team's own stretch, so colours are not comparable between images. Opacity follows signal strength (our choice, to let the map show through); a faint tint marks each image's footprint. Found through the PDS Orbital Data Explorer. Images cover 13% of the tile area.",
   "retrieved": "2026-11-14"
 }
