@@ -66,6 +66,8 @@ export interface VisorOptions {
 }
 
 export type CameraMode = 'helmet' | 'chase' | 'orbit';
+/** On your own: how far the camera stands from you or the vehicle you drive. */
+export type RoamView = 'eyes' | 'close' | 'far';
 
 /** What the view needs from a running mission, asked every frame. */
 export interface MissionFeed {
@@ -99,6 +101,8 @@ export interface VisorState {
   near: string | null;
   /** Which camera shows a mission; 'helmet' when there is none. */
   camera: CameraMode;
+  /** On your own: what you move as (on foot, or a vehicle you drive) and where the camera stands. */
+  roam: { vehicle: VehicleId; view: RoamView };
 }
 
 export interface VisorHandle {
@@ -112,6 +116,8 @@ export interface VisorHandle {
   setRocks(on: boolean): void;
   /** Which camera follows the mission. */
   setCamera(mode: CameraMode): void;
+  /** On your own: walk, or take a vehicle and drive it; and the camera's distance. */
+  setRoam(vehicle: VehicleId, view: RoamView): void;
   resize(): void;
   getState(): VisorState;
   /** Where each prop stands, in scene metres; for tests. */
@@ -126,6 +132,8 @@ export interface VisorHandle {
 }
 
 const EYE_M = 1.7;
+/** Top speed when you drive or walk on your own, m/s (Shift for more): brisker than the real machines, to get about. */
+const ROAM_TOP_MS: Record<VehicleId, number> = { foot: 1.6, openRover: 6, pressRover: 5, robotRover: 3, heli: 8 };
 const WALK_MS = 1.6;
 const FAST_MS = 9;
 const MAX_LIFT_M = 150;
@@ -233,6 +241,7 @@ export async function mountVisor(canvas: HTMLCanvasElement, options: VisorOption
     sunElevDeg: 0,
     near: null,
     camera: options.mission ? 'chase' : 'helmet',
+    roam: { vehicle: 'foot', view: 'eyes' },
   };
 
   /* ---- ground layers ---- */
@@ -347,6 +356,10 @@ export async function mountVisor(canvas: HTMLCanvasElement, options: VisorOption
   let lift = options.mission ? 0 : Math.max(0, Math.min(MAX_LIFT_M, options.arrive?.liftM ?? 0));
   // The descent from the map's camera, eased over a few seconds once the ground is built; any input ends it.
   let descent: { t: number; lift: number; pitch: number } | null = options.arrive && !options.mission ? { t: 0, lift, pitch: (-options.arrive.pitchDeg * Math.PI) / 180 } : null;
+  // On your own, anything but walking in your own eyes: a body or vehicle that moves, and a camera that follows.
+  let roamParty: ReturnType<typeof createParty> | null = null;
+  const roamer = { x: 0, z: 0, heading: 0, speed: 0 };
+  let roamDist = 1;
   // Zooming out past the top is gathered like the map's push, so one notch too many does not leave.
   let ascendPush = 0;
   let ascendAt = 0;
@@ -405,6 +418,10 @@ export async function mountVisor(canvas: HTMLCanvasElement, options: VisorOption
     if (mission) return;
     e.preventDefault();
     descent = null;
+    if (roamParty && state.roam.view !== 'eyes') {
+      roamDist = Math.max(0.5, Math.min(6, roamDist * Math.exp(e.deltaY * 0.0016)));
+      return;
+    }
     if (e.deltaY > 0 && lift >= MAX_LIFT_M - 0.5 && options.onAscend) {
       const now = performance.now();
       if (now - ascendAt > 700) ascendPush = 0;
@@ -551,6 +568,38 @@ export async function mountVisor(canvas: HTMLCanvasElement, options: VisorOption
           }),
           objective ? { x: objective[0], z: objective[1] } : null,
         );
+      }
+    } else if (roamParty) {
+      // Driving (or walking as a figure seen from outside): W and S speed up and slow down, A and D steer.
+      const fwd = (keys.has('KeyW') || keys.has('ArrowUp') ? 1 : 0) - (keys.has('KeyS') || keys.has('ArrowDown') ? 1 : 0) + pad.forward;
+      const steer = (keys.has('KeyD') || keys.has('ArrowRight') ? 1 : 0) - (keys.has('KeyA') || keys.has('ArrowLeft') ? 1 : 0) + pad.right;
+      const fast = keys.has('ShiftLeft') || keys.has('ShiftRight') || pad.fast;
+      const top = ROAM_TOP_MS[state.roam.vehicle] * (fast ? 2.4 : 1);
+      const want = Math.max(-0.4, Math.min(1, fwd)) * top;
+      roamer.speed += (want - roamer.speed) * Math.min(1, dt * (Math.abs(want) > Math.abs(roamer.speed) ? 1.8 : 3.2));
+      // A walker turns on the spot; a vehicle turns only while it rolls.
+      const turnRate = state.roam.vehicle === 'foot' || state.roam.vehicle === 'heli' ? 1.9 : 1.1 * Math.min(1, Math.abs(roamer.speed) / 1.5) * Math.sign(roamer.speed || 1);
+      roamer.heading += steer * turnRate * dt;
+      const nx = roamer.x + Math.sin(roamer.heading) * roamer.speed * dt;
+      const nz = roamer.z - Math.cos(roamer.heading) * roamer.speed * dt;
+      [roamer.x, roamer.z] = keepOutside(nx, nz, props.clearings, roamParty.sizeM * 0.35);
+      roamParty.update({ x: roamer.x, z: roamer.z, headingDeg: (roamer.heading * 180) / Math.PI, speedMs: Math.abs(roamer.speed), moving: Math.abs(roamer.speed) > 0.05 }, dt);
+      const f = roamParty.focus();
+      const view = state.roam.view;
+      roamParty.setFirstPerson(view === 'eyes');
+      if (view === 'eyes') {
+        pos.x = f.x;
+        pos.z = f.z;
+        viewYaw = roamer.heading + yaw;
+        eyeAbove = roamParty.eyeM + (state.roam.vehicle === 'heli' ? 6 : 0);
+      } else {
+        const dist = (roamParty.sizeM * (view === 'far' ? 2.6 : 1.1) + (view === 'far' ? 9 : 3)) * roamDist;
+        const behind = roamer.heading + Math.PI + yaw;
+        pos.x = f.x + Math.sin(behind) * dist;
+        pos.z = f.z - Math.cos(behind) * dist;
+        eyeAbove = (view === 'far' ? 7 : 2.6) * Math.sqrt(roamDist) + (state.roam.vehicle === 'heli' ? 6 : 0);
+        viewYaw = behind + Math.PI;
+        viewPitch = Math.atan2(eyeY - (f.y + 1.2), dist) + pitch;
       }
     } else {
       // Walk: keys or the on-screen pad, along the way the viewer faces.
@@ -722,6 +771,33 @@ export async function mountVisor(canvas: HTMLCanvasElement, options: VisorOption
     setRocks(on) {
       rocks.setVisible(on);
     },
+    setRoam(vehicle, view) {
+      if (mission) return;
+      const was = state.roam;
+      state.roam = { vehicle, view };
+      const needParty = vehicle !== 'foot' || view !== 'eyes';
+      if (roamParty && (!needParty || was.vehicle !== vehicle)) {
+        // Getting out: stand where the vehicle was, facing the way it faced.
+        pos.x = roamer.x;
+        pos.z = roamer.z;
+        yaw = roamer.heading;
+        roamParty.dispose();
+        roamParty = null;
+      }
+      if (needParty && !roamParty) {
+        roamer.x = pos.x;
+        roamer.z = pos.z;
+        roamer.heading = yaw;
+        roamer.speed = 0;
+        roamParty = createParty(scene, vehicle, heightAt, vehicle === 'foot' ? [{ id: 'me', name: 'You', role: 'Commander', color: '#e8743b', android: false, me: true }] : []);
+        yaw = 0;
+      }
+      if (needParty) {
+        lift = 0;
+        pitch = view === 'eyes' ? -0.06 : 0;
+        if (view !== was.view) roamDist = 1;
+      }
+    },
     setCamera(mode) {
       state.camera = mode;
       // The drag offset belongs to the camera it was made on.
@@ -753,6 +829,7 @@ export async function mountVisor(canvas: HTMLCanvasElement, options: VisorOption
       props.dispose();
       party?.dispose();
       walkers?.dispose();
+      roamParty?.dispose();
       guides?.dispose();
       releaseModels();
       sky.dispose();

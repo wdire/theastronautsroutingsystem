@@ -9,6 +9,7 @@ import { useIsTouch } from '@/ui/hooks/useMediaQuery';
 import { MovePad } from './MovePad';
 import { missionFeed } from './missionFeed';
 import { MissionHud } from './MissionHud';
+import { RoamBar } from './RoamBar';
 import { propCaption, sceneProps, standpoint } from './scene';
 import { returnToMap } from '@/map/descend';
 
@@ -49,7 +50,7 @@ function CompassTape({ heading }: { heading: number }) {
 
 /** Everything the overlay shows of the view's state, as one string to compare. */
 function shownKey(s: VisorState): string {
-  return `${s.ready}|${s.loading}|${s.lon.toFixed(5)}|${s.lat.toFixed(5)}|${Math.round(s.elev)}|${s.slopeDeg.toFixed(1)}|${Math.round(s.headingDeg)}|${s.groundSource}|${s.near}|${s.camera}`;
+  return `${s.ready}|${s.loading}|${s.lon.toFixed(5)}|${s.lat.toFixed(5)}|${Math.round(s.elev)}|${s.slopeDeg.toFixed(1)}|${Math.round(s.headingDeg)}|${s.groundSource}|${s.near}|${s.camera}|${s.roam.vehicle}|${s.roam.view}`;
 }
 
 const SHADOW = '[text-shadow:0_1px_3px_rgb(0_0_0/0.9),0_0_1px_rgb(0_0_0/0.8)]';
@@ -187,6 +188,11 @@ export default function RoverView() {
       {state?.ready ? (
         <>
           {riding ? <MissionHud camera={state.camera} onCamera={(mode) => handleRef.current?.setCamera(mode)} /> : null}
+          {riding ? null : (
+            <div className={cn('pointer-events-auto absolute right-3', touch ? 'top-[7.5rem]' : 'top-3')}>
+              <RoamBar vehicle={state.roam.vehicle} view={state.roam.view} onChange={(v, view) => handleRef.current?.setRoam(v, view)} />
+            </div>
+          )}
           {touch && !riding ? (
             <div className="absolute bottom-[max(1.25rem,env(safe-area-inset-bottom))] left-5">
               <MovePad onMove={(right, forward, fast) => handleRef.current?.setMove(right, forward, fast)} />
@@ -235,7 +241,13 @@ export default function RoverView() {
                 );
               })}
             </div>
-            {touch ? null : <p className={cn('text-xs text-white/80', SHADOW)}>W A S D or the arrow keys to walk, Shift for rover speed. Drag to look. Scroll to rise, and past the top to return to the map.</p>}
+            {touch ? null : (
+              <p className={cn('text-xs text-white/80', SHADOW)}>
+                {state.roam.vehicle === 'foot' && state.roam.view === 'eyes'
+                  ? 'W A S D or the arrow keys to walk, Shift to hurry. Drag to look. Scroll to rise, and past the top to return to the map.'
+                  : 'W and S to go and stop, A and D to steer, Shift for more speed. Drag to look around. Scroll to bring the camera in or out.'}
+              </p>
+            )}
           </div>
         </>
       ) : null}
