@@ -1,6 +1,9 @@
 import { mapToneAmount, mapToneLut } from '@/engines/grading';
-import { hdTile, imgTile } from './img';
-import { toBitmap, type TileData, type TileHandler } from './index';
+import { hdTile, imgTile, packageImage } from './img';
+import { toBitmap, type TileData } from './common';
+import { pxToLat } from '@/lib/geo';
+
+type TileHandler = (rest: string[], z: number, x: number, y: number, signal: AbortSignal) => Promise<TileData>;
 
 const luts = new Map<number, Uint8ClampedArray>();
 
@@ -59,23 +62,74 @@ function unsharp(px: Uint8ClampedArray, w: number, h: number, amount: number): v
   }
 }
 
-/**
- * The base image as the map shows it: the tile, with its shadows lifted so dark ground can be read.
- * Rover View takes the untouched tile (`imgTile`) and grades it for eye level itself.
- */
-export const mapImgTile: TileHandler = async (rest, z, x, y, signal) => {
-  const data = await imgTile(rest, z, x, y, signal);
+/** From the regional view in, a light sharpening; most at the zooms the 20 m mosaic is shown at its own size. */
+function sharpenFor(z: number): number {
+  return z >= 11 ? (z <= 14 ? 0.7 : 0.4) : 0;
+}
+
+/** A tile toned for the map at its zoom; as it came if it cannot be read back. */
+async function forMap(data: TileData, z: number, sharpen: number, signal: AbortSignal): Promise<TileData> {
   const lut = lutFor(z);
   // A tile the map has stopped waiting for is not worth toning.
   if (!lut || signal.aborted) return data;
   try {
-    // From the regional view in, a light sharpening; most at the zooms the 20 m mosaic is shown at its own size.
-    return await toned(data, lut, z >= 11 ? (z <= 14 ? 0.7 : 0.4) : 0);
+    return await toned(data, lut, sharpen);
   } catch {
-    // A tile that cannot be read back is shown as it came.
     return data;
   }
-};
+}
+
+/**
+ * The colour of each polar cap as the globe closes it: the ice of the residual caps, a little dimmed by the
+ * dust on it, so the closed pole reads as the bright cap the mosaic shows around it.
+ */
+const CAP_NORTH: readonly [number, number, number] = [196, 181, 171];
+const CAP_SOUTH: readonly [number, number, number] = [188, 168, 150];
+/** Latitudes over which the imagery gives way to the cap colour, degrees. */
+const CAP_FROM = 81.5;
+const CAP_TO = 84.9;
+
+/**
+ * Web Mercator ends at 85.05 degrees; the globe closes each pole by stretching the tiles' last row of pixels
+ * to a point, so every bright or dark pixel in that row became a spoke of a pinched fan. Toward the pole the
+ * imagery is blended into one colour per cap, so the stretched row is even and the cap reads as a cap.
+ */
+async function polarCap(data: TileData, z: number, y: number): Promise<TileData> {
+  const top = Math.abs(pxToLat(y * 256, z));
+  const bottom = Math.abs(pxToLat((y + 1) * 256, z));
+  if (Math.max(top, bottom) < CAP_FROM) return data;
+  const bitmap = await toBitmap(data);
+  const canvas = new OffscreenCanvas(256, 256);
+  const ctx = canvas.getContext('2d', { willReadFrequently: true });
+  if (!ctx) return bitmap;
+  ctx.drawImage(bitmap, 0, 0, 256, 256);
+  bitmap.close();
+  const image = ctx.getImageData(0, 0, 256, 256);
+  const px = image.data;
+  for (let row = 0; row < 256; row += 1) {
+    const lat = pxToLat(y * 256 + row + 0.5, z);
+    const t = Math.max(0, Math.min(1, (Math.abs(lat) - CAP_FROM) / (CAP_TO - CAP_FROM)));
+    const w = t * t * (3 - 2 * t);
+    if (w <= 0) continue;
+    const cap = lat > 0 ? CAP_NORTH : CAP_SOUTH;
+    for (let i = row * 256 * 4; i < (row + 1) * 256 * 4; i += 4) {
+      px[i] = (px[i] ?? 0) + (cap[0] - (px[i] ?? 0)) * w;
+      px[i + 1] = (px[i + 1] ?? 0) + (cap[1] - (px[i + 1] ?? 0)) * w;
+      px[i + 2] = (px[i + 2] ?? 0) + (cap[2] - (px[i + 2] ?? 0)) * w;
+    }
+  }
+  return createImageBitmap(image);
+}
+
+/**
+ * The base image as the map shows it: the tile, with its shadows lifted so dark ground can be read.
+ * Rover View takes the untouched tile (`imgTile`) and grades it for eye level itself.
+ */
+export const mapImgTile: TileHandler = async (rest, z, x, y, signal) => forMap(await polarCap(await imgTile(rest, z, x, y, signal), z, y), z, sharpenFor(z), signal);
+
+/** The base image from the package alone, toned the same: what stands in while the live detail is fetched. */
+export const mapQuickImgTile: TileHandler = async (_rest, z, x, y, signal) => forMap(await polarCap(await packageImage(z, x, y, signal), z, y), z, sharpenFor(z), signal);
+
 
 /** The 25 cm HiRISE layer, toned like the base under it. A clear tile (nothing here) passes as it is. */
 export const mapHdTile: TileHandler = async (rest, z, x, y, signal) => {

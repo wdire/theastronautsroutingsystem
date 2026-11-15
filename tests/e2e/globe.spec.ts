@@ -36,8 +36,9 @@ test('opens on the planet, flies in and back out on one canvas', async ({ page }
   expect(state.sameCanvas).toBe(true);
   expect(state.canvases).toBe(1);
   expect(state.zoom).toBeGreaterThan(zoomBefore + 5);
-  expect(state.center[0]).toBeCloseTo(77.58, 1);
-  expect(state.center[1]).toBeCloseTo(18.4, 1);
+  // The landing view: over the delta and the rim, near where Perseverance worked (LANDING_VIEW).
+  expect(state.center[0]).toBeCloseTo(77.37, 1);
+  expect(state.center[1]).toBeCloseTo(18.46, 1);
   expect(state.landed).toBe(true);
 
   await page.getByRole('button', { name: 'Menu' }).click();

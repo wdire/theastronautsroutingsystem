@@ -4,7 +4,7 @@
  * Every tile lands in the same caches the ground layers read, so the next patch builds from memory.
  */
 import { groundAt } from '@/data/dem';
-import { boxTouchesHirise, loadEsriHiriseImage, loadHiriseHeights, loadHiriseImage } from '@/data/hirise';
+import { boxTouchesHirise, warmEsriHirise, warmHirise } from '@/data/hirise';
 import { distanceM } from '@/lib/geo';
 
 const M_PER_DEG = 59_270;
@@ -43,14 +43,15 @@ export function prefetchAhead(path: readonly (readonly [number, number])[], fast
     if (coarseOnly || !boxTouchesHirise(...near)) continue;
     if (!asked.has(`n${cell}`)) {
       asked.add(`n${cell}`);
-      void loadHiriseHeights(near, 2, undefined, 9).catch(() => undefined);
-      void loadEsriHiriseImage(near, 14).catch(() => undefined);
+      // Tiles only: the mosaic is put together when the patch is built, from memory or the browser's cache.
+      warmHirise('dtm', near, 2, 9);
+      warmEsriHirise(near, 14);
     }
     if (!fast && !asked.has(`c${cell}`)) {
       asked.add(`c${cell}`);
       const close = box(lon, lat, 128);
-      void loadHiriseHeights(close, 0, undefined, 8).catch(() => undefined);
-      void loadHiriseImage(close, 0, undefined, 9).catch(() => undefined);
+      warmHirise('dtm', close, 0, 8);
+      warmHirise('ortho', close, 0, 9);
     }
   }
   if (asked.size > 4000) asked.clear();

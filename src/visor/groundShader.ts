@@ -71,9 +71,26 @@ float fbm(vec2 p) {
   }
   return s;
 }
+// Two octaves: for the edges of masks, where the finer octaves of fbm were not seen but cost as much again.
+float fbm2(vec2 p) {
+  return 0.5 * vnoise(p) + 0.25 * vnoise(p * 2.03 + 17.1) + 0.1875;
+}
 // 1 while a feature of this size is larger than a pixel, fading to 0 before it turns to shimmer.
 float show(float size, float px) {
   return 1.0 - smoothstep(size * 0.22, size * 0.6, px);
+}
+// The orbital mosaics as an eye-level camera sees them (engines/grading.ts, gradeColour, the same numbers):
+// orbital colour looks maroon from a metre and a half up, Mastcam-Z records butterscotch dust. Done here, per
+// pixel, rather than over every texture's pixels as it is built.
+vec3 orbitalGrade(vec3 linear) {
+  vec3 c = pow(max(linear, vec3(0.0)), vec3(1.0 / 2.2));
+  float lum = dot(c, vec3(0.2126, 0.7152, 0.0722));
+  float k = 0.5 + 1.15 * lum / (1.0 + 1.2 * max(0.0, lum - 0.25));
+  const vec3 BS = vec3(0.84, 0.63, 0.45);
+  float target = k * dot(BS, vec3(0.2126, 0.7152, 0.0722));
+  float own = lum > 0.02 ? 0.3 : 0.0;
+  vec3 share = clamp(c / max(lum, 0.02), 0.6, 1.5);
+  return pow(min(vec3(1.0), (1.0 - own) * BS * k + own * share * target), vec3(2.2));
 }
 // Orbital colour graded to the brown the map shows from above (the same mosaics): a dusty red-brown with grey
 // rock in it, never the orange a raw colour stretch gives, so the ground reads the same up close as from orbit.
@@ -86,10 +103,13 @@ vec3 marsGrade(vec3 c) {
 // redder dust between. Returns a multiplier for the colour.
 vec3 groundPatches(vec2 p, float px, float hiOn) {
   float vis = show(6.0, px);
+  // Too far to see: none of the noise below is worth working out.
+  if (vis < 0.002) return vec3(1.0);
   float slabs = smoothstep(0.49, 0.58, fbm(p * 0.075 + 4.0)) * (0.55 + 0.45 * smoothstep(0.4, 0.6, fbm(p * 0.5)));
-  float veins = smoothstep(0.86, 0.96, 1.0 - abs(fbm(p * 0.14 + 9.0) * 2.0 - 1.0)) * show(1.5, px);
-  float drift = smoothstep(0.5, 0.6, fbm(p * 0.03 + 21.0));
-  float rust = fbm(p * 0.22 + 2.0) - 0.5;
+  float veinVis = show(1.5, px);
+  float veins = veinVis > 0.002 ? smoothstep(0.86, 0.96, 1.0 - abs(fbm(p * 0.14 + 9.0) * 2.0 - 1.0)) * veinVis : 0.0;
+  float drift = smoothstep(0.5, 0.6, fbm2(p * 0.03 + 21.0));
+  float rust = fbm2(p * 0.22 + 2.0) - 0.5;
   float k = mix(1.0, 0.7, hiOn) * vis;
   vec3 m = vec3(1.0);
   m = mix(m, vec3(1.55, 1.42, 1.34), clamp(slabs + veins * 0.8, 0.0, 1.0) * 0.8 * k);
@@ -102,25 +122,28 @@ vec3 sandTone(vec3 c) {
   float l = dot(c, vec3(0.2126, 0.7152, 0.0722));
   return mix(vec3(l), c, 0.62) * vec3(0.7, 0.68, 0.69);
 }
-// A tiled texture read twice, at two sizes and turned against each other, so its repeat is not seen.
-vec4 twoScale(sampler2D t, vec2 p, float size) {
+// A tiled texture read twice, at two sizes and turned against each other, so its repeat is not seen. The
+// second read only close by (k is 1 there): further off the repeat is too small to pick out.
+vec4 twoScale(sampler2D t, vec2 p, float size, float k) {
   vec4 a = texture2D(t, p / size);
+  if (k < 0.01) return a;
   vec2 q = mat2(0.7986, -0.6018, 0.6018, 0.7986) * p;
   vec4 b = texture2D(t, q / (size * 2.71) + 0.37);
-  return mix(a, b, 0.38);
+  return mix(a, b, 0.38 * k);
 }
 `;
 
 /** Tone and bedding only: for ground seen from hundreds of metres away. */
 const DETAIL_COARSE = /* glsl */ `
 {
+  diffuseColor.rgb = orbitalGrade(diffuseColor.rgb);
   vec2 p = vWPos.xz;
   float px = max(length(dFdx(p)), length(dFdy(p)));
   float slope = degrees(acos(clamp(normalize(vWNormal).y, 0.0, 1.0)));
-  float tone = (fbm(p * 0.004) - 0.5) * show(120.0, px) + (fbm(p * 0.03) - 0.5) * 0.6 * show(18.0, px);
+  float tone = (fbm(p * 0.004) - 0.5) * show(120.0, px) + (fbm2(p * 0.03) - 0.5) * 0.6 * show(18.0, px);
   diffuseColor.rgb *= 1.0 + tone * 0.32;
   diffuseColor.rgb *= mix(vec3(1.0), groundPatches(p, px, 0.0), 0.6);
-  float rock = max(smoothstep(4.0, 12.0, slope + (fbm(p * 0.006) - 0.5) * 5.0), vSoil.y * 0.6);
+  float rock = max(smoothstep(4.0, 12.0, slope + (fbm2(p * 0.006) - 0.5) * 5.0), vSoil.y * 0.6);
   float lum = dot(diffuseColor.rgb, vec3(0.2126, 0.7152, 0.0722));
   diffuseColor.rgb = mix(diffuseColor.rgb, vec3(lum) * vec3(0.9, 0.84, 0.8), rock * 0.35);
   diffuseColor.rgb = mix(diffuseColor.rgb, sandTone(diffuseColor.rgb), vSoil.x * 0.6);
@@ -136,6 +159,7 @@ const DETAIL_COARSE = /* glsl */ `
  */
 const DETAIL_NEAR = /* glsl */ `
 {
+  diffuseColor.rgb = orbitalGrade(diffuseColor.rgb);
   vec2 p = vWPos.xz;
   float dist = length(vWPos - cameraPosition);
   float px = max(length(dFdx(p)), length(dFdy(p)));
@@ -148,8 +172,9 @@ const DETAIL_NEAR = /* glsl */ `
   float outcrop = 0.0;
   float broken = 0.4;
   if (uHasHi > 0.5) {
+    // Grey in red, coverage in green.
     vec4 hi = texture2D(uHi, vUvHi);
-    hiOn = smoothstep(0.4, 0.9, hi.a);
+    hiOn = smoothstep(0.4, 0.9, hi.g);
     float mean = texture2D(uHi, vUvHi, 4.5).r;
     float wide = texture2D(uHi, vUvHi, 7.5).r;
     ratio = clamp(hi.r / max(mean, 0.03), 0.3, 2.0);
@@ -163,30 +188,33 @@ const DETAIL_NEAR = /* glsl */ `
   base *= mix(1.0, lift, hiOn);
 
   // Tone patches the orbiters would show as one pixel: dust drifts, lag gravel, darker wind streaks.
-  float tone = (fbm(p * 0.012) - 0.5) * 1.2 * show(60.0, px) + (fbm(p * 0.05) - 0.5) * show(12.0, px) + (fbm(p * 0.6) - 0.5) * 0.5 * show(1.2, px);
+  float fineVis = show(1.2, px);
+  float tone = (fbm(p * 0.012) - 0.5) * 1.2 * show(60.0, px) + (fbm2(p * 0.05) - 0.5) * show(12.0, px) + (fineVis > 0.002 ? (fbm2(p * 0.6) - 0.5) * 0.5 * fineVis : 0.0);
   base *= 1.0 + tone * mix(0.38, 0.12, hiOn);
   base *= groundPatches(p, px, hiOn);
 
   // The invented relief's soil: dark sand in hollows and ridge fields, rock on rims and knobs.
-  float sand = vSoil.x * (1.0 - hiOn * 0.7) * smoothstep(0.15, 0.6, vSoil.x + (fbm(p * 0.09 + 3.0) - 0.5) * 0.5);
+  float sand = vSoil.x * (1.0 - hiOn * 0.7) * smoothstep(0.15, 0.6, vSoil.x + (fbm2(p * 0.09 + 3.0) - 0.5) * 0.5);
   float soilRock = vSoil.y * (1.0 - hiOn * 0.7);
   base = mix(base, sandTone(base), sand * 0.75);
   // Dust settles brightest on the gentle rises between.
   base *= 1.0 + (1.0 - sand) * (1.0 - soilRock) * 0.06;
 
-  float bed = max(max(outcrop, smoothstep(14.0, 26.0, slope + (fbm(p * 0.07) - 0.5) * 8.0)), smoothstep(0.45, 0.85, soilRock + (fbm(p * 0.13) - 0.5) * 0.45) * 0.85);
-  float grav = (1.0 - bed) * smoothstep(0.3, 0.75, broken + soilRock * 0.6 + (fbm(p * 0.21 + 7.0) - 0.5) * 0.5) * (1.0 - sand);
+  float bed = max(max(outcrop, smoothstep(14.0, 26.0, slope + (fbm2(p * 0.07) - 0.5) * 8.0)), smoothstep(0.45, 0.85, soilRock + (fbm2(p * 0.13) - 0.5) * 0.45) * 0.85);
+  float grav = (1.0 - bed) * smoothstep(0.3, 0.75, broken + soilRock * 0.6 + (fbm2(p * 0.21 + 7.0) - 0.5) * 0.5) * (1.0 - sand);
   float reg = max(0.0, 1.0 - bed - grav);
 
   // Rock is greyer and a little darker than the dust around it.
   float lumB = dot(base, vec3(0.2126, 0.7152, 0.0722));
   base = mix(base, mix(vec3(lumB), base, 0.55) * 0.92, bed * 0.6);
 
-  float near = (1.0 - smoothstep(50.0, 170.0, dist)) * uGdQuality;
+  // The close-up materials: within about 90 m, where their grain is still larger than a pixel at eye level.
+  float near = (1.0 - smoothstep(30.0, 90.0, dist)) * uGdQuality;
   if (near > 0.001) {
-    vec4 r = twoScale(uRegolith, p, 1.9);
-    vec4 g = twoScale(uGravel, p, 1.6);
-    vec4 b = twoScale(uBedrock, p, 2.6);
+    float k2 = 1.0 - smoothstep(12.0, 30.0, dist);
+    vec4 r = twoScale(uRegolith, p, 1.9, k2);
+    vec4 g = twoScale(uGravel, p, 1.6, k2);
+    vec4 b = twoScale(uBedrock, p, 2.6, k2);
     // Height-aware blending: the higher material shows through where two meet.
     vec3 w = vec3(reg, grav, bed) * (vec3(r.a, g.a, b.a) * 0.6 + 0.4);
     w = pow(w, vec3(3.0));
@@ -238,6 +266,6 @@ export function groundMaterial(kind: GroundKind, map: Texture, hole: { center: V
         '#include <normal_fragment_maps>\nnormal = normalize(normal + (viewMatrix * vec4(gdBump.x, 0.0, gdBump.y, 0.0)).xyz);',
       );
   };
-  material.customProgramCacheKey = () => `areo-ground4|${close ? 'near' : 'coarse'}`;
+  material.customProgramCacheKey = () => `areo-ground5|${close ? 'near' : 'coarse'}`;
   return material;
 }

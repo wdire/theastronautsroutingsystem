@@ -4,8 +4,7 @@
  * tiles they are put together from memory instead of the network.
  */
 import { lonToPx, latToPx } from '@/lib/geo';
-import { mapHdTile, mapImgTile } from './protocol/tone';
-import { demTile } from './protocol/dem';
+import { poolTile } from './protocol/pool';
 
 export function warmView(center: readonly [number, number], zoom: number): void {
   const retina = typeof window !== 'undefined' && window.devicePixelRatio >= 1.5;
@@ -18,8 +17,9 @@ export function warmView(center: readonly [number, number], zoom: number): void 
     const r = tz === z ? 2 : 1;
     for (let dy = -r; dy <= r; dy += 1) {
       for (let dx = -r - 1; dx <= r + 1; dx += 1) {
-        void mapImgTile([], tz, cx + dx, cy + dy, signal).catch(() => undefined);
-        if (tz >= 14) void mapHdTile([], tz, cx + dx, cy + dy, signal).catch(() => undefined);
+        // Whole tiles, kept in the workers' memory: when the map asks, they are handed over as they are.
+        void poolTile('img', tz, cx + dx, cy + dy, 'full', signal).then((s) => s.bitmap.close(), () => undefined);
+        if (tz >= 14) void poolTile('hd', tz, cx + dx, cy + dy, 'full', signal).then((s) => s.bitmap.close(), () => undefined);
       }
     }
   }
@@ -27,5 +27,5 @@ export function warmView(center: readonly [number, number], zoom: number): void 
   const dz = Math.min(14, Math.round(zoom));
   const dx0 = Math.floor(lonToPx(center[0], dz) / 256);
   const dy0 = Math.floor(latToPx(center[1], dz) / 256);
-  for (let dy = -1; dy <= 1; dy += 1) for (let dx = -1; dx <= 1; dx += 1) void demTile([], dz, dx0 + dx, dy0 + dy, signal).catch(() => undefined);
+  for (let dy = -1; dy <= 1; dy += 1) for (let dx = -1; dx <= 1; dx += 1) void poolTile('dem', dz, dx0 + dx, dy0 + dy, 'full', signal).then((s) => s.bitmap.close(), () => undefined);
 }

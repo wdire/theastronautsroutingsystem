@@ -1,4 +1,4 @@
-import { AdditiveBlending, BufferGeometry, CylinderGeometry, DoubleSide, Float32BufferAttribute, InstancedMesh, Matrix4, Mesh, MeshBasicMaterial, Quaternion, Vector3, type Scene } from 'three';
+import { BufferGeometry, CylinderGeometry, DoubleSide, Float32BufferAttribute, InstancedMesh, Matrix4, Mesh, MeshBasicMaterial, Quaternion, Vector3, type Scene } from 'three';
 
 const AHEAD_M = 260;
 const EVERY_M = 12;
@@ -27,7 +27,9 @@ export function createGuides(scene: Scene, heightAt: (x: number, z: number) => n
   arrows.frustumCulled = false;
   arrows.count = 0;
   arrows.renderOrder = 5;
-  const beamMaterial = new MeshBasicMaterial({ color: 0x9cc4ea, transparent: true, opacity: 0.34, blending: AdditiveBlending, depthWrite: false, fog: false });
+  // Blended over what is behind it, not added: drawn straight to the screen (no post-processing to tone it down
+  // afterwards), an added beam burned out to white against the bright sky.
+  const beamMaterial = new MeshBasicMaterial({ color: 0x9cc4ea, transparent: true, opacity: 0.3, depthWrite: false, fog: false });
   const beam = new Mesh(new CylinderGeometry(0.35, 0.6, 90, 12, 1, true), beamMaterial);
   beam.visible = false;
   scene.add(arrows, beam);

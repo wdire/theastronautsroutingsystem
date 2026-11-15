@@ -56,6 +56,22 @@ The model that wrote most of this stopped on the trip-budget content; Opus subag
 - Place card: "Add to the route", Rover View, and a More menu (zoom, link, base). Route: Start, "Fly over", More
   (cuff card, GPX, GeoJSON). Solo crew section is one row with "Bring a crew".
 - Side panels narrow below 1536 px (left 328/352/372, dock 316/332/344) so a 13-inch screen keeps a map.
+- Performance pass (measured on the real GPU, 1470x920 at DPR 2; scripts `tools/.cache/shots/perf2.mjs`,
+  `memsplit.mjs`): Rover View now holds 60 fps walking, driving and riding at 1x/5x/100x (was 25-31 fps with
+  long tasks up to 0.8 s), and the map 59 fps zooming z12-z17 (was 36). Rover View drops ambient occlusion and
+  SMAA (no visible loss, ~10 ms a frame), adapts its pixel ratio 1-1.5x, uploads a new patch's textures one a
+  frame, grades orbital imagery in the shader (no canvas readback), keeps HiRISE as two-byte textures, compact
+  vertex data and shared index buffers. The map composes tiles in two workers (`protocol/pool.ts`,
+  `serve.ts`, `tile.worker.ts`) with byte-capped caches, answers slow tiles with a stand-in at once and refreshes
+  them when ready, and shrinks to 1 px while Rover View is open. Tab memory in Rover View 1.2-1.5 GB (was
+  2.2-2.5 GB); the ~700 MB goal is not met. Replay writes the store at 4 Hz, not every frame.
+- Poles: imagery blends to an ice colour and heights level between 81.5 and 84.9 degrees, so the globe shows a
+  clean cap instead of a fan of stretched pixels (`protocol/tone.ts`, `protocol/dem.ts`).
+- Rover View minimap (`src/ui/visor/Minimap.tsx`): north-up, from the shipped z14 tiles, the viewer's arrow,
+  the route ahead, the base, a scale; a click returns to the map there.
+- Known: in SwiftShader (headless e2e) every map frame costs 200-600 ms, so some timing-sensitive e2e tests can
+  fail under load; on the GPU the same flows have no task over 100 ms. `mergeAlternatives` (~200 ms) still runs
+  on the main thread after each plan edit.
 
 ## Sixth session (2026-11-15, later): mission panel, map that explains itself, Rover View playground
 

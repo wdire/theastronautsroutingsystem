@@ -1,3 +1,4 @@
+import { peopleOf } from '@/engines/fleet';
 import type { PathPoint } from '@/engines/types';
 import { pathStats } from '@/planner/geometry';
 import { crewAt } from '@/sim/world';
@@ -25,8 +26,8 @@ export function missionFeed(): MissionFeed | null {
 
   // The crew as the mission's roster has it; alone, the visitor walks by themself.
   const roster = useApp.getState().roster;
-  // Solo, the vehicle's own crew: the visitor commanding, and partners to make up its seats (two in suits on foot).
-  const seats = Math.max(1, VEHICLES[run.vehicle].crew);
+  // Solo, the people the plan sends: the visitor commanding, and partners to make up the number.
+  const seats = Math.max(1, VEHICLES[run.vehicle].crew > 0 || run.vehicle === 'foot' ? peopleOf(run.plan) : 1);
   const solo = [
     { id: 'me', name: 'You', role: 'Commander', color: '#e8743b', android: false, me: true },
     ...Array.from({ length: seats - 1 }, (_, i) => ({ id: `partner-${i}`, name: i === 0 ? 'Partner' : `Partner ${i + 1}`, role: 'Crew', color: ['#3f8fd8', '#7ab55c', '#c9a227'][i % 3] ?? '#3f8fd8', android: false, me: false })),

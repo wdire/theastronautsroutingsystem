@@ -7,7 +7,7 @@ import type { ModelSpec } from './modelSpecs';
  * into their own mesh under a pivot at the hub, named `wheel-<n>`, with the radius in userData.
  * Works on the loaded model before it is cloned, so every copy gets turning wheels.
  */
-export function separateWheels(root: Group, spec: NonNullable<ModelSpec['wheels']>): void {
+export async function separateWheels(root: Group, spec: NonNullable<ModelSpec['wheels']>): Promise<void> {
   root.updateMatrixWorld(true);
   const toRoot = new Matrix4().copy(root.matrixWorld).invert();
   const sources: Mesh[] = [];
@@ -78,7 +78,17 @@ export function separateWheels(root: Group, spec: NonNullable<ModelSpec['wheels'
   // In cylinder mode a triangle inside a wheel's cylinder is not enough: the fender, the strut and the
   // steering arm reach into it too, and turned with the tyre they spun like a handle. Only whole parts
   // (triangles joined by shared corners) that lie inside one cylinder are cut out.
-  let partOf = 'at' in spec ? sources.map((mesh, s) => wholePartsInside(mesh, toRoot, centroids[s]!, centres, spec.radius * 1.1, spec.halfWidth * 1.2)) : null;
+  // Which connected part each triangle belongs to depends on the mesh alone: worked out once, a mesh per task,
+  // so loading a model never holds a frame for long.
+  const partsOfMesh: Int32Array[] = [];
+  if ('at' in spec) {
+    for (const mesh of sources) {
+      await nextTask();
+      partsOfMesh.push(connectedParts(mesh));
+    }
+    await nextTask();
+  }
+  let partOf = 'at' in spec ? sources.map((mesh, s) => wholePartsInside(mesh, partsOfMesh[s]!, toRoot, centres, spec.radius * 1.1, spec.halfWidth * 1.2)) : null;
   // The hubs given are a guess: a wheel turned about a point a few centimetres off its true axle wobbles.
   // The axle is put at the middle of the tyre found, and the parts are chosen again about it.
   const radii = centres.map(() => spec.radius);
@@ -126,7 +136,8 @@ export function separateWheels(root: Group, spec: NonNullable<ModelSpec['wheels'
       centres[w]!.y = b.y0 + radii[w]!;
     });
     const r = Math.max(...radii);
-    if (partOf) partOf = sources.map((mesh, s) => wholePartsInside(mesh, toRoot, centroids[s]!, centres, r * 1.06, spec.halfWidth * 1.2));
+    await nextTask();
+    if (partOf) partOf = sources.map((mesh, s) => wholePartsInside(mesh, partsOfMesh[s]!, toRoot, centres, r * 1.06, spec.halfWidth * 1.2));
   }
 
   const wheelOf = (x: number, y: number, z: number): number => {
@@ -177,7 +188,9 @@ export function separateWheels(root: Group, spec: NonNullable<ModelSpec['wheels'
       const g = new BufferGeometry();
       for (const [name, attribute] of Object.entries(geometry.attributes)) g.setAttribute(name, attribute);
       g.setIndex(new BufferAttribute(pos.count > 65_535 ? new Uint32Array(list) : new Uint16Array(list), 1));
-      g.computeBoundingSphere();
+      // The whole mesh's sphere holds any part of it: a pass over every point per wheel cost a tenth of a second.
+      if (!geometry.boundingSphere) geometry.computeBoundingSphere();
+      g.boundingSphere = geometry.boundingSphere?.clone() ?? null;
       return g;
     };
     moved.forEach((list, w) => {
@@ -213,29 +226,55 @@ export function rollWheels(wheels: readonly { pivot: Object3D; radius: number }[
   for (const w of wheels) w.pivot.rotation.x -= distanceM / w.radius;
 }
 
+const nextTask = () => new Promise<void>((resolve) => setTimeout(resolve, 0));
+
 /**
- * For each triangle of a mesh, the wheel whose cylinder holds the whole connected part it belongs to,
- * or -1. Corners are joined by position, since exporters split vertices along seams.
+ * For each triangle of a mesh, the connected part it belongs to (triangles joined by shared corners). Corners
+ * are joined by position, since exporters split vertices along seams.
  */
-function wholePartsInside(mesh: Mesh, toRoot: Matrix4, centroids: Float32Array, centres: readonly Vector3[], radius: number, halfWidth: number): Int32Array {
+function connectedParts(mesh: Mesh): Int32Array {
   const geometry = mesh.geometry;
   const pos = geometry.getAttribute('position');
   const index = geometry.getIndex();
-  const tris = centroids.length / 3;
+  const tris = (index ? index.count : pos.count) / 3;
   const corner = (t: number, k: number) => (index ? index.getX(t * 3 + k) : t * 3 + k);
-  // Weld by position.
-  const keyOf = new Map<string, number>();
-  const weld = new Int32Array(pos.count);
-  for (let i = 0; i < pos.count; i += 1) {
-    const key = `${pos.getX(i).toFixed(4)},${pos.getY(i).toFixed(4)},${pos.getZ(i).toFixed(4)}`;
-    let id = keyOf.get(key);
-    if (id === undefined) {
-      id = keyOf.size;
-      keyOf.set(key, id);
+  // Weld by position, rounded to 0.1 mm, through a numeric hash table: a string key for every corner cost
+  // most of a second on the larger models, in one frame, as Rover View opened.
+  const count = pos.count;
+  const qx = new Float64Array(count);
+  const qy = new Float64Array(count);
+  const qz = new Float64Array(count);
+  let cap = 1;
+  while (cap < count * 2) cap <<= 1;
+  const slotVertex = new Int32Array(cap).fill(-1);
+  const slotId = new Int32Array(cap);
+  const weld = new Int32Array(count);
+  let parts = 0;
+  for (let i = 0; i < count; i += 1) {
+    const x = Math.round(pos.getX(i) * 1e4);
+    const y = Math.round(pos.getY(i) * 1e4);
+    const z = Math.round(pos.getZ(i) * 1e4);
+    qx[i] = x;
+    qy[i] = y;
+    qz[i] = z;
+    let h = (Math.imul(x | 0, 73856093) ^ Math.imul(y | 0, 19349663) ^ Math.imul(z | 0, 83492791)) & (cap - 1);
+    for (;;) {
+      const r = slotVertex[h]!;
+      if (r < 0) {
+        slotVertex[h] = i;
+        slotId[h] = parts;
+        weld[i] = parts;
+        parts += 1;
+        break;
+      }
+      if (qx[r] === x && qy[r] === y && qz[r] === z) {
+        weld[i] = slotId[h]!;
+        break;
+      }
+      h = (h + 1) & (cap - 1);
     }
-    weld[i] = id;
   }
-  const parent = new Int32Array(keyOf.size);
+  const parent = new Int32Array(parts);
   for (let i = 0; i < parent.length; i += 1) parent[i] = i;
   const find = (a: number): number => {
     let x = a;
@@ -250,12 +289,24 @@ function wholePartsInside(mesh: Mesh, toRoot: Matrix4, centroids: Float32Array, 
     parent[find(weld[corner(t, 1)]!)] = a;
     parent[find(weld[corner(t, 2)]!)] = a;
   }
+  const out = new Int32Array(tris);
+  for (let t = 0; t < tris; t += 1) out[t] = find(weld[corner(t, 0)]!);
+  return out;
+}
+
+/** For each triangle of a mesh, the wheel whose cylinder holds the whole connected part it belongs to, or -1. */
+function wholePartsInside(mesh: Mesh, partOfTri: Int32Array, toRoot: Matrix4, centres: readonly Vector3[], radius: number, halfWidth: number): Int32Array {
+  const geometry = mesh.geometry;
+  const pos = geometry.getAttribute('position');
+  const index = geometry.getIndex();
+  const tris = partOfTri.length;
+  const corner = (t: number, k: number) => (index ? index.getX(t * 3 + k) : t * 3 + k);
   // Which cylinder each vertex lies in (-1 none), and per part whether every vertex agrees.
   const m = new Matrix4().multiplyMatrices(toRoot, mesh.matrixWorld);
   const v = new Vector3();
   const partWheel = new Map<number, number>();
   for (let t = 0; t < tris; t += 1) {
-    const root = find(weld[corner(t, 0)]!);
+    const root = partOfTri[t]!;
     if (partWheel.get(root) === -2) continue;
     for (let k = 0; k < 3; k += 1) {
       v.fromBufferAttribute(pos, corner(t, k)).applyMatrix4(m);
@@ -278,7 +329,7 @@ function wholePartsInside(mesh: Mesh, toRoot: Matrix4, centroids: Float32Array, 
   }
   const out = new Int32Array(tris);
   for (let t = 0; t < tris; t += 1) {
-    const w = partWheel.get(find(weld[corner(t, 0)]!)) ?? -1;
+    const w = partWheel.get(partOfTri[t]!) ?? -1;
     out[t] = w >= 0 ? w : -1;
   }
   return out;

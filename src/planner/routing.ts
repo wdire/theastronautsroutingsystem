@@ -155,29 +155,39 @@ export async function planRoutes(input: PlanInput, deps: RoutingDeps): Promise<R
     deps.onProgress(rev, (leg + 1) / legs);
   }
 
-  const costedAt = (departUtcMs: number): RouteCandidate[] =>
-    STYLES.map((style) => {
-      const path = paths.get(style) ?? [];
-      const indices = stopIndices.get(style) ?? [];
-      const stops: TripStop[] = [];
-      for (let i = 1; i < indices.length; i += 1) {
-        const work = visit.workMin[i] ?? 0;
-        const index = indices[i];
-        if (index === undefined) continue;
-        if (work > 0) {
-          const name = visit.names[i];
-          stops.push({ index, workMin: work, ...(name ? { name } : {}) });
-        }
+  // Each style's trip is costed in its own task: together they took a couple of hundred milliseconds, all in
+  // one frame, right after every edit.
+  const costedAt = async (departUtcMs: number): Promise<RouteCandidate[]> => {
+    const out: RouteCandidate[] = [];
+    for (const style of STYLES) {
+      await new Promise<void>((resolve) => setTimeout(resolve, 0));
+      out.push(costOne(style, departUtcMs));
+    }
+    return out;
+  };
+  const costOne = (style: RouteStyle, departUtcMs: number): RouteCandidate => {
+    const path = paths.get(style) ?? [];
+    const indices = stopIndices.get(style) ?? [];
+    const stops: TripStop[] = [];
+    for (let i = 1; i < indices.length; i += 1) {
+      const work = visit.workMin[i] ?? 0;
+      const index = indices[i];
+      if (index === undefined) continue;
+      if (work > 0) {
+        const name = visit.names[i];
+        stops.push({ index, workMin: work, ...(name ? { name } : {}) });
       }
-      const trip = deps.computeTrip
-        ? deps.computeTrip(path, { vehicle: plan.vehicle, people: peopleOf(plan), departUtcMs, scenario: input.scenario, style, stops, campAtNight: plan.campAtNight })
-        : shapeOnlyTrip(path);
-      return { style, path, stopIndices: indices, trip };
-    });
+    }
+    const trip = deps.computeTrip
+      ? deps.computeTrip(path, { vehicle: plan.vehicle, people: peopleOf(plan), departUtcMs, scenario: input.scenario, style, stops, campAtNight: plan.campAtNight })
+      : shapeOnlyTrip(path);
+    return { style, path, stopIndices: indices, trip };
+  };
 
   let departUtcMs = input.departUtcMs;
   let departMoved = false;
-  let candidates = costedAt(departUtcMs);
+  let candidates = await costedAt(departUtcMs);
+  if (!deps.isCurrent(rev)) return null;
   const origin = visit.points[0];
   // A plan made at Martian midnight should not open with "wait eleven hours": it leaves the next good morning.
   // A rover that camps is out overnight whenever it leaves, so its start is left alone.
@@ -188,7 +198,8 @@ export async function planRoutes(input: PlanInput, deps: RoutingDeps): Promise<R
     if (better.moved && Number.isFinite(better.departUtcMs)) {
       departUtcMs = better.departUtcMs;
       departMoved = true;
-      candidates = costedAt(departUtcMs);
+      candidates = await costedAt(departUtcMs);
+      if (!deps.isCurrent(rev)) return null;
     }
   }
 

@@ -47,7 +47,7 @@ export function loadModel(name: ModelName): Promise<Group> {
       cache.set(name, pending);
       return pending;
     }
-    pending = loader.loadAsync(spec.url).then((gltf) => {
+    pending = loader.loadAsync(spec.url).then(async (gltf) => {
       const inner = gltf.scene;
       inner.scale.multiplyScalar(spec.scale);
       inner.rotation.y += (spec.yawDeg * Math.PI) / 180;
@@ -67,7 +67,7 @@ export function loadModel(name: ModelName): Promise<Group> {
       const root = new Group();
       root.name = name;
       root.add(inner);
-      if (spec.wheels) separateWheels(root, spec.wheels);
+      if (spec.wheels) await separateWheels(root, spec.wheels);
       return root;
     });
     cache.set(name, pending);

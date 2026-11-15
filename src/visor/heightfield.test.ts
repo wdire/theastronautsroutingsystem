@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { BufferAttribute, BufferGeometry, DoubleSide, Mesh, MeshBasicMaterial, Raycaster, Vector3 } from 'three';
-import { fieldHeightAt, fieldIndices, type HeightField } from './heightfield';
+import { fieldHeightAt, fieldIndices, gridNormals, type HeightField } from './heightfield';
 
 function roughField(n: number, step: number): HeightField {
   const heights = new Float32Array(n * n);
@@ -51,5 +51,26 @@ describe('height field', () => {
     expect(fieldHeightAt(f, f.x0 + 40, f.z0 + 40)).toBeCloseTo(f.heights[24] ?? 0, 5);
     expect(fieldHeightAt(f, f.x0 - 0.01, f.z0)).toBeNull();
     expect(fieldHeightAt(f, 0, f.z0 + 40.01)).toBeNull();
+  });
+});
+
+describe('gridNormals', () => {
+  it('points straight up on flat ground', () => {
+    const n = 4;
+    const out = gridNormals(new Float32Array(n * n).fill(7), n, 2);
+    for (let i = 0; i < n * n; i += 1) expect([out[i * 3], out[i * 3 + 1], out[i * 3 + 2]]).toEqual([-0, 1, -0]);
+  });
+
+  it('leans away from a slope rising to the east', () => {
+    const n = 5;
+    const step = 2;
+    const heights = new Float32Array(n * n);
+    // Rises 1 m per metre eastward (along +x): 45 degrees.
+    for (let iz = 0; iz < n; iz += 1) for (let ix = 0; ix < n; ix += 1) heights[iz * n + ix] = ix * step;
+    const out = gridNormals(heights, n, step);
+    const o = (2 * n + 2) * 3;
+    expect(out[o]).toBeCloseTo(-Math.SQRT1_2, 5);
+    expect(out[o + 1]).toBeCloseTo(Math.SQRT1_2, 5);
+    expect(out[o + 2]).toBeCloseTo(0, 5);
   });
 });

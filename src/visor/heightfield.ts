@@ -64,3 +64,28 @@ export function fieldSlopeAt(f: HeightField, x: number, z: number): number {
   if (hx0 === null || hx1 === null || hz0 === null || hz1 === null) return 0;
   return (Math.atan(Math.hypot((hx1 - hx0) / (2 * e), (hz1 - hz0) / (2 * e))) * 180) / Math.PI;
 }
+
+/**
+ * Normals of a regular height grid from its central differences (one-sided at the edges). The same surface
+ * three.js would shade, at a fraction of the cost of its general per-triangle pass over a quarter of a million
+ * points.
+ */
+export function gridNormals(heights: Float32Array, n: number, step: number): Float32Array {
+  const out = new Float32Array(n * n * 3);
+  for (let iz = 0; iz < n; iz += 1) {
+    const zl = Math.max(0, iz - 1);
+    const zh = Math.min(n - 1, iz + 1);
+    for (let ix = 0; ix < n; ix += 1) {
+      const xl = Math.max(0, ix - 1);
+      const xh = Math.min(n - 1, ix + 1);
+      const dx = ((heights[iz * n + xh] ?? 0) - (heights[iz * n + xl] ?? 0)) / ((xh - xl) * step);
+      const dz = ((heights[zh * n + ix] ?? 0) - (heights[zl * n + ix] ?? 0)) / ((zh - zl) * step);
+      const len = Math.hypot(dx, 1, dz);
+      const o = (iz * n + ix) * 3;
+      out[o] = -dx / len;
+      out[o + 1] = 1 / len;
+      out[o + 2] = -dz / len;
+    }
+  }
+  return out;
+}

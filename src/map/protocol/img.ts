@@ -1,5 +1,5 @@
 import { getCoverage, loadCoverage, nearestTile, tileUrl, type Coverage, type TileRef } from '@/data/coverage';
-import { flatTile, MARS_FLAT, type TileData } from './index';
+import { flatTile, MARS_FLAT, type TileData } from './common';
 import { blendDetail, highPassRadius, luminance, type DetailLayer } from './detail';
 import { CTX, HIRISE, USGS_HIRISE, VIKING, warpToTile, type EquirectSource } from './live';
 import { insideHirise } from '@/data/hiriseGrid';
@@ -7,7 +7,7 @@ import { pxToLat, pxToLon } from '@/lib/geo';
 
 /** Decoded package tiles kept for upsampling, most recently used last. */
 const bitmapCache = new Map<string, Promise<ImageBitmap>>();
-const BITMAP_CACHE_MAX = 96;
+const BITMAP_CACHE_MAX = 24;
 
 /** Zoom from which each live source adds detail, and the zoom whose detail it already matches. */
 const VIKING_FROM = 5;
@@ -102,10 +102,66 @@ export function tileTouchesHirise(z: number, x: number, y: number): boolean {
   return false;
 }
 
+interface DetailPlan {
+  src: EquirectSource;
+  radius: number;
+  gain: number;
+  masked: boolean;
+}
+
+/**
+ * The live sources that add detail to a tile upsampled from a package tile at `refZ`: Viking below zoom 9,
+ * CTX from 9, and HiRISE on top from 14 wherever an image covers the tile. Empty when the package tile is
+ * already as fine as they are.
+ */
+function detailPlan(z: number, refZ: number): DetailPlan[] {
+  if (refZ === z) return [];
+  const plan: DetailPlan[] = [];
+  if (z >= CTX_FROM && refZ < CTX_NATIVE) {
+    plan.push({ src: CTX, radius: highPassRadius(z, refZ), gain: 1, masked: false });
+  } else if (z >= VIKING_FROM && z < CTX_FROM && refZ < VIKING_NATIVE) {
+    plan.push({ src: VIKING, radius: highPassRadius(z, refZ), gain: 0.9, masked: false });
+  }
+  if (z >= HIRISE_FROM) {
+    // Esri's tiled HiRISE layer: served from a CDN, so the map never waits on the slower USGS cut.
+    plan.push({ src: HIRISE, radius: highPassRadius(z, Math.max(refZ, CTX_NATIVE)), gain: 1.25, masked: true });
+  }
+  return plan;
+}
+
+function offline(): boolean {
+  return typeof navigator !== 'undefined' && navigator.onLine === false;
+}
+
+/**
+ * Whether the full tile waits on a live service. Such a tile can be stood in for at once by
+ * `packageImage`, and swapped for the full one when the service answers.
+ */
+export async function liveDetailWanted(z: number, x: number, y: number): Promise<boolean> {
+  if (offline()) return false;
+  const cov = getCoverage() ?? (await loadCoverage());
+  if (!cov) return false;
+  const ref = nearestTile(cov, ['img', 'planetImg'], z, x, y);
+  return ref !== null && detailPlan(z, ref.z).length > 0;
+}
+
+/**
+ * What the shipped package alone gives for a tile, with no live service asked: the package tile, or its
+ * nearest ancestor upsampled. Blurry far past the package's zoom, but always the right colours in the right
+ * places, and as fast as the app's own files.
+ */
+export async function packageImage(z: number, x: number, y: number, signal: AbortSignal): Promise<TileData> {
+  const cov = getCoverage() ?? (await loadCoverage());
+  if (!cov) return flatTile(MARS_FLAT);
+  const ref = nearestTile(cov, ['img', 'planetImg'], z, x, y);
+  if (!ref) return flatTile(MARS_FLAT);
+  if (ref.z === z) return fetchBytes(tileUrl(cov, ref), signal);
+  return (await upsample(cov, ref, z, x, y)).transferToImageBitmap();
+}
+
 /**
  * Base imagery for any tile to zoom 19. The package tile if there is one; otherwise the nearest
- * package ancestor, upsampled for colour, with live detail blended into its brightness:
- * Viking below zoom 9, CTX from 9, and HiRISE on top from 14 wherever an image covers the tile.
+ * package ancestor, upsampled for colour, with live detail blended into its brightness (see detailPlan).
  * With no connection the upsampled ancestor is returned as it is, so there is always ground.
  */
 export async function imgTile(_rest: string[], z: number, x: number, y: number, signal: AbortSignal): Promise<TileData> {
@@ -116,20 +172,10 @@ export async function imgTile(_rest: string[], z: number, x: number, y: number, 
   if (ref.z === z) return fetchBytes(tileUrl(cov, ref), signal);
 
   const canvas = await upsample(cov, ref, z, x, y);
-  const wanted: Promise<DetailLayer | null>[] = [];
+  const plan = detailPlan(z, ref.z);
+  if (plan.length === 0 || offline()) return canvas.transferToImageBitmap();
   const pad = 32;
-  if (z >= CTX_FROM && ref.z < CTX_NATIVE) {
-    wanted.push(detailLayer(CTX, z, x, y, pad, highPassRadius(z, ref.z), 1, false, signal));
-  } else if (z >= VIKING_FROM && z < CTX_FROM && ref.z < VIKING_NATIVE) {
-    wanted.push(detailLayer(VIKING, z, x, y, pad, highPassRadius(z, ref.z), 0.9, false, signal));
-  }
-  if (z >= HIRISE_FROM) {
-    // Esri's tiled HiRISE layer: served from a CDN, so the map never waits on the slower USGS cut.
-    wanted.push(detailLayer(HIRISE, z, x, y, pad, highPassRadius(z, Math.max(ref.z, CTX_NATIVE)), 1.25, true, signal));
-  }
-  if (wanted.length === 0 || (typeof navigator !== 'undefined' && navigator.onLine === false)) return canvas.transferToImageBitmap();
-
-  const layers = (await Promise.all(wanted)).filter((l): l is DetailLayer => l !== null);
+  const layers = (await Promise.all(plan.map((p) => detailLayer(p.src, z, x, y, pad, p.radius, p.gain, p.masked, signal)))).filter((l): l is DetailLayer => l !== null);
   if (signal.aborted) throw new DOMException('aborted', 'AbortError');
   if (layers.length === 0) return canvas.transferToImageBitmap();
   const ctx = canvas.getContext('2d', { willReadFrequently: true });
@@ -141,8 +187,9 @@ export async function imgTile(_rest: string[], z: number, x: number, y: number, 
 }
 
 /** A fully transparent tile: no HD imagery here, the base shows through. A new one each time: the map may close it. */
-function transparentTile(): Promise<ImageBitmap> {
-  return createImageBitmap(new OffscreenCanvas(1, 1));
+export function transparentTile(): Promise<ImageBitmap> {
+  // From pixels, not a blank canvas: a worker refuses to make a bitmap of a canvas that was never drawn on.
+  return createImageBitmap(new ImageData(1, 1));
 }
 
 /**
@@ -150,11 +197,13 @@ function transparentTile(): Promise<ImageBitmap> {
  * 15: the base tile draws at once, and this one fades in over it when the slower USGS cut arrives. Its colour
  * is the base tile's, its detail HiRISE's at full gain; transparent off the mosaic.
  */
-export async function hdTile(rest: string[], z: number, x: number, y: number, signal: AbortSignal): Promise<TileData> {
+export async function hdTile(_rest: string[], z: number, x: number, y: number, signal: AbortSignal): Promise<TileData> {
   if (!tileTouchesHirise(z, x, y)) return transparentTile();
   // A wide margin, for the wide blur below: tiles must agree at their edges.
   const pad = 64;
-  const [baseData, warped] = await Promise.all([imgTile(rest, z, x, y, signal), warpToTile(USGS_HIRISE, z, x, y, pad, 45_000, signal)]);
+  // The colour comes from the package alone: this layer's own detail replaces whatever finer grain the base
+  // tile carries, and the tile never waits on the base's live services as well as its own.
+  const [baseData, warped] = await Promise.all([packageImage(z, x, y, signal), warpToTile(USGS_HIRISE, z, x, y, pad, 45_000, signal)]);
   if (signal.aborted) throw new DOMException('aborted', 'AbortError');
   if (!warped || warped.coverage < 0.02) return transparentTile();
   const base = baseData instanceof ArrayBuffer ? await createImageBitmap(new Blob([baseData])) : baseData;

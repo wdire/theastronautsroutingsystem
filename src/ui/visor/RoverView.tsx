@@ -11,6 +11,7 @@ import { MovePad } from './MovePad';
 import { missionFeed } from './missionFeed';
 import { MissionHud } from './MissionHud';
 import { RoamBar } from './RoamBar';
+import { Minimap } from './Minimap';
 import { propCaption, sceneProps, standpoint } from './scene';
 import { returnToMap } from '@/map/descend';
 
@@ -218,6 +219,24 @@ export default function RoverView() {
               <RoamBar vehicle={state.roam.vehicle} view={state.roam.view} onChange={(v, view) => handleRef.current?.setRoam(v, view)} />
             </div>
           )}
+          <Minimap
+            lon={state.lon}
+            lat={state.lat}
+            headingDeg={state.headingDeg}
+            route={() => handleRef.current?.route() ?? []}
+            onOpenMap={() => {
+              const s = handleRef.current?.getState() ?? state;
+              closeVisor();
+              returnToMap(s.lon, s.lat, s.headingDeg);
+            }}
+            className={cn(
+              'absolute',
+              // On a phone, at the left under the time of day, clear of the move-as bar on the right and the caption
+              // and pad at the bottom (under the replay panel when riding the drive, which spans the width); on a
+              // desktop, the bottom-right corner, clear of the time of day in the middle and the panels at the top.
+              touch ? cn('left-3 size-[112px]', replaying ? 'top-[18.5rem]' : 'top-[7.5rem]') : 'right-3 bottom-4 size-[200px] max-xl:size-[168px]',
+            )}
+          />
           {touch && !riding && !replaying ? (
             <div className="absolute bottom-[max(1.25rem,env(safe-area-inset-bottom))] left-5">
               <MovePad onMove={(right, forward, fast) => handleRef.current?.setMove(right, forward, fast)} />
@@ -267,7 +286,7 @@ export default function RoverView() {
               })}
             </div>
             {touch ? null : (
-              <p className={cn('text-xs text-white/80', SHADOW)}>
+              <p className={cn('max-w-[min(56rem,calc(100vw-30rem))] text-center text-xs text-white/80', SHADOW)}>
                 {replaying
                   ? 'Drag to look around. The rover follows its real track; pause or change the speed in the panel.'
                   : state.roam.vehicle === 'foot' && state.roam.view === 'eyes'

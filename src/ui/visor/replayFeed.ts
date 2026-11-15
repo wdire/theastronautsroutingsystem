@@ -43,6 +43,11 @@ export async function replayFeed(fromSol: number): Promise<MissionFeed> {
   useReplay.setState({ distM: Math.min(total, (start?.distKm ?? 0) * 1000), totalM: total, sol: start?.sol ?? 0, playing: true });
   let last = performance.now();
   let index = 1;
+  // The distance is advanced here every frame and written to the store a few times a second: each write
+  // redraws the replay panel, and sixty redraws a second cost the frame for nothing the eye can read.
+  let distM = useReplay.getState().distM;
+  let pushed = distM;
+  let pushedAt = 0;
 
   /** The path index whose segment holds a distance, searched from the last one (the replay moves forward). */
   const seek = (d: number): number => {
@@ -71,18 +76,26 @@ export async function replayFeed(fromSol: number): Promise<MissionFeed> {
       const dt = Math.min(0.25, (now - last) / 1000);
       last = now;
       const s = useReplay.getState();
-      let d = s.distM;
+      // Moved from the panel (back to the start): take it from there.
+      if (s.distM !== pushed) distM = pushed = s.distM;
+      let d = distM;
       const moving = s.playing && d < total;
       if (moving) {
         d = Math.min(total, d + REPLAY_BASE_MS * s.speed * dt);
+        distM = d;
         const sol = solAt(t, d);
-        useReplay.setState(sol !== s.sol ? { distM: d, sol, ...(d >= total ? { playing: false } : {}) } : { distM: d, ...(d >= total ? { playing: false } : {}) });
+        const done = d >= total;
+        if (done || sol !== s.sol || now - pushedAt > 250) {
+          pushed = d;
+          pushedAt = now;
+          useReplay.setState({ distM: d, ...(sol !== s.sol ? { sol } : {}), ...(done ? { playing: false } : {}) });
+        }
       }
       const p = pointAt(d);
       return { lon: p.lon, lat: p.lat, headingDeg: p.heading, speedMs: moving ? REPLAY_BASE_MS * s.speed : 0, moving };
     },
     ahead() {
-      const d = useReplay.getState().distM;
+      const d = distM;
       const i = seek(d);
       const pts: [number, number][] = [];
       // The next 1.5 km of track: the guides draw it, and the view loads the ground under it ahead of time.

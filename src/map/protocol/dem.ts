@@ -3,7 +3,7 @@ import { tileHeights } from '@/data/dem';
 import { encodeTerrarium, TILE } from '@/data/terrarium';
 import { boxTouchesHirise, loadHiriseHeights } from '@/data/hirise';
 import { pxToLat, pxToLon } from '@/lib/geo';
-import type { TileData } from './index';
+import type { TileData } from './common';
 /**
  * The map's terrain goes to zoom 16: the package to 14 (HiRISE read at 5 m), then over Jezero the HiRISE model
  * itself at 4 m and 2 m, so the delta's scarps and the rim's benches stand up close in. MapLibre stretches 16.
@@ -30,13 +30,45 @@ function terrariumBitmap(heights: Float32Array): Promise<ImageBitmap> {
  * Elevation tiles for the map’s terrain and hillshade. Where the package has no tile at this zoom,
  * the nearest ancestor is blended up, so relief never drops to a flat sheet at a coverage edge.
  */
-export async function demTile(_rest: string[], z: number, x: number, y: number, signal: AbortSignal): Promise<TileData> {
+/** The height of each polar cap as the globe closes it, m: the mean of the elevation mosaic's last row there. */
+const CAP_NORTH_M = -3600;
+const CAP_SOUTH_M = 2950;
+
+/**
+ * Toward each pole the heights level off to one value, as the imagery does to one colour (see tone.ts): the
+ * globe closes the pole by stretching the last row to a point, and every bump in that row became a ridge of a
+ * pinched fan in the relief and its shading. A copy when anything changes; the cached heights are untouched.
+ */
+function polarCapHeights(heights: Float32Array, z: number, y: number): Float32Array {
+  const from = 81.5;
+  const to = 84.9;
+  if (Math.max(Math.abs(pxToLat(y * TILE, z)), Math.abs(pxToLat((y + 1) * TILE, z))) < from) return heights;
+  const out = heights.slice();
+  for (let row = 0; row < TILE; row += 1) {
+    const lat = pxToLat(y * TILE + row + 0.5, z);
+    const t = Math.max(0, Math.min(1, (Math.abs(lat) - from) / (to - from)));
+    const w = t * t * (3 - 2 * t);
+    if (w <= 0) continue;
+    const cap = lat > 0 ? CAP_NORTH_M : CAP_SOUTH_M;
+    for (let i = row * TILE; i < (row + 1) * TILE; i += 1) out[i] = (out[i] ?? 0) + (cap - (out[i] ?? 0)) * w;
+  }
+  return out;
+}
+
+/** Whether the full elevation tile waits on the HiRISE model (zoom 15 and 16 over Jezero). */
+export function dtmWanted(z: number, x: number, y: number): boolean {
+  if (z <= 14 || z > MAP_DEM_MAX_ZOOM) return false;
+  return boxTouchesHirise(pxToLon(x * TILE, z), pxToLat((y + 1) * TILE, z), pxToLon((x + 1) * TILE, z), pxToLat(y * TILE, z));
+}
+
+/** With `packageOnly`, past zoom 14 the package's heights are stretched and the HiRISE model is not waited for. */
+export async function demTile(_rest: string[], z: number, x: number, y: number, signal: AbortSignal, packageOnly = false): Promise<TileData> {
   const cov = getCoverage() ?? (await loadCoverage());
   if (!cov) return terrariumBitmap(new Float32Array(TILE * TILE));
   const ref = nearestTile(cov, ['terrain', 'planetTerrain'], z, x, y);
   if (!ref) return terrariumBitmap(new Float32Array(TILE * TILE));
-  const base = (await tileHeights(z, x, y)).heights;
-  if (z <= 14) return terrariumBitmap(base);
+  const base = polarCapHeights((await tileHeights(z, x, y)).heights, z, y);
+  if (z <= 14 || packageOnly) return terrariumBitmap(base);
   // Past the package: the HiRISE model where it covers the tile, the package's heights stretched elsewhere.
   const west = pxToLon(x * TILE, z);
   const east = pxToLon((x + 1) * TILE, z);

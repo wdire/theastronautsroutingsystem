@@ -1,10 +1,19 @@
-import type { StyleSpecification } from 'maplibre-gl';
+import type { RasterLayerSpecification, StyleSpecification } from 'maplibre-gl';
 import { REGION } from '@/lib/constants';
 
 export const SOURCE_BASE = 'base';
 export const SOURCE_REGION = 'region-outline';
-
 const [w, s, e, n] = REGION;
+
+/**
+ * Jezero’s floor is dark basalt: the image is lifted a little so its shapes read on a screen. Contrast is strong
+ * from afar, where it gives the landforms body, and slight close in, where it crushed dark sand to black.
+ */
+const GRADE: NonNullable<RasterLayerSpecification['paint']> = {
+  'raster-contrast': ['interpolate', ['linear'], ['zoom'], 10, 0.22, 14, 0.12, 16, 0.02],
+  'raster-saturation': 0.26,
+  'raster-brightness-min': ['interpolate', ['linear'], ['zoom'], 12, 0.02, 16, 0.07],
+};
 
 /** The base style: Mars imagery on a globe. Terrain, light and overlays are added by their own modules. */
 export function baseStyle(): StyleSpecification {
@@ -45,20 +54,18 @@ export function baseStyle(): StyleSpecification {
     },
     layers: [
       { id: 'ground', type: 'background', paint: { 'background-color': '#7a4a30' } },
-      // Jezero’s floor is dark basalt: the image is lifted a little so its shapes read on a screen. Contrast is
-      // strong from afar, where it gives the landforms body, and slight close in, where it crushed dark sand to black.
       {
         id: 'base',
         type: 'raster',
         source: SOURCE_BASE,
-        paint: { 'raster-fade-duration': 180, 'raster-resampling': 'linear', 'raster-contrast': ['interpolate', ['linear'], ['zoom'], 10, 0.22, 14, 0.12, 16, 0.02], 'raster-saturation': 0.26, 'raster-brightness-min': ['interpolate', ['linear'], ['zoom'], 12, 0.02, 16, 0.07] },
+        paint: { 'raster-fade-duration': 180, 'raster-resampling': 'linear', ...GRADE },
       },
       {
         id: 'hirise-hd',
         type: 'raster',
         source: 'hd',
         minzoom: 13,
-        paint: { 'raster-fade-duration': 450, 'raster-resampling': 'linear', 'raster-contrast': ['interpolate', ['linear'], ['zoom'], 10, 0.22, 14, 0.12, 16, 0.02], 'raster-saturation': 0.26, 'raster-brightness-min': ['interpolate', ['linear'], ['zoom'], 12, 0.02, 16, 0.07] },
+        paint: { 'raster-fade-duration': 450, 'raster-resampling': 'linear', ...GRADE },
       },
       {
         id: 'region-outline',

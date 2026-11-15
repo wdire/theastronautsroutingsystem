@@ -1,10 +1,8 @@
 import {
   Color,
   DirectionalLight,
-  HalfFloatType,
   Mesh,
   PMREMGenerator,
-  WebGLRenderTarget,
   type Texture,
   FogExp2,
   HemisphereLight,
@@ -16,10 +14,6 @@ import {
   Vector3,
   WebGLRenderer,
 } from 'three';
-import { EffectComposer } from 'three/examples/jsm/postprocessing/EffectComposer.js';
-import { SMAAPass } from 'three/examples/jsm/postprocessing/SMAAPass.js';
-import { OutputPass } from 'three/examples/jsm/postprocessing/OutputPass.js';
-import { N8AOPass } from 'n8ao';
 import type { Scenario, VehicleId } from '@/engines/types';
 import { sunPosition } from '@/engines/marsTime';
 import { tauAt, visibilityKm } from '@/engines/environment';
@@ -125,6 +119,8 @@ export interface VisorHandle {
   /** On your own: walk, or take a vehicle and drive it; and the camera's distance. */
   setRoam(vehicle: VehicleId, view: RoamView): void;
   resize(): void;
+  /** The resolution the scene is drawn at, as a share of CSS pixels (it adapts to the frame rate); for the checks. */
+  ratio(): number;
   getState(): VisorState;
   /** Where each prop stands, in scene metres; for tests. */
   props(): { id: string; x: number; z: number; y: number; seated: boolean; real: boolean }[];
@@ -132,8 +128,10 @@ export interface VisorHandle {
   position(): { x: number; y: number; z: number };
   /** How far the camera is above the drawn ground under it, m. Never negative. */
   eyeAboveGround(): number;
+  /** The route ahead of a ride, lon and lat from the party on (empty on foot), for the minimap. */
+  route(): readonly (readonly [number, number])[];
   /** What the last frame cost, for the performance checks. */
-  stats(): { triangles: number; calls: number; rocks: number; layers: string; wheels: [number, number] };
+  stats(): { triangles: number; calls: number; rocks: number; layers: string; wheels: [number, number]; textures: number; geometries: number; programs: number };
   dispose(): void;
 }
 
@@ -163,6 +161,10 @@ export class WebGLUnavailableError extends Error {
 export async function mountVisor(canvas: HTMLCanvasElement, options: VisorOptions): Promise<VisorHandle> {
   let renderer: WebGLRenderer;
   try {
+    // Drawn straight to the screen. Ambient occlusion, SMAA and the half-float buffers they needed cost a third
+    // of every frame and a few hundred megabytes of graphics memory, for a difference that could hardly be seen
+    // on this ground. Multisampling the canvas cost as much again here (measured on Metal); drawn at 1.25 to
+    // 1.5 times the CSS pixels, edges are already finer than the screen shows.
     renderer = new WebGLRenderer({ canvas, antialias: false, powerPreference: 'high-performance' });
   } catch {
     throw new WebGLUnavailableError();
@@ -197,19 +199,6 @@ export async function mountVisor(canvas: HTMLCanvasElement, options: VisorOption
   scene.add(hemi, sun, sun.target);
   const sky = createSky();
   scene.add(sky.mesh);
-
-  /* ---- what the camera sees goes through ambient occlusion, then antialiasing, then tone mapping ---- */
-  let postOk = true;
-  const composer = new EffectComposer(renderer, new WebGLRenderTarget(1, 1, { type: HalfFloatType }));
-  const ao = new N8AOPass(scene, camera, 1, 1);
-  ao.configuration.aoRadius = 1.6;
-  ao.configuration.distanceFalloff = 0.5;
-  ao.configuration.intensity = 2.4;
-  ao.configuration.gammaCorrection = false;
-  ao.setQualityMode('Medium');
-  composer.addPass(ao);
-  composer.addPass(new SMAAPass());
-  composer.addPass(new OutputPass());
 
   // The sky lights everything it can see: an environment map rendered from the dome, renewed as the sun moves.
   const pmrem = new PMREMGenerator(renderer);
@@ -283,6 +272,22 @@ export async function mountVisor(canvas: HTMLCanvasElement, options: VisorOption
     updateHoles();
   };
 
+  /**
+   * Patches built and waiting to be shown. Their textures go to the graphics card one a frame (see the frame
+   * loop), then the patch replaces the old one: sent all at once, a new layer's textures and triangles held up
+   * a frame for a tenth of a second or more.
+   */
+  const staged: { textures: Texture[]; ready: () => void }[] = [];
+  const show = async (layer: Layer, next: Patch, still: () => boolean = () => true): Promise<Patch | null> => {
+    await new Promise<void>((ready) => staged.push({ textures: [...next.textures], ready }));
+    if (disposed || !still()) {
+      next.dispose();
+      return null;
+    }
+    swapIn(layer, next);
+    return next;
+  };
+
   const ensure = (kind: PatchSpec['kind'], x: number, z: number) => {
     const layer = layers[kind];
     if (layer.building || disposed) return;
@@ -303,9 +308,9 @@ export async function mountVisor(canvas: HTMLCanvasElement, options: VisorOption
     const cz = kind === 'close' ? Math.round(z / 8) * 8 : z;
     const options = { maxAnisotropy: maxAniso, hirise: !quick, coarser: coarser ? (px: number, pz: number) => coarser.heightAt(px, pz) : undefined };
     buildPatch(frame, cx, cz, layer.spec, options)
+      .then((built) => show(layer, built))
       .then((next) => {
-        if (disposed) return next.dispose();
-        swapIn(layer, next);
+        if (!next) return;
         if (quick && tierNow() < 2) {
           sharpenTried.add(next);
           sharpen(kind, next);
@@ -324,10 +329,10 @@ export async function mountVisor(canvas: HTMLCanvasElement, options: VisorOption
     state.loading = state.ready ? 'Bringing in HiRISE detail…' : state.loading;
     const coarser = kind === 'close' ? layers.near.patch : null;
     buildPatch(frame, from.cx, from.cz, layer.spec, { maxAnisotropy: maxAniso, hirise: true, coarser: coarser ? (px, pz) => coarser.heightAt(px, pz) : undefined })
+      // Moved on meanwhile: the newer patch is already HiRISE.
+      .then((built) => show(layer, built, () => layer.patch === from))
       .then((next) => {
-        // Moved on meanwhile: the newer patch is already HiRISE.
-        if (disposed || layer.patch !== from) return next.dispose();
-        swapIn(layer, next);
+        if (!next) return;
         // The close patch blended into the old near surface; it is built again against the new one.
         if (kind === 'near' && layers.close.patch) rebuildClose = true;
       })
@@ -360,6 +365,7 @@ export async function mountVisor(canvas: HTMLCanvasElement, options: VisorOption
   const guides = mission ? createGuides(scene, heightAt) : null;
   let lastGuides = -1e9;
   let lastPrefetch = -1e9;
+  let routeAhead: readonly (readonly [number, number])[] = [];
   let loweredForSpeed = false;
   let lastTier: 0 | 1 | 2 = 0;
   let lastSharpenCheck = 0;
@@ -451,15 +457,52 @@ export async function mountVisor(canvas: HTMLCanvasElement, options: VisorOption
   };
   canvas.addEventListener('wheel', onWheel, { passive: false });
 
+  /**
+   * The resolution the scene is drawn at, as a share of CSS pixels. Up to 1.5 on a high-density screen (the
+   * difference from 2 is hard to see, and 2 is 78% more pixels), lowered a step at a time while frames run
+   * long and raised again after a long stretch at full rate: a full-screen view on a laptop's graphics is
+   * limited by how many pixels it shades, and a steady 60 frames reads better than a few more pixels.
+   */
+  const maxRatio = Math.min(window.devicePixelRatio || 1, 1.5);
+  const minRatio = Math.min(1, maxRatio);
+  let pixelRatio = maxRatio > 1.25 ? 1.25 : maxRatio;
+  const ratioWatch = { since: performance.now(), frames: 0, slow: 0, slowWindows: 0, goodSince: performance.now(), raisedAt: -1e9, raiseBlocked: false };
+  const adaptResolution = (now: number, dt: number) => {
+    if (effective === 'low') return;
+    ratioWatch.frames += 1;
+    if (dt > 0.0205) ratioWatch.slow += 1;
+    const span = now - ratioWatch.since;
+    if (span < 2000) return;
+    const slowShare = ratioWatch.slow / Math.max(1, ratioWatch.frames);
+    ratioWatch.since = now;
+    ratioWatch.frames = 0;
+    ratioWatch.slow = 0;
+    // Every change reallocates the drawing buffer, a hitch of its own: two slow stretches in a row before going
+    // down, twenty seconds of full rate before trying a step up, and no more tries once one has not held.
+    ratioWatch.slowWindows = slowShare > 0.3 ? ratioWatch.slowWindows + 1 : 0;
+    if (slowShare > 0.03) ratioWatch.goodSince = now;
+    let next = pixelRatio;
+    if (ratioWatch.slowWindows >= 2 && pixelRatio > minRatio) {
+      next = Math.max(minRatio, pixelRatio - 0.125);
+      ratioWatch.slowWindows = 0;
+      if (now - ratioWatch.raisedAt < 8000) ratioWatch.raiseBlocked = true;
+    } else if (!ratioWatch.raiseBlocked && pixelRatio < maxRatio && now - ratioWatch.goodSince > 20_000) {
+      next = Math.min(maxRatio, pixelRatio + 0.125);
+      ratioWatch.raisedAt = now;
+      ratioWatch.goodSince = now;
+    }
+    if (next !== pixelRatio) {
+      pixelRatio = next;
+      renderer.setPixelRatio(pixelRatio);
+      resize();
+    }
+  };
+
   const applyQuality = () => {
     const low = effective === 'low';
     // 1.5 at most: on a Retina screen the difference from 2 is hard to see, and it is 44% fewer pixels for
     // ambient occlusion and antialiasing to work through every frame.
-    renderer.setPixelRatio(low ? 1 : Math.min(window.devicePixelRatio || 1, 1.5));
-    composer.setPixelRatio(renderer.getPixelRatio());
-    // Half-resolution AO is left off: switching it made n8ao hand three.js a render target it could not
-    // set up on a high-density screen, and every frame threw.
-    ao.enabled = !low && postOk;
+    renderer.setPixelRatio(low ? 1 : pixelRatio);
     groundQuality.value = low ? 0 : 1;
     rocks.setLowQuality(low);
     sun.shadow.mapSize.set(low ? 1024 : 2048, low ? 1024 : 2048);
@@ -472,7 +515,6 @@ export async function mountVisor(canvas: HTMLCanvasElement, options: VisorOption
     const w = canvas.clientWidth || window.innerWidth;
     const h = canvas.clientHeight || window.innerHeight;
     renderer.setSize(w, h, false);
-    composer.setSize(w, h);
     camera.aspect = w / Math.max(1, h);
     // A phone held upright needs a wider lens to feel the same.
     camera.fov = camera.aspect < 1 ? 78 : 62;
@@ -528,6 +570,7 @@ export async function mountVisor(canvas: HTMLCanvasElement, options: VisorOption
     const dt = Math.min(0.1, (now - last) / 1000);
     last = now;
     if (dt > 0) fpsSmooth += (1 / dt - fpsSmooth) * 0.05;
+    if (state.ready && quality !== 'low') adaptResolution(now, dt);
 
     if (descent && state.ready) {
       if (keys.size > 0 || dragging) {
@@ -576,6 +619,7 @@ export async function mountVisor(canvas: HTMLCanvasElement, options: VisorOption
       if (guides && mission && now - lastGuides > 350) {
         lastGuides = now;
         const ahead = mission.ahead();
+        routeAhead = ahead.path;
         // The ground the route is heading for starts loading now, so it is sharp by the time it is reached.
         if (now - lastPrefetch > 1500) {
           lastPrefetch = now;
@@ -646,6 +690,16 @@ export async function mountVisor(canvas: HTMLCanvasElement, options: VisorOption
       sharpen('close', layers.close.patch);
     }
     for (const kind of ORDER) ensure(kind, pos.x, pos.z);
+    // One texture of a waiting patch to the graphics card a frame; a patch whose textures are all there is shown.
+    const waiting = staged[0];
+    if (waiting) {
+      const texture = waiting.textures.shift();
+      if (texture) renderer.initTexture(texture);
+      else {
+        staged.shift();
+        waiting.ready();
+      }
+    }
 
     // Stand on the drawn ground, and ease the eye height so steps in the data do not jolt the view.
     const ground = heightAt(pos.x, pos.z);
@@ -686,21 +740,7 @@ export async function mountVisor(canvas: HTMLCanvasElement, options: VisorOption
     sun.target.position.set(Math.round(pos.x / texel) * texel, ground, Math.round(pos.z / texel) * texel);
     sun.position.copy(sun.target.position).addScaledVector(sunDir, 400);
 
-    // N8AO is the pass that draws the scene into the composer: with it off (low quality, fast missions)
-    // the composer would hand on an empty buffer and the screen went black. Then the scene is drawn plainly.
-    if (postOk && ao.enabled) {
-      try {
-        composer.render(dt);
-      } catch (err) {
-        // Post-processing is a nicety: if it fails on this machine the scene is drawn plainly, once warned.
-        postOk = false;
-        ao.enabled = false;
-        console.warn('Rover View: post-processing failed, drawing without it.', err);
-        renderer.render(scene, camera);
-      }
-    } else {
-      renderer.render(scene, camera);
-    }
+    renderer.render(scene, camera);
 
     if (!state.ready && layers.near.patch && layers.mid.patch) {
       state.ready = true;
@@ -788,11 +828,11 @@ export async function mountVisor(canvas: HTMLCanvasElement, options: VisorOption
     // Most browsers hand the context back within a second; when one does not, the view is built anew.
     lostTimer = window.setTimeout(() => options.onLost?.(), 1800);
   };
+  // The ground's textures let go of their pixels once uploaded, so a context handed back cannot be refilled
+  // from them: the view is built again, from tiles still in memory.
   const onRestored = () => {
     window.clearTimeout(lostTimer);
-    last = performance.now();
-    state.loading = null;
-    raf = requestAnimationFrame(frameLoop);
+    options.onLost?.();
   };
   canvas.addEventListener('webglcontextlost', onLost);
   canvas.addEventListener('webglcontextrestored', onRestored);
@@ -854,14 +894,18 @@ export async function mountVisor(canvas: HTMLCanvasElement, options: VisorOption
       pitch = mode === 'helmet' ? -0.06 : 0;
     },
     resize,
+    // For the checks: the resolution the scene is drawn at now.
+    ratio: () => pixelRatio,
     getState: () => ({ ...state }),
     props: () => props.list(),
+    route: () => routeAhead,
     position: () => ({ x: pos.x, y: pos.y, z: pos.z }),
     eyeAboveGround: () => pos.y - heightAt(pos.x, pos.z),
-    stats: () => ({ triangles: renderer.info.render.triangles, calls: renderer.info.render.calls, rocks: rocks.count(), wheels: party ? [party.wheelCount(), Math.round(party.wheelTurn() * 100) / 100] : [0, 0], layers: ORDER.map((k) => `${k}:${layers[k].patch ? (layers[k].patch.hirise ? `hirise ${layers[k].patch.debug}` : 'package') : 'none'}`).join(' ') }),
+    stats: () => ({ triangles: renderer.info.render.triangles, calls: renderer.info.render.calls, rocks: rocks.count(), wheels: party ? [party.wheelCount(), Math.round(party.wheelTurn() * 100) / 100] : [0, 0], layers: ORDER.map((k) => `${k}:${layers[k].patch ? (layers[k].patch.hirise ? `hirise ${layers[k].patch.debug}` : 'package') : 'none'}`).join(' '), textures: renderer.info.memory.textures, geometries: renderer.info.memory.geometries, programs: renderer.info.programs?.length ?? 0 }),
     dispose() {
       disposed = true;
       cancelAnimationFrame(raf);
+      for (const waiting of staged.splice(0)) waiting.ready();
       window.removeEventListener('keydown', onKeyDown);
       window.removeEventListener('keyup', onKeyUp);
       window.removeEventListener('blur', onBlur);
@@ -884,8 +928,6 @@ export async function mountVisor(canvas: HTMLCanvasElement, options: VisorOption
       sky.dispose();
       envMap?.dispose();
       pmrem.dispose();
-      ao.dispose();
-      composer.dispose();
       window.clearTimeout(lostTimer);
       renderer.dispose();
       // Release the context now rather than when the page forgets the canvas: browsers keep only about

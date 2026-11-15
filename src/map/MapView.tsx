@@ -3,9 +3,9 @@ import 'maplibre-gl/dist/maplibre-gl.css';
 import { useApp } from '@/store';
 import { createMap, destroyMap, whenMapReady } from './instance';
 import { addRunFocus, flyIn, isInRegion, startGlobeSpin } from './camera';
-import { setTileHandler } from './protocol';
-import { mapHdTile, mapImgTile } from './protocol/tone';
-import { demTile } from './protocol/dem';
+import { setTileHandler, type TileHandler } from './protocol';
+import { onTileReady, poolTile } from './protocol/pool';
+import type { TileKind } from './protocol/serve';
 import { addTerrain } from './terrain';
 import { addPlacePicking } from './pick';
 import { addDescend } from './descend';
@@ -25,9 +25,19 @@ import { groundAtCached } from '@/data/dem';
 import { marsTime } from '@/engines/marsTime';
 import { fmtClock, fmtDeg, fmtElevation } from '@/lib/format';
 
-setTileHandler('img', mapImgTile);
-setTileHandler('hd', mapHdTile);
-setTileHandler('dem', demTile);
+/** A tile kind made in the tile workers, progressively: a stand-in at once where the full tile waits on the network. */
+const fromPool =
+  (kind: TileKind): TileHandler =>
+  async (_rest, z, x, y, signal) => {
+    const served = await poolTile(kind, z, x, y, 'progressive', signal);
+    return served.maxAge ? { data: served.bitmap, maxAge: served.maxAge } : served.bitmap;
+  };
+setTileHandler('img', fromPool('img'));
+setTileHandler('hd', fromPool('hd'));
+setTileHandler('dem', fromPool('dem'));
+
+/** The map sources each tile kind is drawn by. */
+const SOURCES_OF: Partial<Record<TileKind, readonly string[]>> = { img: [SOURCE_BASE], hd: ['hd'], dem: ['dem', 'dem-shade'] };
 
 /** The one map of the app. Everything else draws over it. */
 export function MapView() {
@@ -56,6 +66,39 @@ export function MapView() {
       }),
     );
     cleanups.push(startGlobeSpin(map), startPlanner());
+
+    // A tile first drawn as a stand-in is asked for again once its full version is ready, a frame's worth at a time.
+    const toRefresh = new Map<string, { z: number; x: number; y: number }[]>();
+    let refreshFrame = 0;
+    // A dozen tiles a frame at most: each one is uploaded again, and the terrain redrawn under it.
+    const PER_FRAME = 12;
+    const flushRefresh = () => {
+      refreshFrame = 0;
+      let budget = PER_FRAME;
+      for (const [id, tiles] of toRefresh) {
+        const now = tiles.splice(0, budget);
+        budget -= now.length;
+        try {
+          if (now.length > 0 && map.getSource(id)) map.refreshTiles(id, now);
+        } catch {
+          // The source went away with a style change; nothing to refresh.
+        }
+        if (tiles.length === 0) toRefresh.delete(id);
+        if (budget <= 0) break;
+      }
+      if (toRefresh.size > 0) refreshFrame = requestAnimationFrame(flushRefresh);
+    };
+    cleanups.push(
+      onTileReady((kind, z, x, y) => {
+        for (const id of SOURCES_OF[kind] ?? []) {
+          let list = toRefresh.get(id);
+          if (!list) toRefresh.set(id, (list = []));
+          list.push({ z, x, y });
+        }
+        refreshFrame ||= requestAnimationFrame(flushRefresh);
+      }),
+      () => cancelAnimationFrame(refreshFrame),
+    );
 
     const onClick = (e: { lngLat: { lng: number; lat: number } }) => {
       if (useApp.getState().mode === 'globe' && isInRegion(e.lngLat.lng, e.lngLat.lat)) flyIn(map);
@@ -91,9 +134,14 @@ export function MapView() {
     };
   }, []);
 
+  // While Rover View covers the screen the map shrinks to a single pixel: its canvas, multisampled buffers and
+  // the tiles it keeps for a screenful let go of their graphics memory, which Rover View needs. Coming back,
+  // it fills in again from the tile workers' memory and the browser's cache.
+  const covered = useApp((s) => s.visor !== null);
+
   // The library sets `position: relative` on its container, so the size comes from a wrapper.
   return (
-    <div className="absolute inset-0">
+    <div className={covered ? 'invisible absolute top-0 left-0 size-px overflow-hidden' : 'absolute inset-0'}>
       <div ref={ref} className="size-full" aria-label="Map of Mars" role="application" />
     </div>
   );

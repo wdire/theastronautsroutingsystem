@@ -75,7 +75,7 @@ test('the mission editor adds, edits, reorders and removes, with undo', async ({
   await expect(name).toBeFocused();
   await name.fill('Delta scarp');
   await name.press('Enter');
-  await expect(plan.getByRole('button', { name: /Delta scarp/ })).toBeVisible();
+  await expect(plan.getByText('Delta scarp', { exact: true })).toBeVisible();
   // The plan is in the link.
   await expect.poll(() => (page.url().match(/\|/g) ?? []).length).toBe(2);
 });

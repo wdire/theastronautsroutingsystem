@@ -1,14 +1,30 @@
-import { BufferAttribute, BufferGeometry, CanvasTexture, LinearMipmapLinearFilter, Mesh, MeshStandardMaterial, NoColorSpace, RepeatWrapping, SRGBColorSpace, Vector2, type Texture } from 'three';
+import {
+  BufferAttribute,
+  BufferGeometry,
+  CanvasTexture,
+  ClampToEdgeWrapping,
+  DataTexture,
+  LinearFilter,
+  LinearMipmapLinearFilter,
+  Mesh,
+  MeshStandardMaterial,
+  NoColorSpace,
+  RGFormat,
+  Sphere,
+  SRGBColorSpace,
+  UnsignedByteType,
+  Vector2,
+  Vector3,
+  type Texture,
+} from 'three';
 import { finestZoomAt, loadGrid } from '@/data/dem';
 import { getCoverage, hasTile, nearestTile, tileUrl } from '@/data/coverage';
 import { boxTouchesHirise, loadEsriHiriseImage, loadHiriseHeights, loadHiriseImage, type HiriseHeights, type HiriseImage } from '@/data/hirise';
 import { makeGrid } from '@/engines/terrain';
-import { gradePixels } from '@/engines/grading';
 import { latToPx, lonToPx, smoothstep } from '@/lib/geo';
-import { toBitmap } from '@/map/protocol';
-import { imgTile } from '@/map/protocol/img';
+import { poolTile } from '@/map/protocol/pool';
 import { curvatureDrop, toLonLat, type Frame } from './frame';
-import { fieldHeightAt, fieldIndices, type HeightField } from './heightfield';
+import { fieldHeightAt, fieldIndices, gridNormals, type HeightField } from './heightfield';
 import { groundMaterial, type GroundKind } from './groundShader';
 import { cutoffForSourceZoom, HIRISE_CUTOFF_M, planetMetres, reliefAt, type ReliefSample } from './relief';
 
@@ -42,21 +58,26 @@ export interface PatchSpec {
   reliefMinM?: number;
 }
 
-/** The ground layers, coarse to fine. Each finer one cuts a hole in the one before it. */
+/**
+ * The ground layers, coarse to fine. Each finer one cuts a hole in the one before it. Sample counts are what
+ * the eye can tell apart at each layer's distance, and no more: every point is relief to work out, bytes to
+ * send to the graphics card and triangles to draw each frame, and the fine grain up close comes from the
+ * ground shader's tiled close-up materials rather than from more triangles.
+ */
 export const FAR: PatchSpec = { kind: 'far', sizeM: 85_000, samples: 257, imgZoom: 10, demZoom: 9 };
-export const MID: PatchSpec = { kind: 'mid', sizeM: 40_000, samples: 401, imgZoom: 12, demZoom: 10, reliefMinM: 400, blend: { demZoom: FAR.demZoom, fromM: 4_000, toM: 1_000, sinkM: 10 } };
+export const MID: PatchSpec = { kind: 'mid', sizeM: 40_000, samples: 321, imgZoom: 12, demZoom: 10, reliefMinM: 500, blend: { demZoom: FAR.demZoom, fromM: 4_000, toM: 1_000, sinkM: 10 } };
 export const NEAR: PatchSpec = {
   kind: 'near',
   sizeM: 2_000,
-  samples: 501,
+  samples: 401,
   imgZoom: 14,
   demZoom: 14,
   hirise: { dtm: 2, ortho: 14, image: 'esri', priority: 3 },
-  reliefMinM: 16,
+  reliefMinM: 20,
   blend: { demZoom: MID.demZoom, fromM: 330, toM: 140, sinkM: 0.8, reliefMinM: MID.reliefMinM },
 };
-/** Under the viewer’s feet: half-metre triangles on the 1 m model, the 25 cm image on top. */
-export const CLOSE: PatchSpec = { kind: 'close', sizeM: 256, samples: 513, imgZoom: 14, demZoom: 14, hirise: { dtm: 0, ortho: 0, image: 'usgs', priority: 0 }, reliefMinM: 1.6, blend: { fromM: 44, toM: 16, sinkM: 0.12 } };
+/** Under the viewer’s feet: two-thirds-metre triangles on the 1 m model, the 25 cm image on top. */
+export const CLOSE: PatchSpec = { kind: 'close', sizeM: 256, samples: 385, imgZoom: 14, demZoom: 14, hirise: { dtm: 0, ortho: 0, image: 'usgs', priority: 0 }, reliefMinM: 2, blend: { fromM: 44, toM: 16, sinkM: 0.12 } };
 
 /** How far inside a layer’s edge the coarser layer’s hole stops, m. Inside the ring where the two agree. */
 export const HOLE_INSET_M = { mid: 700, near: 110, close: 20 } as const;
@@ -79,10 +100,16 @@ export interface Patch {
   roughnessAt(x: number, z: number): number | null;
   /** Tells this patch’s shader where the next finer patch sits, so it leaves that square undrawn. */
   setHole(cx: number, cz: number, half: number): void;
+  /** Its textures, so the view can send them to the graphics card a frame at a time before it shows the patch. */
+  textures: Texture[];
   dispose(): void;
 }
 
-/** The imagery over a lon/lat box at one zoom, graded for eye level, as a canvas and its pixel origin. */
+/**
+ * The imagery over a lon/lat box at one zoom, as a canvas and its pixel origin. The tiles are made in the tile
+ * workers and only drawn here, on a canvas the browser keeps on the graphics card: nothing is read back, and
+ * the texture is copied from it there. The grade for eye level is the ground shader's.
+ */
 async function imagery(
   west: number,
   south: number,
@@ -98,7 +125,7 @@ async function imagery(
   const canvas = document.createElement('canvas');
   canvas.width = (x1 - x0 + 1) * 256;
   canvas.height = (y1 - y0 + 1) * 256;
-  const ctx = canvas.getContext('2d', { willReadFrequently: true });
+  const ctx = canvas.getContext('2d');
   if (!ctx) throw new Error('no 2d context');
   ctx.fillStyle = 'rgb(150 96 62)';
   ctx.fillRect(0, 0, canvas.width, canvas.height);
@@ -114,7 +141,9 @@ async function imagery(
           try {
             if (live || !cov || hasTile(cov, 'img', zoom, tx, ty)) {
               // The map’s own tile: the package tile, or its ancestor with live detail.
-              ctx.drawImage(await toBitmap(await imgTile([], zoom, tx, ty, signal)), dx, dy);
+              const { bitmap } = await poolTile('raw', zoom, tx, ty, 'full', signal);
+              ctx.drawImage(bitmap, dx, dy);
+              bitmap.close();
               return;
             }
             // Wide layers skip the live services: the nearest package ancestor is enough at that distance.
@@ -127,6 +156,7 @@ async function imagery(
             const size = 256 / 2 ** dz;
             ctx.imageSmoothingQuality = 'high';
             ctx.drawImage(bitmap, (tx - (ref.x << dz)) * size, (ty - (ref.y << dz)) * size, size, size, dx, dy, 256, 256);
+            bitmap.close();
           } catch {
             // A missing tile leaves the flat ochre fill.
           }
@@ -135,30 +165,26 @@ async function imagery(
     }
   }
   await Promise.all(jobs);
-  const image = ctx.getImageData(0, 0, canvas.width, canvas.height);
-  gradePixels(image.data);
-  ctx.putImageData(image, 0, 0);
   return { canvas, px0: x0 * 256, py0: y0 * 256 };
 }
 
 /** Local roughness of a grey image: the spread of brightness in a small window, as a share of its mean. */
-function roughnessGrid(img: HiriseImage, windowPx: number): { grid: Float32Array; cols: number; rows: number; cell: number } {
-  const ctx = img.canvas.getContext('2d', { willReadFrequently: true });
+async function roughnessGrid(img: HiriseImage, windowPx: number, pause: () => Promise<void>): Promise<{ grid: Float32Array; cols: number; rows: number; cell: number }> {
   const cell = windowPx;
   const cols = Math.floor(img.width / cell);
   const rows = Math.floor(img.height / cell);
   const grid = new Float32Array(cols * rows).fill(Number.NaN);
-  if (!ctx) return { grid, cols, rows, cell };
-  const data = ctx.getImageData(0, 0, img.width, img.height).data;
+  const data = img.data;
   for (let r = 0; r < rows; r += 1) {
+    await pause();
     for (let c = 0; c < cols; c += 1) {
       let sum = 0;
       let sq = 0;
       let n = 0;
       for (let y = r * cell; y < (r + 1) * cell; y += 1) {
         for (let x = c * cell; x < (c + 1) * cell; x += 1) {
-          const i = (y * img.width + x) * 4;
-          if ((data[i + 3] ?? 0) < 128) continue;
+          const i = (y * img.width + x) * 2;
+          if ((data[i + 1] ?? 0) < 128) continue;
           const v = data[i] ?? 0;
           sum += v;
           sq += v * v;
@@ -173,6 +199,57 @@ function roughnessGrid(img: HiriseImage, windowPx: number): { grid: Float32Array
     }
   }
   return { grid, cols, rows, cell };
+}
+
+/**
+ * One index buffer per grid size, shared by every patch of that size and never freed: the triangles of a
+ * regular grid do not change, and a patch of half a million triangles would otherwise send its own each time.
+ */
+const sharedIndex = new Map<number, BufferAttribute>();
+function gridIndex(n: number): BufferAttribute {
+  let index = sharedIndex.get(n);
+  if (!index) {
+    index = new BufferAttribute(fieldIndices(n), 1);
+    sharedIndex.set(n, index);
+  }
+  return index;
+}
+
+/** Once on the graphics card, an attribute's copy here is let go: nothing reads it back. */
+function dropAfterUpload(attribute: BufferAttribute): BufferAttribute {
+  return attribute.onUpload(() => {
+    (attribute as unknown as { array: unknown }).array = null;
+  });
+}
+
+/** Unit normals as signed bytes, four to a vertex (the fourth unused): a quarter of the bytes of floats. */
+function packNormals(normals: Float32Array): Int8Array {
+  const count = normals.length / 3;
+  const out = new Int8Array(count * 4);
+  for (let i = 0; i < count; i += 1) {
+    out[i * 4] = Math.round((normals[i * 3] ?? 0) * 127);
+    out[i * 4 + 1] = Math.round((normals[i * 3 + 1] ?? 1) * 127);
+    out[i * 4 + 2] = Math.round((normals[i * 3 + 2] ?? 0) * 127);
+  }
+  return out;
+}
+
+/** 0..1 as a 16-bit fraction. */
+const unit16 = (v: number) => Math.round(Math.max(0, Math.min(1, v)) * 65535);
+
+/**
+ * A pause point for long loops: once `budgetMs` has passed since the last pause, gives the frame loop a turn.
+ * A patch is a quarter of a million points of noise and blending; done in one go it froze the view for most of
+ * a second.
+ */
+function slicer(signal?: AbortSignal, budgetMs = 8): () => Promise<void> {
+  let since = performance.now();
+  return async () => {
+    if (performance.now() - since < budgetMs) return;
+    await new Promise<void>((resolve) => setTimeout(resolve, 0));
+    if (signal?.aborted) throw new DOMException('aborted', 'AbortError');
+    since = performance.now();
+  };
 }
 
 export interface BuildOptions {
@@ -209,8 +286,11 @@ export async function buildPatch(frame: Frame, cx: number, cz: number, spec: Pat
 
   const n = spec.samples;
   const step = spec.sizeM / (n - 1);
+  const pause = slicer(opts.signal);
+  await pause();
   const lonLat = new Float64Array(n * n * 2);
   for (let iz = 0; iz < n; iz += 1) {
+    if ((iz & 31) === 0) await pause();
     for (let ix = 0; ix < n; ix += 1) {
       const [lon, lat] = toLonLat(frame, cx - half + ix * step, cz - half + iz * step);
       lonLat[(iz * n + ix) * 2] = lon;
@@ -265,15 +345,21 @@ export async function buildPatch(frame: Frame, cx: number, cz: number, spec: Pat
     return (at(x0, z0) * (1 - u) + at(x0 + 1, z0) * u) * (1 - v) + (at(x0, z0 + 1) * (1 - u) + at(x0 + 1, z0 + 1) * u) * v;
   };
   const rs: ReliefSample = { h: 0, sand: 0, rock: 0 };
+  const texW = tex.canvas.width;
+  const texH = tex.canvas.height;
   const rsCoarse: ReliefSample = { h: 0, sand: 0, rock: 0 };
 
   const heights = new Float32Array(n * n);
   const positions = new Float32Array(n * n * 3);
-  const uvs = new Float32Array(n * n * 2);
-  const uvHi = new Float32Array(n * n * 2);
-  // Per point: loose sand and exposed rock, 0 to 1, for the shader and the rocks.
-  const soil = new Float32Array(n * n * 2);
+  // Texture coordinates as 16-bit fractions (a twentieth of a pixel on the widest texture): half the bytes
+  // to send to the graphics card, and every byte sent is time the frame waits.
+  const uvs = new Uint16Array(n * n * 2);
+  const uvHi = new Uint16Array(n * n * 2);
+  // Per point: loose sand and exposed rock, 0 to 255, for the shader and the rocks (two bytes unused: the
+  // graphics card wants every vertex attribute four bytes wide).
+  const soil = new Uint8Array(n * n * 4);
   for (let iz = 0; iz < n; iz += 1) {
+    await pause();
     const z = cz - half + iz * step;
     for (let ix = 0; ix < n; ix += 1) {
       const x = cx - half + ix * step;
@@ -294,8 +380,8 @@ export async function buildPatch(frame: Frame, cx: number, cz: number, spec: Pat
       if (spec.reliefMinM !== undefined) {
         reliefAt(PX, PZ, spec.reliefMinM, cutoff, rs);
         elevation += rs.h;
-        soil[i * 2] = rs.sand;
-        soil[i * 2 + 1] = rs.rock;
+        soil[i * 4] = Math.round(Math.max(0, Math.min(1, rs.sand)) * 255);
+        soil[i * 4 + 1] = Math.round(Math.max(0, Math.min(1, rs.rock)) * 255);
       }
       if (blend) {
         const inside = half - Math.max(Math.abs(x - cx), Math.abs(z - cz));
@@ -315,40 +401,58 @@ export async function buildPatch(frame: Frame, cx: number, cz: number, spec: Pat
       positions[i * 3] = x;
       positions[i * 3 + 1] = y;
       positions[i * 3 + 2] = z;
-      uvs[i * 2] = (lonToPx(lon, spec.imgZoom) - tex.px0) / tex.canvas.width;
-      uvs[i * 2 + 1] = 1 - (latToPx(lat, spec.imgZoom) - tex.py0) / tex.canvas.height;
+      uvs[i * 2] = unit16((lonToPx(lon, spec.imgZoom) - tex.px0) / texW);
+      uvs[i * 2 + 1] = unit16(1 - (latToPx(lat, spec.imgZoom) - tex.py0) / texH);
       if (hiImg) {
         const [u, v] = hiImg.uvOf(lon, lat);
-        uvHi[i * 2] = u;
-        uvHi[i * 2 + 1] = v;
+        uvHi[i * 2] = unit16(u);
+        uvHi[i * 2 + 1] = unit16(v);
       }
     }
   }
 
   const geometry = new BufferGeometry();
-  geometry.setAttribute('position', new BufferAttribute(positions, 3));
-  geometry.setAttribute('uv', new BufferAttribute(uvs, 2));
-  geometry.setAttribute('uvHi', new BufferAttribute(uvHi, 2));
-  geometry.setAttribute('soil', new BufferAttribute(soil, 2));
-  geometry.setIndex(new BufferAttribute(fieldIndices(n), 1));
-  geometry.computeVertexNormals();
-  geometry.computeBoundingSphere();
+  geometry.setAttribute('position', dropAfterUpload(new BufferAttribute(positions, 3)));
+  geometry.setAttribute('uv', dropAfterUpload(new BufferAttribute(uvs, 2, true)));
+  geometry.setAttribute('uvHi', dropAfterUpload(new BufferAttribute(uvHi, 2, true)));
+  geometry.setAttribute('soil', new BufferAttribute(soil, 4, true));
+  await pause();
+  geometry.setIndex(gridIndex(n));
+  await pause();
+  geometry.setAttribute('normal', dropAfterUpload(new BufferAttribute(packNormals(gridNormals(heights, n, step)), 4, true)));
+  // The bounding sphere from the grid's extent, not from a pass over every point.
+  let yMin = Infinity;
+  let yMax = -Infinity;
+  for (let i = 0; i < heights.length; i += 1) {
+    const h = heights[i]!;
+    if (h < yMin) yMin = h;
+    if (h > yMax) yMax = h;
+  }
+  geometry.boundingSphere = new Sphere(new Vector3(cx, (yMin + yMax) / 2, cz), Math.hypot(half * Math.SQRT2, (yMax - yMin) / 2));
+  await pause();
 
   const map = new CanvasTexture(tex.canvas);
   map.colorSpace = SRGBColorSpace;
   map.anisotropy = opts.maxAnisotropy;
   map.minFilter = LinearMipmapLinearFilter;
   map.generateMipmaps = true;
+  // Once copied to the texture, the canvas's own pixels are let go.
+  map.onUpdate = () => {
+    tex.canvas.width = 1;
+    tex.canvas.height = 1;
+  };
 
-  let hiTex: Texture | null = null;
+  let hiTex: DataTexture | null = null;
   if (hiImg && hiImg.filled > 0) {
-    hiTex = new CanvasTexture(hiImg.canvas);
-    // Brightness, not colour: read as stored.
+    // Brightness and coverage, two bytes a pixel, read as stored.
+    hiTex = new DataTexture(hiImg.data, hiImg.width, hiImg.height, RGFormat, UnsignedByteType);
     hiTex.colorSpace = NoColorSpace;
     hiTex.anisotropy = opts.maxAnisotropy;
     hiTex.minFilter = LinearMipmapLinearFilter;
-    hiTex.wrapS = hiTex.wrapT = RepeatWrapping;
+    hiTex.magFilter = LinearFilter;
+    hiTex.wrapS = hiTex.wrapT = ClampToEdgeWrapping;
     hiTex.generateMipmaps = true;
+    hiTex.needsUpdate = true;
   }
 
   const hole = { center: new Vector2(1e9, 1e9), half: 0 };
@@ -360,7 +464,15 @@ export async function buildPatch(frame: Frame, cx: number, cz: number, spec: Pat
   mesh.frustumCulled = false;
   mesh.renderOrder = { far: 0, mid: 1, near: 2, close: 3 }[spec.kind];
 
-  const rough = hiImg && hiImg.filled > 0.05 ? roughnessGrid(hiImg, Math.max(4, Math.round(2 / hiImg.res))) : null;
+  await pause();
+  const rough = hiImg && hiImg.filled > 0.05 ? await roughnessGrid(hiImg, Math.max(4, Math.round(2 / hiImg.res)), pause) : null;
+  if (hiTex) {
+    const t = hiTex;
+    // Uploaded once; the pixels here are not needed again (the roughness grid above is made from them).
+    t.onUpdate = () => {
+      (t.image as { data: Uint8Array | null }).data = null;
+    };
+  }
   const field: HeightField = { n, x0: cx - half, z0: cz - half, step, heights };
   return {
     spec,
@@ -379,13 +491,13 @@ export async function buildPatch(frame: Frame, cx: number, cz: number, spec: Pat
         const gx = Math.round((x - (cx - half)) / step);
         const gz = Math.round((z - (cz - half)) / step);
         if (gx < 0 || gz < 0 || gx >= n || gz >= n) return null;
-        const k = (gz * n + gx) * 2;
-        return Math.max(0, Math.min(1, 0.16 + (soil[k + 1] ?? 0) * 1.15 - (soil[k] ?? 0) * 0.3));
+        const k = (gz * n + gx) * 4;
+        return Math.max(0, Math.min(1, 0.16 + ((soil[k + 1] ?? 0) / 255) * 1.15 - ((soil[k] ?? 0) / 255) * 0.3));
       }
       const [lon, lat] = toLonLat(frame, x, z);
       const [u, v] = hiImg.uvOf(lon, lat);
       const c = Math.floor((u * hiImg.width) / rough.cell);
-      const r = Math.floor(((1 - v) * hiImg.height) / rough.cell);
+      const r = Math.floor((v * hiImg.height) / rough.cell);
       if (c < 0 || r < 0 || c >= rough.cols || r >= rough.rows) return null;
       const g = rough.grid[r * rough.cols + c] ?? Number.NaN;
       return Number.isFinite(g) ? g : null;
@@ -396,7 +508,10 @@ export async function buildPatch(frame: Frame, cx: number, cz: number, spec: Pat
       const u = material.userData.uniforms as { uHoleCenter?: { value: Vector2 }; uHoleHalf?: { value: number } } | undefined;
       if (u?.uHoleHalf) u.uHoleHalf.value = hh;
     },
+    textures: hiTex ? [map, hiTex] : [map],
     dispose: () => {
+      // The shared index buffer stays on the graphics card for the next patch of this size.
+      geometry.setIndex(null);
       geometry.dispose();
       map.dispose();
       hiTex?.dispose();

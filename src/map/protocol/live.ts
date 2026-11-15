@@ -20,6 +20,8 @@ export interface EquirectSource {
   size?: (level: number) => { cols: number; rows: number };
   /** How long to wait for a tile, ms. */
   timeoutMs?: number;
+  /** The request pool it shares with other sources on the same server; its own id if absent. */
+  pool?: string;
 }
 
 const ESRI = 'https://astro.arcgis.com/arcgis/rest/services/OnMars';
@@ -33,16 +35,21 @@ export const CTX: EquirectSource = {
   maxLevel: 15,
   levelFor: (z) => z - 2,
   url: (l, r, c) => `${ESRI}/CTX/MapServer/tile/${l}/${r}/${c}`,
+  pool: 'esri',
 };
 
-/** MRO HiRISE, a sparse mosaic of 25 to 50 cm images (Esri OnMars). Transparent where no image exists. */
+/**
+ * MRO HiRISE, a sparse mosaic of 25 to 50 cm images (Esri OnMars). Transparent where no image exists. Read no
+ * finer than level 16 (32 cm a pixel): level 17 only resamples the same images, at four times the tiles.
+ */
 export const HIRISE: EquirectSource = {
   id: 'hirise',
   tileSize: 512,
   baseRes: 0.3515625,
-  maxLevel: 17,
+  maxLevel: 16,
   levelFor: (z) => z - 2,
   url: (l, r, c) => `${ESRI}/HiRISE/MapServer/tile/${l}/${r}/${c}`,
+  pool: 'esri',
 };
 
 const ORTHO = HIRISE_LAYERS.ortho;
@@ -81,8 +88,35 @@ export const VIKING: EquirectSource = {
   url: (l, r, c) => `${TREK}/Mars_Viking_MDIM21_ClrMosaic_global_232m/1.0.0/default/default028mm/${l}/${r}/${c}.jpg`,
 };
 
-const tileCache = new Map<string, Promise<ImageBitmap | null>>();
-const TILE_CACHE_MAX = 120;
+/**
+ * Decoded source tiles, most recently used last, kept to a budget in bytes: a 512 px tile is a megabyte
+ * decoded, and every tile worker keeps its own. Evicted tiles come back from the browser's HTTP cache (every
+ * source here is served cacheable), so the budget only has to hold what the tiles being made right now share.
+ */
+const tileCache = new Map<string, { made: Promise<ImageBitmap | null>; bytes: number }>();
+const TILE_CACHE_BYTES = 12 * 1024 * 1024;
+let tileCacheBytes = 0;
+
+function rememberTile(url: string, made: Promise<ImageBitmap | null>, bytes: number): void {
+  const old = tileCache.get(url);
+  if (old) tileCacheBytes -= old.bytes;
+  tileCache.delete(url);
+  tileCache.set(url, { made, bytes });
+  tileCacheBytes += bytes;
+  // Evicted bitmaps are not closed: a warp may be about to draw one it was handed a moment ago.
+  for (const [key, entry] of tileCache) {
+    if (tileCacheBytes <= TILE_CACHE_BYTES || tileCache.size <= 1) break;
+    tileCache.delete(key);
+    tileCacheBytes -= entry.bytes;
+  }
+}
+
+function forgetTile(url: string, made: Promise<ImageBitmap | null>): void {
+  const entry = tileCache.get(url);
+  if (entry?.made !== made) return;
+  tileCache.delete(url);
+  tileCacheBytes -= entry.bytes;
+}
 
 /**
  * Requests wait in a pool per source, so a slow one (the USGS cut takes seconds a tile) never holds up a fast
@@ -96,8 +130,18 @@ interface Job {
   wanted: number;
   dropped: boolean;
   drop: () => void;
+  /** When it was asked for, in batches: requests a few frames apart belong to the same view. */
+  batch: number;
 }
-const POOL_SIZE: Record<string, number> = { 'usgs-hirise': 4 };
+const BATCH_MS = 120;
+const HTTP2 = typeof location !== 'undefined' && location.protocol === 'https:';
+/**
+ * Requests at once per pool. Esri's server speaks HTTP/1.1, so the browser opens six connections to it in all,
+ * shared by every tile worker: a few each keeps the newest-first order meaningful. The USGS cut comes from the
+ * app's own server, which in development is HTTP/1.1 too, and its slow answers must leave connections free
+ * for the package tiles; over HTTP/2 in production that limit is gone.
+ */
+const POOL_SIZE: Record<string, number> = { 'usgs-hirise': HTTP2 ? 6 : 2, esri: 3 };
 const pools = new Map<string, { running: number; queue: Job[] }>();
 
 function pool(id: string) {
@@ -113,11 +157,24 @@ function pump(id: string): void {
   const p = pool(id);
   const max = POOL_SIZE[id] ?? 8;
   while (p.running < max) {
-    const job = p.queue.pop();
+    const job = nextJob(p.queue);
     if (!job) return;
     if (job.dropped) continue;
     job.start();
   }
+}
+
+/**
+ * The newest view's requests first, and within one view the order they were asked in: the map asks for the
+ * tiles nearest the middle of the screen first, so plain newest-first would fetch the edges before the centre.
+ */
+function nextJob(queue: Job[]): Job | undefined {
+  let best = -1;
+  for (let i = 0; i < queue.length; i += 1) {
+    const job = queue[i]!;
+    if (best < 0 || job.batch > queue[best]!.batch) best = i;
+  }
+  return best < 0 ? undefined : queue.splice(best, 1)[0];
 }
 
 /** One source tile, or null if the service has none there, does not answer in time, or nobody wants it any more. Never rejects. */
@@ -129,13 +186,15 @@ function sourceTile(src: EquirectSource, level: number, row: number, col: number
     tileCache.set(url, hit);
     const job = jobs.get(url);
     if (job) want(job, signal);
-    return hit;
+    return hit.made;
   }
-  const p = pool(src.id);
+  const poolId = src.pool ?? src.id;
+  const p = pool(poolId);
   let job!: Job;
   const made = new Promise<ImageBitmap | null>((resolve) => {
     job = {
       url,
+      batch: Math.floor(performance.now() / BATCH_MS),
       wanted: 0,
       dropped: false,
       drop: () => {
@@ -154,7 +213,7 @@ function sourceTile(src: EquirectSource, level: number, row: number, col: number
             clearTimeout(timer);
             p.running -= 1;
             resolve(bitmap);
-            pump(src.id);
+            pump(poolId);
           });
       },
     };
@@ -162,16 +221,12 @@ function sourceTile(src: EquirectSource, level: number, row: number, col: number
   jobs.set(url, job);
   want(job, signal);
   p.queue.push(job);
-  pump(src.id);
+  pump(poolId);
   // A miss (or a dropped request) is not kept: the service may answer next time.
   void made.then((bitmap) => {
-    if (!bitmap && tileCache.get(url) === made) tileCache.delete(url);
+    if (!bitmap) forgetTile(url, made);
   });
-  tileCache.set(url, made);
-  if (tileCache.size > TILE_CACHE_MAX) {
-    const oldest = tileCache.keys().next().value;
-    if (oldest !== undefined) tileCache.delete(oldest);
-  }
+  rememberTile(url, made, src.tileSize * src.tileSize * 4);
   return made;
 }
 
@@ -243,17 +298,27 @@ export async function warpToTile(src: EquirectSource, z: number, x: number, y: n
   const tiles = await Promise.all(work);
   if (tiles.every((t) => !t.bitmap)) return null;
 
-  const mw = (col1 - col0 + 1) * ts;
-  const mh = (row1 - row0 + 1) * ts;
+  // Only the source pixels under the tile are read back: close in, a tile spans a sliver of one source tile, and
+  // reading all of every source tile it touches cost many times the warp itself.
+  const ox0 = col0 * ts;
+  const oy0 = row0 * ts;
+  const fullW = (col1 - col0 + 1) * ts;
+  const fullH = (row1 - row0 + 1) * ts;
+  const bx0 = Math.max(0, Math.floor(Math.min(sx[0] ?? 0, sx[size - 1] ?? 0) - ox0) - 1);
+  const by0 = Math.max(0, Math.floor(Math.min(sy[0] ?? 0, sy[size - 1] ?? 0) - oy0) - 1);
+  const bx1 = Math.min(fullW, Math.ceil(Math.max(sx[0] ?? 0, sx[size - 1] ?? 0) - ox0) + 2);
+  const by1 = Math.min(fullH, Math.ceil(Math.max(sy[0] ?? 0, sy[size - 1] ?? 0) - oy0) + 2);
+  const mw = Math.max(2, bx1 - bx0);
+  const mh = Math.max(2, by1 - by0);
   const mosaic = new OffscreenCanvas(mw, mh);
   const ctx = mosaic.getContext('2d', { willReadFrequently: true });
   if (!ctx) return null;
-  for (const t of tiles) if (t.bitmap) ctx.drawImage(t.bitmap, (t.c - col0) * ts, (t.r - row0) * ts, ts, ts);
+  for (const t of tiles) if (t.bitmap) ctx.drawImage(t.bitmap, (t.c - col0) * ts - bx0, (t.r - row0) * ts - by0, ts, ts);
   const srcPx = ctx.getImageData(0, 0, mw, mh).data;
 
   const rgba = new Uint8ClampedArray(size * size * 4);
-  const ox = col0 * ts;
-  const oy = row0 * ts;
+  const ox = ox0 + bx0;
+  const oy = oy0 + by0;
   let covered = 0;
   for (let j = 0; j < size; j += 1) {
     const fy = Math.max(0, Math.min(mh - 1.001, (sy[j] ?? 0) - oy));

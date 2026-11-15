@@ -101,7 +101,8 @@ export function addHoverInfo(map: MapLibreMap): () => void {
     if (!h) return unhover();
     if (hovered?.kind !== h.kind) {
       unhover();
-      const base = map.getPaintProperty(h.kind.layer, 'line-width');
+      // Only line layers have a width: asking a circle layer (the traverse's stops) for one throws.
+      const base = map.getLayer(h.kind.layer)?.type === 'line' ? map.getPaintProperty(h.kind.layer, 'line-width') : undefined;
       hovered = { kind: h.kind, base };
       if (h.kind.width && typeof base === 'number') map.setPaintProperty(h.kind.layer, 'line-width', h.kind.width);
     }

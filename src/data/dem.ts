@@ -8,11 +8,11 @@ import { decodeTerrarium, gridZoomFor, tileWindow, upsampleHeights, TILE } from 
 export const DEM_MAX_ZOOM = 14;
 const TERRAIN_PRODUCTS = ['terrain', 'planetTerrain'] as const;
 
-/** Decoded tiles, most recently used last. 256 KB each. */
+/** Decoded tiles, most recently used last. 256 KB each, and every tile worker keeps its own. */
 const cache = new Map<string, Promise<Float32Array>>();
 /** The same tiles once resolved, for the pointer readout, which cannot wait. */
 const ready = new Map<string, Float32Array>();
-const CACHE_MAX = 160;
+const CACHE_MAX = 64;
 
 function remember(key: string, value: Promise<Float32Array>): Promise<Float32Array> {
   cache.set(key, value);
