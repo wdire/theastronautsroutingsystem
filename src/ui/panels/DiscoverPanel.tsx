@@ -2,7 +2,7 @@ import { ValidatePanel } from './ValidatePanel';
 import { nasaUrl } from '@/lib/nasa';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { Marker } from 'maplibre-gl';
-import { Binoculars, MapPin } from 'lucide-react';
+import { Play, Binoculars, MapPin } from 'lucide-react';
 import { loadPlaces, loadSamples, loadTraverse, type Place, type SampleCore, type Traverse } from '@/data/datasets';
 import { getMap } from '@/map/instance';
 import { useApp } from '@/store';
@@ -152,6 +152,19 @@ function FollowPerseverance({ traverse, places }: { traverse: Traverse; places: 
         </button>
         <button type="button" onClick={showFrames} className="inline-flex h-8 items-center rounded-md border px-2.5 text-[13px] font-medium hover:bg-secondary">
           What it saw that sol
+        </button>
+        <button
+          type="button"
+          onClick={() => {
+            // From the sol on the slider, or from landing when the slider is at the last sol.
+            const from = index === stops.length - 1 ? (stops[0] ?? stop) : stop;
+            useApp.getState().openVisor({ lon: from.lon, lat: from.lat, replaySol: from.sol });
+          }}
+          className="inline-flex h-8 items-center gap-1.5 rounded-md bg-primary px-2.5 text-[13px] font-semibold text-primary-foreground transition-opacity hover:opacity-90"
+          title="Ride along Perseverance's real track in 3D, sped up"
+        >
+          <Play className="size-3.5" aria-hidden />
+          {index === stops.length - 1 ? 'Ride the whole drive' : `Ride the drive from sol ${stop.sol}`}
         </button>
       </div>
       {frames && frames.sol === stop.sol ? (

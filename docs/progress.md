@@ -54,9 +54,15 @@ The model that wrote most of this stopped on the trip-budget content; Opus subag
 - A bug hunt (subagent) found 14 issues; fixed: reroute at a stop, verdict from `run.missionId`, leaving an
   underway crew mission, commander finish race, ride-along entry, links (`m=` template id, drone stations kept),
   Belva helipad, solo partners in 3D, base move after a run, flyover drag.
-  OPEN from it: a reroute or turn-back is costed with full tanks (TripOptions has no starting O2/battery, so the
-  proposal cannot warn that the new route outruns the air left); Start uses a departure costed when the route was
-  last worked out (a stale "leave now"); a WebGL context loss in Rover View restores the clock picked at first mount.
+  Fixed later the same day: reroutes are costed from the crew's remaining O2 and battery (`startO2Kg`,
+  `startBatteryKWh` in TripOptions) and the proposal warns when they will not last; a "leave now" plan is costed
+  again every 15 minutes of clock; a WebGL context loss in Rover View keeps the clock the visitor picked.
+- Map close up: a `hirise-hd` layer (`mars://hd`, `hdTile` in `protocol/img.ts`) draws the USGS 25 cm mosaic over
+  the base from zoom 15 and fades in as it arrives. Hillshade highlight is faint and fades past zoom 14; contrast
+  and brightness floor are zoom-dependent; the tone curve is a shadow lift, not a gamma; detail gain is bounded.
+- Perseverance's drive replay: Discover, "Ride the drive from sol N" / "Ride the whole drive" (`VisorAt.replaySol`,
+  `src/ui/visor/replayFeed.ts`, `ReplayBar.tsx`). Any moving view prefetches the ground ahead
+  (`src/visor/prefetch.ts`): coarse layers always, the 25 cm ground only below 20x.
 
 ## Fifth session (2026-11-15): bases, one place to plan, the whole planet in search
 

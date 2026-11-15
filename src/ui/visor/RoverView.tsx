@@ -4,7 +4,8 @@ import { useApp } from '@/store';
 import { nextLtst, marsTime, sunriseSunset } from '@/engines/marsTime';
 import { fmtClock, fmtDeg, fmtDuration, fmtElevation, fmtLatLon } from '@/lib/format';
 import { cn } from '@/lib/cn';
-import type { VisorHandle, VisorState } from '@/visor';
+import type { MissionFeed, VisorHandle, VisorState } from '@/visor';
+import { ReplayBar } from './ReplayBar';
 import { useIsTouch } from '@/ui/hooks/useMediaQuery';
 import { MovePad } from './MovePad';
 import { missionFeed } from './missionFeed';
@@ -69,6 +70,11 @@ export default function RoverView() {
   const touch = useIsTouch();
   // Riding along only when asked for, and only while the mission runs; anywhere else the visitor stands on foot.
   const ride = at?.ride === true;
+  const replaySol = at?.replaySol;
+  const replaying = replaySol !== undefined;
+  // Set when the graphics were lost and the view restarts itself; the clock saved at first opening carries over.
+  const restarting = useRef(false);
+  const saved = useRef<{ utcMs: number; live: boolean; paused: boolean } | null>(null);
   const riding = useApp((s) => ride && s.world?.run?.status === 'running');
   const lon = at?.lon;
   const lat = at?.lat;
@@ -86,17 +92,25 @@ export default function RoverView() {
     const app = useApp.getState();
     // Riding along with a mission: the mission owns the clock, and the view follows the crew.
     const mission = ride ? missionFeed() : null;
-    // Otherwise the clock is restored when the view closes.
-    const saved = { utcMs: app.utcMs, live: app.clockLive, paused: app.clockPaused };
+    // Otherwise the clock is restored when the view closes. A restart after the graphics were lost keeps the
+    // clock as it was first found, and the hour the visitor picked since.
+    const restart = restarting.current;
+    restarting.current = false;
+    if (!restart || !saved.current) saved.current = { utcMs: app.utcMs, live: app.clockLive, paused: app.clockPaused };
     // A dark spot opens at mid-morning: there is nothing to see at night.
     const t = marsTime(app.utcMs, lon);
-    if (!mission && (t.ltstH < 6.5 || t.ltstH > 17.8)) {
+    if (!mission && !restart && (t.ltstH < 6.5 || t.ltstH > 17.8)) {
       app.setClock(nextLtst(app.utcMs, lon, 10), false);
       app.setClockPaused(true);
     }
+    // Replaying Perseverance's drive: the rover's own track is the feed.
+    const feed: Promise<MissionFeed | null> = replaySol !== undefined ? import('./replayFeed').then((m) => m.replayFeed(replaySol)) : Promise.resolve(mission);
     // The scene’s rovers and base are worked out first, so the view can open beside one, not inside it.
-    void Promise.all([import('@/visor'), sceneProps(app.world?.run?.plan ?? app.plan, app.world?.run?.vehicle ?? null)])
-      .then(async ([{ mountVisor }, props]) => {
+    void Promise.all([import('@/visor'), sceneProps(app.world?.run?.plan ?? app.plan, app.world?.run?.vehicle ?? null), feed])
+      .then(async ([{ mountVisor }, sceneList, follow]) => {
+        // On a replay Perseverance is the one driving: its parked copy stays out of the scene.
+        const props = replaySol !== undefined ? sceneList.filter((p) => p.id !== 'perseverance') : sceneList;
+        const mission = follow;
         const stand = mission ? { lon, lat, headingDeg: 0 } : standpoint(lon, lat, props);
         const handle = await mountVisor(canvas, {
           ...(mission ? { mission } : {}),
@@ -117,7 +131,9 @@ export default function RoverView() {
             if (s) returnToMap(s.lon, s.lat, s.headingDeg);
           },
           onLost: () => {
-            if (!cancelled) setAttempt((n) => n + 1);
+            if (cancelled) return;
+            restarting.current = true;
+            setAttempt((n) => n + 1);
           },
           onState: (next) => {
             if (cancelled) return;
@@ -141,12 +157,14 @@ export default function RoverView() {
       handleRef.current = null;
       canvas.remove();
       delete window.__areoVisor;
-      if (mission) return;
+      if (mission || restarting.current || !saved.current) return;
+      const was = saved.current;
+      saved.current = null;
       const now = useApp.getState();
-      now.setClock(saved.live ? Date.now() : saved.utcMs, saved.live);
-      now.setClockPaused(saved.paused);
+      now.setClock(was.live ? Date.now() : was.utcMs, was.live);
+      now.setClockPaused(was.paused);
     };
-  }, [lon, lat, ride, attempt]);
+  }, [lon, lat, ride, replaySol, attempt]);
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
@@ -190,12 +208,17 @@ export default function RoverView() {
       {state?.ready ? (
         <>
           {riding ? <MissionHud camera={state.camera} onCamera={(mode) => handleRef.current?.setCamera(mode)} /> : null}
-          {riding ? null : (
+          {replaying ? (
+            <div className={cn('pointer-events-auto absolute right-3', touch ? 'top-[7.5rem]' : 'top-3')}>
+              <ReplayBar camera={state.camera} onCamera={(mode) => handleRef.current?.setCamera(mode)} />
+            </div>
+          ) : null}
+          {riding || replaying ? null : (
             <div className={cn('pointer-events-auto absolute right-3', touch ? 'top-[7.5rem]' : 'top-3')}>
               <RoamBar vehicle={state.roam.vehicle} view={state.roam.view} onChange={(v, view) => handleRef.current?.setRoam(v, view)} />
             </div>
           )}
-          {touch && !riding ? (
+          {touch && !riding && !replaying ? (
             <div className="absolute bottom-[max(1.25rem,env(safe-area-inset-bottom))] left-5">
               <MovePad onMove={(right, forward, fast) => handleRef.current?.setMove(right, forward, fast)} />
             </div>
@@ -245,7 +268,9 @@ export default function RoverView() {
             </div>
             {touch ? null : (
               <p className={cn('text-xs text-white/80', SHADOW)}>
-                {state.roam.vehicle === 'foot' && state.roam.view === 'eyes'
+                {replaying
+                  ? 'Drag to look around. The rover follows its real track; pause or change the speed in the panel.'
+                  : state.roam.vehicle === 'foot' && state.roam.view === 'eyes'
                   ? 'W A S D or the arrow keys to walk, Shift to hurry. Drag to look. Scroll to rise, and past the top to return to the map.'
                   : 'W and S to go and stop, A and D to steer, Shift for more speed. Drag to look around. Scroll to bring the camera in or out.'}
               </p>

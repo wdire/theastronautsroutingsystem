@@ -127,6 +127,9 @@ export interface TripOptions {
   style: RouteStyle;
   stops?: TripStop[];
   campAtNight?: boolean;
+  /** What is left at departure, when the trip starts part way through a mission (a reroute). Full if absent. */
+  startO2Kg?: number;
+  startBatteryKWh?: number;
 }
 
 /** One per path point, taken on arrival at that point (after any work or wait there). */

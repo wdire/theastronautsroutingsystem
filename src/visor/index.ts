@@ -34,6 +34,7 @@ import { skyState } from './skyModel';
 import { createProps, keepOutside } from './props';
 import { createParty } from './party';
 import { createWalkers, type WalkerSpec } from './walkers';
+import { prefetchAhead } from './prefetch';
 import type { CrewLook } from './crewLook';
 import { createGuides } from './guides';
 import { releaseModels, retainModels } from './models';
@@ -347,6 +348,7 @@ export async function mountVisor(canvas: HTMLCanvasElement, options: VisorOption
   let lastWalkers = -1e9;
   const guides = mission ? createGuides(scene, heightAt) : null;
   let lastGuides = -1e9;
+  let lastPrefetch = -1e9;
   let loweredForSpeed = false;
   // The chase camera swings round behind the party at its own pace, so a turn does not whip the view.
   let chaseAngle = Number.NaN;
@@ -560,6 +562,11 @@ export async function mountVisor(canvas: HTMLCanvasElement, options: VisorOption
       if (guides && mission && now - lastGuides > 350) {
         lastGuides = now;
         const ahead = mission.ahead();
+        // The ground the route is heading for starts loading now, so it is sharp by the time it is reached.
+        if (now - lastPrefetch > 1500) {
+          lastPrefetch = now;
+          prefetchAhead(ahead.path, mission.fast());
+        }
         const objective = ahead.objective ? toLocal(frame, ahead.objective[0], ahead.objective[1]) : null;
         guides.update(
           ahead.path.map((p) => {

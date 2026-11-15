@@ -91,10 +91,12 @@ export function startPlanner(): () => void {
     timer = window.setTimeout(() => void run(), 280);
   };
 
+  // "Leave now" is costed for the hour it was worked out: when the clock has moved on a quarter of an hour (or
+  // was jumped in the clock menu), the plan is costed again, so Start never flies a budget for an hour gone by.
   const unsubscribe = useApp.subscribe(
-    (s) => [s.planRev, s.scenario, s.departUtcMs] as const,
+    (s) => [s.planRev, s.scenario, s.departUtcMs, s.departUtcMs === null && !s.world ? Math.floor(s.utcMs / 900_000) : 0] as const,
     schedule,
-    { equalityFn: (a, b) => a[0] === b[0] && a[1] === b[1] && a[2] === b[2] },
+    { equalityFn: (a, b) => a[0] === b[0] && a[1] === b[1] && a[2] === b[2] && a[3] === b[3] },
   );
   if (useApp.getState().plan.start) schedule();
 

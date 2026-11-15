@@ -295,11 +295,14 @@ export function computeTrip(path: PathPoint[], opts: TripOptions): TripResult {
   /* ---------- the running books ---------- */
 
   let t = depart;
-  let o2Used = 0;
+  // A trip that starts part way through a mission starts with what is left, not full tanks.
+  const startO2 = opts.startO2Kg;
+  let o2Used = startO2 !== undefined && Number.isFinite(startO2) ? Math.min(o2Carried, Math.max(0, o2Carried - startO2)) : 0;
   let energyKWh = 0;
   let solarKWh = 0;
-  let battery = capacityKWh;
-  let minBattery = capacityKWh;
+  const startBattery = opts.startBatteryKWh;
+  let battery = startBattery !== undefined && Number.isFinite(startBattery) ? Math.min(capacityKWh, Math.max(0, startBattery)) : capacityKWh;
+  let minBattery = battery;
   let waterL = 0;
   let doseMSv = 0;
   let movingS = 0;

@@ -204,9 +204,18 @@ export async function apply(alertId: string): Promise<void> {
     const now = world();
     // The mission may have ended, or another begun, while the router worked.
     if (serial !== missionSerial || !now?.run || now.run.status !== 'running' || !now.alerts.some((a) => a.id === alertId && !a.resolved)) return;
-    const trip = computeTrip(path, { vehicle: ask.vehicle, departUtcMs: now.utcMs, scenario: run.scenario, style: run.plan.style, stops, campAtNight: run.plan.campAtNight });
-    // What the change costs, against what was left of the old route.
+    // What the change costs, against what was left of the old route; costed from what the crew has left now.
     const crew = crewAt(run, now.utcMs);
+    const trip = computeTrip(path, {
+      vehicle: ask.vehicle,
+      departUtcMs: now.utcMs,
+      scenario: run.scenario,
+      style: run.plan.style,
+      stops,
+      campAtNight: run.plan.campAtNight,
+      ...(crew.o2Kg !== null ? { startO2Kg: crew.o2Kg } : {}),
+      ...(crew.batteryKWh !== null ? { startBatteryKWh: crew.batteryKWh } : {}),
+    });
     const oldLeftM = Math.max(0, pathStats(run.path).distM - crew.distM);
     const oldLeftS = Math.max(0, (run.legStartUtcMs + run.trip.totals.durationS * 1000 - now.utcMs) / 1000);
     useApp.setState({ proposed: { alertId, path, stopIndices, trip, addedM: trip.totals.distM - oldLeftM, addedS: run.trip.samples.length > 0 ? trip.totals.durationS - oldLeftS : 0 } });

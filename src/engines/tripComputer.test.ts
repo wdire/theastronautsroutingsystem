@@ -409,3 +409,18 @@ describe('walkbackLimitHours', () => {
     expect(walkbackLimitHours(VEHICLES.heli)).toBe(0);
   });
 });
+
+describe('computeTrip part way through a mission', () => {
+  it('starts from the oxygen and battery left, and says when that is not enough', () => {
+    const full = computeTrip(line(3300, 50), opts('foot'));
+    const carried = full.samples[0]?.o2Kg ?? 0;
+    const low = computeTrip(line(3300, 50), opts('foot', { startO2Kg: carried * 0.3 }));
+    expect(low.samples[0]?.o2Kg).toBeCloseTo(carried * 0.3, 5);
+    // The same walk uses the same air; it just starts with less of it.
+    expect((low.samples[0]?.o2Kg ?? 0) - (low.samples.at(-1)?.o2Kg ?? 0)).toBeCloseTo((full.samples[0]?.o2Kg ?? 0) - (full.samples.at(-1)?.o2Kg ?? 0), 3);
+    const empty = computeTrip(line(3300, 50), opts('foot', { startO2Kg: carried * 0.05 }));
+    expect(empty.feasible).toBe(false);
+    const rover = computeTrip(line(3000, 50), opts('openRover', { startBatteryKWh: 2 }));
+    expect(rover.samples[0]?.batteryKWh).toBeCloseTo(2, 1);
+  });
+});

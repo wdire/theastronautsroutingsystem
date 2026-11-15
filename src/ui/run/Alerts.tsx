@@ -51,6 +51,11 @@ export function AlertCard({ inVisor = false, floating = false }: { inVisor?: boo
             {inVisor ? 'A new route' : 'A new route, the dashed green line on the map'}: {change(proposed.addedM, fmtDistance, 'longer', 'shorter', 'the same length')}
             {proposed.addedS !== 0 ? `, ${change(proposed.addedS, fmtDuration, 'more', 'less', 'the same time')}` : ''}.
           </p>
+          {proposed.trip.feasible ? null : (
+            <p role="alert" className="mt-2 rounded-md bg-warning/10 px-2.5 py-1.5 text-[13px] leading-relaxed text-warning">
+              On what the crew has left, this route does not work: {proposed.trip.warnings.find((w) => w.severity === 'warning')?.text ?? 'a limit is reached before the end.'}
+            </p>
+          )}
           <div className="mt-2.5 flex flex-wrap gap-2">
             <button type="button" className={PRIMARY} onClick={takeProposed}>
               Take this route

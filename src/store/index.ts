@@ -53,6 +53,8 @@ export interface VisorAt {
   lat: number;
   /** Opened from Ride along: follow the running mission's crew instead of standing here on foot. */
   ride?: boolean;
+  /** Replay Perseverance's drive from this sol, riding along with the rover. */
+  replaySol?: number;
   arrive?: { headingDeg: number; pitchDeg: number; liftM: number };
 }
 
