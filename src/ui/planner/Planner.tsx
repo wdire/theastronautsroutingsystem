@@ -146,7 +146,7 @@ function ReadySummary({ alt, departUtcMs }: { alt: RouteAlternative; departUtcMs
   const rows: [string, string][] = [
     ['Who', `${who}, ${v.name.toLowerCase()}`],
     ['When', `Leave ${leave}, back ${back} LTST (${fmtDuration(t.durationS)})`],
-    ['Where', `${fmtDistance(t.distM)} out and back, ${plan.stops.length} ${plan.stops.length === 1 ? 'stop' : 'stops'}, ${tasks} ${tasks === 1 ? 'task' : 'tasks'}`],
+    ['Where', `${fmtDistance(t.distM)} out and back: ${plan.stops.length} ${plan.stops.length === 1 ? 'stop' : 'stops'} and ${tasks} ${tasks === 1 ? 'task' : 'tasks'}`],
   ];
   if (t.minO2Frac !== null) rows.push(['Margin', `${fmtPercent(t.minO2Frac)} of the oxygen left at the end`]);
   else if (t.minBatteryFrac !== null) rows.push(['Margin', `Battery never below ${fmtPercent(t.minBatteryFrac)}`]);

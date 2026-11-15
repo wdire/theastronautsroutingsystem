@@ -36,6 +36,28 @@ new folder under `src/ui`, or Tailwind misses the new classes); screenshots with
 The model that wrote most of this stopped on the trip-budget content; Opus subagents wrote `tripComputer.ts`,
 `departure.ts`, `export.ts`, `validate.ts`, `missions.ts`, `alerts.ts` and `src/sim/*` without trouble.
 
+## Sixth session (2026-11-15, later): mission panel, map that explains itself, Rover View playground
+
+- Desktop runs live in the left column (`src/ui/run/MissionPanel.tsx`): status, the alert card (`AlertCard` in
+  `Alerts.tsx`, also floating over Rover View and on phones), supplies, crew and vehicle, stops with tasks and
+  ETAs, controls, ride-along and radio. Phones keep `RunPanel` at the bottom. Plan edits are refused while a run
+  is `running` (`editPlan` in the store); templates and place-card plan actions are disabled then.
+- The planner sums the mission up before Start (`ReadySummary`). The Crew tab shows a solo run as such.
+- Map lines explain themselves on hover and act on click (`src/map/hoverInfo.ts`).
+- Map tilt follows zoom (`pitchForZoom` in `src/map/tilt.ts`) until the visitor tilts it; retina screens load
+  tiles one level finer (`tileSize: 128` in `src/map/style.ts`).
+- Rover View on your own: walk in your eyes or as a figure, or drive the SEV, the open rover, Perseverance or
+  Ingenuity (`setRoam` in `src/visor/index.ts`, `RoamBar.tsx`); camera Eyes, Close, Far, wheel for distance.
+  Rover View rides along only from Ride along (`VisorAt.ride`).
+- Ground: rust grade, pale slabs and veins, dark drifts (`groundPatches` in `groundShader.ts`); HiRISE relief
+  cutoff 6 m. Base: two habitat modules joined by a drawn tunnel.
+- A bug hunt (subagent) found 14 issues; fixed: reroute at a stop, verdict from `run.missionId`, leaving an
+  underway crew mission, commander finish race, ride-along entry, links (`m=` template id, drone stations kept),
+  Belva helipad, solo partners in 3D, base move after a run, flyover drag.
+  OPEN from it: a reroute or turn-back is costed with full tanks (TripOptions has no starting O2/battery, so the
+  proposal cannot warn that the new route outruns the air left); Start uses a departure costed when the route was
+  last worked out (a stale "leave now"); a WebGL context loss in Rover View restores the clock picked at first mount.
+
 ## Fifth session (2026-11-15): bases, one place to plan, the whole planet in search
 
 Design: `docs/superpowers/specs/2026-11-15-bases-panels-search-design.md`.

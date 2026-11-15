@@ -416,6 +416,11 @@
   padding: 0;
   border: 0;
   background: none;
+  /* Only the badge takes the pointer: the name lets the map under it be hovered and clicked. */
+  pointer-events: none;
+}
+.base-pin-icon {
+  pointer-events: auto;
   cursor: pointer;
 }
 .base-pin-icon {
