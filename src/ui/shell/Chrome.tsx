@@ -81,9 +81,9 @@ function LeftPanel() {
   const plannerOpen = useApp((s) => s.plannerOpen);
   const running = useApp((s) => s.world !== null);
   if (placeOpen) return <PlaceCard />;
-  if (plannerOpen) return <Planner />;
   // While a mission runs, the column is the mission: alerts, crew, supplies, stops, controls.
   if (running) return <MissionPanel />;
+  if (plannerOpen) return <Planner />;
   return <Home />;
 }
 

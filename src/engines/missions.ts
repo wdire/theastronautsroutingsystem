@@ -72,6 +72,8 @@ const P = {
   wildcatRidge: { placeId: 'place:wildcat-ridge', name: 'Wildcat Ridge', lon: 77.405925, lat: 18.458647 },
   deltaFront: { placeId: 'place:jezero-delta-front', name: 'Jezero delta front', lon: 77.401422, lat: 18.450566 },
   belva: { placeId: 'place:belva-crater', name: 'Belva crater', lon: 77.369008, lat: 18.482929 },
+  // A helicopter carries six minutes of flight: it works from a pad set down on the delta top near its target.
+  belvaPad: { name: 'Delta-top helipad', lon: 77.377382, lat: 18.476653 },
   brightAngel: { placeId: 'place:bright-angel', name: 'Bright Angel', lon: 77.303836, lat: 18.496112 },
   // The valley's IAU centre, where it cuts through the crater rim: the breach.
   breach: { name: 'Neretva Vallis breach', lon: 77.2, lat: 18.55 },
@@ -180,10 +182,10 @@ export const MISSIONS: readonly Mission[] = [
   mission({
     id: 'belva',
     title: 'Scout Belva crater by air',
-    brief: 'Send the helicopter from the sample depot to look into Belva crater, a hole punched through the delta that shows its layers in cross-section.',
+    brief: 'Fly the helicopter from a pad on the delta top, 600 m out, to look into Belva crater, a hole punched through the delta that shows its layers in cross-section.',
     vehicle: 'heli',
     style: 'safest',
-    start: P.threeForks,
+    start: P.belvaPad,
     stops: [{ place: P.belva, tasks: ['photo'] }],
     roundTrip: true,
     campAtNight: false,

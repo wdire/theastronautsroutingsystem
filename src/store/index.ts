@@ -51,6 +51,8 @@ export function newId(prefix: string): string {
 export interface VisorAt {
   lon: number;
   lat: number;
+  /** Opened from Ride along: follow the running mission's crew instead of standing here on foot. */
+  ride?: boolean;
   arrive?: { headingDeg: number; pitchDeg: number; liftM: number };
 }
 
@@ -228,8 +230,10 @@ const initialBase = loadBase();
 
 export const useApp = create<AppState>()(
   subscribeWithSelector((set, get) => {
+    // A plan being flown is not edited: the run took its own copy, and changes would only re-route the planner
+    // behind the crew's back. Edits resume once the mission is over.
     const editPlan = (fn: (plan: MissionPlan) => MissionPlan) =>
-      set((s) => ({ plan: fn(s.plan), planRev: s.planRev + 1 }));
+      set((s) => (s.world?.run?.status === 'running' ? {} : { plan: fn(s.plan), planRev: s.planRev + 1 }));
 
     return {
       mode: 'globe',
@@ -289,7 +293,7 @@ export const useApp = create<AppState>()(
         saveBase(base);
         set({ base });
         // Only a plan made here follows the base; one shared by another commander starts at theirs.
-        if (!get().world?.run && startsAtBase(get().plan, old)) editPlan((p) => withBase(p, base));
+        if (get().world?.run?.status !== 'running' && startsAtBase(get().plan, old)) editPlan((p) => withBase(p, base));
       },
       setPlan: (plan, missionId) => set((s) => ({ plan, planRev: s.planRev + 1, missionId: missionId ?? null })),
       openPlanner: (plannerOpen) => set(plannerOpen ? { plannerOpen, placeId: null } : { plannerOpen, picking: null }),

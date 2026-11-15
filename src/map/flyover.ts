@@ -88,11 +88,12 @@ export function startFlyover(map: MapLibreMap, route: RouteAlternative, names: r
   report(0);
   window.addEventListener('keydown', onKey, true);
   const first = path[0];
+  // A drag during the approach hands the camera back too (the approach itself carries no input event).
+  map.on('movestart', onUserMove);
   // A short flight to the start, then along the route.
   map.easeTo({ center: first ? [first[0], first[1]] : before.center, zoom, pitch: PITCH, bearing, duration: 1300 });
   void map.once('moveend').then(() => {
     if (ended) return;
-    map.on('movestart', onUserMove);
     raf = requestAnimationFrame(frame);
   });
   return () => end(true);

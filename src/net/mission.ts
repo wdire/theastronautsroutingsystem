@@ -56,7 +56,8 @@ export function useCurrentMission(registered: boolean): MissionData | null {
       }));
     } else if (!currentId) {
       // A run that ended under the visitor stays followed until they put it away; leaving or a cancelled plan does not.
-      if (prev?.ran) useCrew.setState({ ended: prev.id });
+      // A run that finished lands in the visitor's past missions; one they walked out of does not.
+      if (prev?.ran && (mine.past ?? []).some((p) => p.missionId === prev.id)) useCrew.setState({ ended: prev.id });
       last.current = null;
       useCrew.setState({ current: null });
     }

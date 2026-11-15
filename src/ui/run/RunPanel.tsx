@@ -139,12 +139,11 @@ export function Chat({ world }: { world: World }) {
 }
 
 export function Outcome({ run }: { run: MissionRun }) {
-  const missionId = useApp((s) => s.missionId);
   // A crew mission's end offers its debrief, once the commander's browser has filed it.
   const crewMission = useCrew((s) => s.current?.id ?? s.ended);
   const out = run.outcome;
   if (!out) return null;
-  const verdict = (missionId ? missionById(missionId) : undefined)?.judge({
+  const verdict = (run.missionId ? missionById(run.missionId) : undefined)?.judge({
     tasksDone: out.tasksDone,
     tasksPlanned: out.tasksTotal,
     endedAt: out.kind === 'home' ? 'start' : out.kind === 'arrived' ? 'lastStop' : 'elsewhere',
@@ -269,7 +268,7 @@ export function RunPanel() {
             <div className="flex flex-wrap items-center gap-2">
               <button
                 type="button"
-                onClick={() => useApp.getState().openVisor({ lon: crew.lon, lat: crew.lat })}
+                onClick={() => useApp.getState().openVisor({ lon: crew.lon, lat: crew.lat, ride: true })}
                 className="inline-flex h-9 items-center gap-2 rounded-md border px-2.5 text-[13px] font-medium transition-colors hover:bg-secondary pointer-coarse:h-11"
               >
                 <Binoculars className="size-4 text-muted-foreground" aria-hidden />

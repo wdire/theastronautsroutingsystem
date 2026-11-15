@@ -722,10 +722,10 @@ export function applyAlert(world: World, alertId: string): World {
   return post(resolve(world, alertId, 'applied'), 'system', `${alert.action.label}: done.`);
 }
 
-/** Stops on the current leg the crew has not reached yet, in path order. */
+/** Stops on the current leg the crew has not left yet (including one it is working at), in path order. */
 function stopsAhead(run: MissionRun, t: number): LegStop[] {
   const tl = timelineOf(run);
-  return run.legStops.filter((ls) => (tl.arriveS[ls.index] ?? 0) > t).sort((a, b) => a.index - b.index);
+  return run.legStops.filter((ls) => (tl.departS[ls.index] ?? 0) > t).sort((a, b) => a.index - b.index);
 }
 
 /** What the router needs for an alert that proposes a new route; null for any other alert. */
@@ -750,6 +750,7 @@ export function proposal(world: World, alertId: string): RouteProposal | null {
         lon: s?.lon ?? p?.[0] ?? crew.lon,
         lat: s?.lat ?? p?.[1] ?? crew.lat,
         ...(s?.name ? { name: s.name } : {}),
+        ...(p ? { elev: p[2] } : {}),
         stopId: ls.stopId,
       };
     });

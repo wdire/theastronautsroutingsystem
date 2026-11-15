@@ -29,9 +29,12 @@ async function load(mission: Mission): Promise<void> {
 
 /** Ready-made missions. Each loads into the planner, where every stop and task can be changed. */
 export function MissionsPanel() {
+  const running = useApp((s) => s.world?.run?.status === 'running');
   return (
     <div className="px-4 pt-3 pb-4">
-      <p className="text-[13px] leading-relaxed text-muted-foreground">Four missions to start from. Each one opens in the mission plan, where you can change anything.</p>
+      <p className="text-[13px] leading-relaxed text-muted-foreground">
+        {running ? 'A mission is under way. These open in the plan once it is over.' : 'Four missions to start from. Each one opens in the mission plan, where you can change anything.'}
+      </p>
       <ul className="mt-3 flex flex-col gap-2">
         {MISSIONS.map((t) => {
           const Icon = ICON[t.vehicle];
@@ -52,7 +55,8 @@ export function MissionsPanel() {
               <button
                 type="button"
                 onClick={() => void load(t)}
-                className="mt-3 inline-flex h-8 items-center rounded-md bg-secondary px-3 text-[13px] font-semibold transition-colors hover:bg-accent"
+                disabled={running}
+                className="mt-3 inline-flex h-8 items-center rounded-md bg-secondary px-3 text-[13px] font-semibold transition-colors hover:bg-accent disabled:pointer-events-none disabled:opacity-45"
               >
                 Open in the mission plan
               </button>

@@ -67,7 +67,9 @@ export default function RoverView() {
   // Bumped when the browser takes the graphics away for good: a fresh canvas and a fresh view.
   const [attempt, setAttempt] = useState(0);
   const touch = useIsTouch();
-  const riding = useApp((s) => s.world?.run != null);
+  // Riding along only when asked for, and only while the mission runs; anywhere else the visitor stands on foot.
+  const ride = at?.ride === true;
+  const riding = useApp((s) => ride && s.world?.run?.status === 'running');
   const lon = at?.lon;
   const lat = at?.lat;
 
@@ -83,7 +85,7 @@ export default function RoverView() {
     let cancelled = false;
     const app = useApp.getState();
     // Riding along with a mission: the mission owns the clock, and the view follows the crew.
-    const mission = missionFeed();
+    const mission = ride ? missionFeed() : null;
     // Otherwise the clock is restored when the view closes.
     const saved = { utcMs: app.utcMs, live: app.clockLive, paused: app.clockPaused };
     // A dark spot opens at mid-morning: there is nothing to see at night.
@@ -144,7 +146,7 @@ export default function RoverView() {
       now.setClock(saved.live ? Date.now() : saved.utcMs, saved.live);
       now.setClockPaused(saved.paused);
     };
-  }, [lon, lat, attempt]);
+  }, [lon, lat, ride, attempt]);
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {

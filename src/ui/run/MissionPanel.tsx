@@ -212,7 +212,7 @@ export function MissionPanel() {
         <footer className="flex shrink-0 flex-wrap items-center justify-between gap-2 border-t px-3 py-2.5">
           {watching ? <p className="text-xs text-muted-foreground">The commander sets speed and stops.</p> : <Controls />}
           <div className="grid w-full grid-cols-[auto_minmax(0,1fr)] gap-2 [&_button]:max-w-none">
-            <button type="button" onClick={() => useApp.getState().openVisor({ lon: crew.lon, lat: crew.lat })} className={SMALL_BTN} title="Ride along in 3D">
+            <button type="button" onClick={() => useApp.getState().openVisor({ lon: crew.lon, lat: crew.lat, ride: true })} className={SMALL_BTN} title="Ride along in 3D">
               <Binoculars className="size-4 text-muted-foreground" aria-hidden />
               Ride along
             </button>

@@ -79,6 +79,8 @@ export interface MissionOutcome {
 export interface MissionRun {
   id: string;
   name: string;
+  /** The ready-made mission this run flies, if any: its rule judges the end, whatever the planner holds by then. */
+  missionId?: string;
   plan: MissionPlan;
   vehicle: VehicleId;
   scenario: Scenario;
@@ -141,7 +143,8 @@ export interface RouteProposal {
   action: 'reroute' | 'turnBack';
   from: LonLat;
   /** Waypoints to pass in order; the last is the end of the new route. */
-  via: { lon: number; lat: number; name?: string; stopId?: string }[];
+  /** `elev` is the ground height there, m, when known: a stop the crew is already at needs no routing. */
+  via: { lon: number; lat: number; name?: string; stopId?: string; elev?: number }[];
   hazards: HazardZone[];
   vehicle: VehicleId;
   /** The new route starts now. */

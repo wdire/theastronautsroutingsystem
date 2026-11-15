@@ -7,6 +7,7 @@ import { computeTrip } from '@/engines/tripComputer';
 import { missionById } from '@/engines/missions';
 import type { PathPoint, TripStop } from '@/engines/types';
 import { pathStats } from '@/planner/geometry';
+import { distanceM } from '@/lib/geo';
 import { routeOnce } from '@/planner/single';
 import { useApp } from '@/store';
 import { forceEvent } from './events';
@@ -80,6 +81,7 @@ export function startMission(): boolean {
   const seed = Math.abs(Math.round(route.trip.totals.distM * 7 + route.path.length * 13)) || 1;
   const started = startRun(createWorld(departUtcMs, seed), { name, plan: s.plan, path: [...route.path], stopIndices: [...route.stopIndices], trip: route.trip, scenario: s.scenario }, departUtcMs);
   if (!started.run) return false;
+  if (s.missionId) started.run.missionId = s.missionId;
   // A run of this browser's own: whatever was being watched before is over.
   mirror = false;
   spoken = new Set();
@@ -173,6 +175,18 @@ export async function apply(alertId: string): Promise<void> {
     const stops: TripStop[] = [];
     let from = ask.from;
     for (const via of ask.via) {
+      // The crew is standing at this stop (working there): the leg is the spot itself, with the work left.
+      if (distanceM(from[0], from[1], via.lon, via.lat) < 15 && via.elev !== undefined) {
+        const at: PathPoint = [via.lon, via.lat, via.elev];
+        if (path.length === 0) path.push([from[0], from[1], via.elev]);
+        path.push(at);
+        const index = path.length - 1;
+        stopIndices.push(index);
+        const workMin = run.tasks.filter((t) => t.stopId === via.stopId && t.state !== 'done' && t.state !== 'skipped').reduce((n, t) => n + t.minutes, 0);
+        if (workMin > 0) stops.push({ index, workMin, ...(via.name ? { name: via.name } : {}) });
+        from = [via.lon, via.lat];
+        continue;
+      }
       const reply = await routeOnce({ from, to: [via.lon, via.lat], vehicle: ask.vehicle, style: run.plan.style, departUtcMs: ask.departUtcMs, scenario: run.scenario, hazards: ask.hazards });
       if (!reply.ok) {
         toast('No way round was found', { description: `${reply.message} The crew stays on the route it has.` });

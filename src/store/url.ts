@@ -8,6 +8,8 @@ export interface UrlState {
   departUtcMs?: number;
   /** The place whose card is open. */
   place?: string;
+  /** The ready-made mission the plan came from, so its rule for success comes back with the link. */
+  mission?: string;
 }
 
 const VEHICLES: readonly VehicleId[] = ['foot', 'openRover', 'pressRover', 'robotRover', 'heli'];
@@ -100,6 +102,7 @@ export function encodeUrlState(state: UrlState): string {
   }
   if (state.departUtcMs !== undefined) parts.push(`t=${Math.round(state.departUtcMs / 1000)}`);
   if (state.place) parts.push(`place=${encodeURIComponent(state.place)}`);
+  if (state.mission && /^[a-z0-9-]{1,32}$/.test(state.mission)) parts.push(`m=${state.mission}`);
   return parts.length ? `#${parts.join('&')}` : '';
 }
 
@@ -152,6 +155,9 @@ export function decodeUrlState(hash: string): UrlState {
 
   const t = finite(kv.get('t'), 0, 4_102_444_800);
   if (t !== null) out.departUtcMs = t * 1000;
+
+  const mission = kv.get('m');
+  if (mission && /^[a-z0-9-]{1,32}$/.test(mission)) out.mission = mission;
 
   const place = kv.get('place');
   if (place) {

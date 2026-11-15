@@ -84,6 +84,13 @@ function useLiveWorld(missionId: Id<'missions'> | null, enabled: boolean) {
   return { world, planned: snapshot?.planned ?? null, updatedAt: live?.updatedAt ?? null, hasLive: live !== undefined && live !== null };
 }
 
+/**
+ * Missions whose end this browser is filing (or has filed). The server says "underway" until the filing lands,
+ * a second or more after the end; a run put away in that window must not be resumed from its last snapshot,
+ * nor filed twice.
+ */
+const finishing = new Set<string>();
+
 /** The commander's side: publish, log, relay the crew's radio calls to the base, and file the debrief. */
 export function useCommanderRun(data: MissionData | null): void {
   const missionId = data?.mission._id ?? null;
@@ -94,6 +101,7 @@ export function useCommanderRun(data: MissionData | null): void {
   const resume = useLiveWorld(missionId, underway && !hasWorld);
   useEffect(() => {
     if (!underway || hasWorld || !resume.world || !missionId) return;
+    if (finishing.has(missionId) || resume.world.run?.status !== 'running') return;
     if (resume.planned) plannedFor.set(missionId, resume.planned);
     resumeMission(resume.world);
   }, [underway, hasWorld, resume.world, resume.planned, missionId]);
@@ -153,6 +161,8 @@ export function useCommanderRun(data: MissionData | null): void {
     };
 
     const finish = async (w: World): Promise<void> => {
+      if (finishing.has(missionId)) return;
+      finishing.add(missionId);
       // The last snapshot shows the crew the end; after it nothing more is published.
       for (let i = 0; inFlight && i < 50; i++) await new Promise((r) => window.setTimeout(r, 100));
       await publish();
@@ -223,7 +233,8 @@ export function useMemberRun(data: MissionData | null): void {
   const ended = useCrew((s) => s.ended);
   const missionId = data?.mission._id ?? null;
   const status = data?.mission.status;
-  const watching = !!data && !data.isCommander && (status === 'underway' || ((status === 'complete' || status === 'aborted') && ended === missionId && data.mission.startedAt !== null));
+  // Only crew watch: someone who left an underway mission is no longer on its radio or its screen.
+  const watching = !!data && !data.isCommander && ((status === 'underway' && data.isCrew) || ((status === 'complete' || status === 'aborted') && ended === missionId && data.mission.startedAt !== null));
   const live = useLiveWorld(missionId, watching);
   const applied = useRef(false);
 

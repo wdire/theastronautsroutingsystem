@@ -163,6 +163,8 @@ export function PlaceCard() {
   const cond = ground ? conditionsAt(v.lat, v.lon, ground.elev, utcMs, scenario) : null;
   const time = marsTime(utcMs, v.lon);
   const inRegion = inBox(REGION, v.lon, v.lat);
+  // Nothing is added to a plan that is being flown.
+  const planOpen = inRegion && useApp.getState().world?.run?.status !== 'running';
   const base = useApp.getState().base;
   const cov = getCoverage();
   const sourceZoom = cov ? finestZoomAt(cov, v.lon, v.lat) : 0;
@@ -218,14 +220,14 @@ export function PlaceCard() {
         {v.kind === 'point' ? null : <NasaImages name={v.name} />}
 
         <div className="flex flex-wrap gap-1.5 px-4 pt-4">
-          <Button onClick={routeHere} disabled={!inRegion} className="h-9 px-3.5 text-[13px] font-semibold">
+          <Button onClick={routeHere} disabled={!planOpen} className="h-9 px-3.5 text-[13px] font-semibold">
             <Navigation aria-hidden />
             Route here
           </Button>
-          <ActionButton icon={<House aria-hidden />} onClick={() => void moveBaseTo(v.lon, v.lat)} disabled={!inRegion}>
+          <ActionButton icon={<House aria-hidden />} onClick={() => void moveBaseTo(v.lon, v.lat)} disabled={!planOpen}>
             Put the base here
           </ActionButton>
-          <ActionButton icon={<MapPinPlus aria-hidden />} onClick={addStop} disabled={!inRegion}>
+          <ActionButton icon={<MapPinPlus aria-hidden />} onClick={addStop} disabled={!planOpen}>
             Add stop
           </ActionButton>
           <ActionButton icon={<Binoculars aria-hidden />} disabled={!inRegion} onClick={() => useApp.getState().openVisor({ lon: v.lon, lat: v.lat })}>
