@@ -6,6 +6,7 @@ import { fmtClock, fmtDeg } from '@/lib/format';
 import { marsTime } from '@/engines/marsTime';
 import { MapCanvas } from './Minimap';
 import { OVERLAY_NAMES } from './overlayNames';
+import { releaseTablet, tabletLevel } from '@/audio/cues';
 
 /**
  * The tablet in the visitor's left hand while they walk in their own eyes. It is held where a person holds one:
@@ -124,6 +125,8 @@ export function Tablet({ handle, lon, lat, headingDeg, route, onOpenMap, hud }: 
       if (q && shown) el.style.transform = quadMatrix(q);
       // The screen's own controls fade as the gaze goes down to the tablet, and come back as it lifts.
       const fade = view.ownEyes ? Math.max(0, Math.min(1, (view.lookDownDeg - HUD_FADE_DEG[0]) / (HUD_FADE_DEG[1] - HUD_FADE_DEG[0]))) : 0;
+      // Its faint electronic hum, as loud as it is looked at.
+      tabletLevel(shown ? fade : 0);
       if (root && Math.abs(fade - lastFade) > 0.01) {
         lastFade = fade;
         root.querySelectorAll<HTMLElement>('[data-hud-fade]').forEach((n) => {
@@ -135,6 +138,7 @@ export function Tablet({ handle, lon, lat, headingDeg, route, onOpenMap, hud }: 
     raf = requestAnimationFrame(frame);
     return () => {
       cancelAnimationFrame(raf);
+      releaseTablet();
       hud()
         ?.querySelectorAll<HTMLElement>('[data-hud-fade]')
         .forEach((n) => {

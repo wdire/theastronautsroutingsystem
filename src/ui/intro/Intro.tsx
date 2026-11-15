@@ -1,11 +1,12 @@
 import { useEffect, type CSSProperties, type ReactNode } from "react";
-import { ArrowRight } from "lucide-react";
+import { ArrowRight, ArrowUpRight, Volume2, VolumeOff } from "lucide-react";
 import { useApp } from "@/store";
 import { getMap } from "@/map/instance";
 import { flyIn, JEZERO_VIEW } from "@/map/camera";
 import { lightTimeS, marsTime, sunPosition } from "@/engines/marsTime";
 import { fmtClock } from "@/lib/format";
 import { cn } from "@/lib/cn";
+import { useSound } from "@/audio/useSound";
 
 const [LON, LAT] = JEZERO_VIEW.center;
 
@@ -122,6 +123,24 @@ function Telemetry() {
   );
 }
 
+/** Sound on or off, beside the clock: the flight down is the first thing heard. */
+function SoundToggle() {
+  const [on, setOn] = useSound();
+  const Icon = on ? Volume2 : VolumeOff;
+  return (
+    <button
+      type="button"
+      onClick={() => setOn(!on)}
+      aria-pressed={on}
+      aria-label="Sound effects"
+      title={on ? "Sound effects on" : "Sound effects off"}
+      className="pointer-events-auto -mt-1.5 inline-flex size-9 shrink-0 items-center justify-center rounded-md text-[#b9ad9f] transition-colors duration-200 hover:bg-white/[0.06] hover:text-[#fbf4ea] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#9cc4ea]"
+    >
+      <Icon className="size-[18px]" aria-hidden />
+    </button>
+  );
+}
+
 /** The opening screen: the planet, a sky, one sentence, one way in. */
 export function Intro() {
   const mode = useApp((s) => s.mode);
@@ -133,6 +152,7 @@ export function Intro() {
     const onKey = (e: KeyboardEvent) => {
       if (e.key !== "Enter" || e.defaultPrevented) return;
       const target = e.target as HTMLElement | null;
+      if (target?.closest("a[href]")) return;
       if (
         target &&
         target !== document.body &&
@@ -166,8 +186,9 @@ export function Intro() {
         <Rise delay={0}>
           <Wordmark />
         </Rise>
-        <Rise delay={500}>
+        <Rise delay={500} className="flex items-start gap-5 lg:gap-7">
           <Telemetry />
+          <SoundToggle />
         </Rise>
       </header>
 
@@ -223,9 +244,18 @@ export function Intro() {
             </span>
           </Rise>
           <Rise delay={700}>
-            <p className="mt-10 hidden text-[0.75rem] text-[#8a8075] sm:block">
-              On NASA orbital data: HiRISE, CTX, THEMIS and MOLA.
-            </p>
+            <div className="mt-10 hidden text-[0.75rem] text-[#8a8075] sm:block">
+              <p>On NASA orbital data: HiRISE, CTX, THEMIS and MOLA.</p>
+              <a
+                href="https://github.com/wdire/theastronautsroutingsystem"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="mt-1.5 inline-flex items-center gap-1 underline-offset-[3px] transition-colors duration-200 hover:text-[#ddd2c4] hover:underline focus-visible:rounded-sm focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#9cc4ea]"
+              >
+                Source code on GitHub
+                <ArrowUpRight className="size-3" aria-hidden />
+              </a>
+            </div>
           </Rise>
         </div>
       </div>

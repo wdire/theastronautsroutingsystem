@@ -1,4 +1,4 @@
-import { Globe2, Link2, Menu, Moon, Sun, Volume2, VolumeX } from 'lucide-react';
+import { AudioLines, Globe2, Link2, Menu, Moon, Sun, Volume2, VolumeOff, VolumeX } from 'lucide-react';
 import { toast } from 'sonner';
 import {
   DropdownMenu,
@@ -10,6 +10,7 @@ import {
 import { getMap } from '@/map/instance';
 import { flyOut } from '@/map/camera';
 import { useApp } from '@/store';
+import { useSound } from '@/audio/useSound';
 
 async function copyLink(): Promise<void> {
   try {
@@ -25,6 +26,7 @@ export function MainMenu() {
   const theme = useApp((s) => s.theme);
   const spoken = useApp((s) => s.spokenAlerts);
   const setTheme = useApp((s) => s.setTheme);
+  const [sound, setSound] = useSound();
 
   return (
     <DropdownMenu>
@@ -52,6 +54,10 @@ export function MainMenu() {
           Copy a link to this view
         </DropdownMenuItem>
         <DropdownMenuSeparator />
+        <DropdownMenuItem onSelect={() => setSound(!sound)}>
+          {sound ? <VolumeOff aria-hidden /> : <AudioLines aria-hidden />}
+          {sound ? 'Turn sound effects off' : 'Turn sound effects on'}
+        </DropdownMenuItem>
         <DropdownMenuItem onSelect={() => useApp.setState({ spokenAlerts: !spoken })}>
           {spoken ? <VolumeX aria-hidden /> : <Volume2 aria-hidden />}
           {spoken ? 'Stop speaking alerts' : 'Speak mission alerts aloud'}

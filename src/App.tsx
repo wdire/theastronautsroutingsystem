@@ -7,6 +7,7 @@ import { Starfield } from '@/ui/intro/Starfield';
 import { useApp } from '@/store';
 import { cn } from '@/lib/cn';
 import { NET_ENABLED } from '@/net/config';
+import { startSoundCues } from '@/audio/wire';
 
 // The opening screen needs the planet and one button. Search, panels and the planner load beside it,
 // and are there well before the flight down ends.
@@ -44,6 +45,9 @@ export function App() {
       stop?.();
     };
   }, []);
+
+  // Sound effects: quiet cues at the moments that matter (the flight down, alerts, the helmet).
+  useEffect(() => startSoundCues(), []);
 
   // The app clock follows real time, second by second, until a mission takes it over.
   useEffect(() => {
