@@ -73,7 +73,7 @@ export function addRangeRings(map: MapLibreMap): () => void {
     for (const ring of e.data.rings) {
       // The longest line is the ring itself; shorter ones are holes around ground too steep to reach.
       const lines = ring.lines.filter((l) => l.length > 8).sort((a, b) => b.length - a.length);
-      for (const coordinates of lines) features.push({ type: 'Feature' as const, properties: { hours: ring.hours }, geometry: { type: 'LineString' as const, coordinates: coordinates as LonLat[] } });
+      for (const coordinates of lines) features.push({ type: 'Feature' as const, properties: { hours: ring.hours, label: labelFor(ring.hours) }, geometry: { type: 'LineString' as const, coordinates: coordinates as LonLat[] } });
       const outer = lines[0];
       if (!outer) continue;
       // Labelled on the east side, where a map reader looks for the end of a scale.

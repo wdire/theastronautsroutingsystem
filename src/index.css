@@ -437,3 +437,20 @@
   outline: 2px solid #9cc4ea;
   outline-offset: 2px;
 }
+
+/* The label by the pointer over a line on the map. */
+.map-tip {
+  position: absolute;
+  top: 0;
+  left: 0;
+  z-index: 3;
+  max-width: 300px;
+  padding: 6px 9px;
+  border-radius: 6px;
+  border: 1px solid rgb(255 255 255 / 0.12);
+  background: rgb(20 17 15 / 0.94);
+  color: #fbf4ea;
+  font: 500 12.5px/1.4 var(--font-sans);
+  pointer-events: none;
+  box-shadow: 0 6px 18px rgb(0 0 0 / 0.45);
+}

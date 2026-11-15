@@ -196,7 +196,7 @@ export function addRouteLayers(map: MapLibreMap): () => void {
     }
     const chosen: RouteAlternative | undefined = s.route.alternatives.find((a) => a.id === (s.route.status === 'ready' ? s.route.selected : ''));
     const others = s.route.alternatives.filter((a) => a !== chosen);
-    alt.setData({ type: 'FeatureCollection', features: others.map((a) => line(a.path)) });
+    alt.setData({ type: 'FeatureCollection', features: others.map((a) => ({ ...line(a.path), properties: { id: a.id, label: a.label } })) });
     if (!chosen || chosen.path.length < 2) {
       main.setData(EMPTY);
       return;
