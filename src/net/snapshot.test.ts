@@ -8,7 +8,7 @@ describe('live snapshot and route', () => {
     const w = tick(startedWorld(), 600);
     const run = w.run!;
     const planned = plannedFrom(run.trip, run.startedUtcMs, run.startLevels);
-    const snapJson = encodeSnapshot(w, planned);
+    const snapJson = encodeSnapshot(w, planned, true);
     const routeJson = encodeRoute(routeOf(run));
     // The snapshot carries no path or trip; the route carries them.
     expect(snapJson).not.toContain('"path"');
@@ -36,7 +36,7 @@ describe('live snapshot and route', () => {
 
   it('waits for the route of the snapshot\'s own leg', () => {
     const w = startedWorld();
-    const snap = parseSnapshot(encodeSnapshot(w, null))!;
+    const snap = parseSnapshot(encodeSnapshot(w, null, true))!;
     const route = parseRoute(encodeRoute({ ...routeOf(w.run!), leg: 3 }))!;
     expect(rebuildWorld(snap, route)).toBeNull();
     expect(rebuildWorld(snap, null)).toBeNull();
@@ -53,12 +53,12 @@ describe('live snapshot and route', () => {
     expect(parseRoute(JSON.stringify({ ...good, trip: { ...good.trip, samples: { keys: ['x'], rows: [] } } }))).toBeNull();
     expect(parseRoute(JSON.stringify({ ...good, trip: { ...good.trip, samples: { ...good.trip.samples, rows: [[1, 2]] } } }))).toBeNull();
     // A snapshot whose world is broken inside passes the envelope check but not the rebuild.
-    const snap = JSON.parse(encodeSnapshot(w, null));
+    const snap = JSON.parse(encodeSnapshot(w, null, true));
     snap.world.alerts = [{ id: 1 }];
     expect(rebuildWorld(parseSnapshot(JSON.stringify(snap))!, parseRoute(encodeRoute(routeOf(run))))).toBeNull();
     // Path and samples that do not line up.
     const short = { ...good, path: good.path.slice(0, 3) };
-    expect(rebuildWorld(parseSnapshot(encodeSnapshot(w, null))!, parseRoute(JSON.stringify(short)))).toBeNull();
+    expect(rebuildWorld(parseSnapshot(encodeSnapshot(w, null, true))!, parseRoute(JSON.stringify(short)))).toBeNull();
   });
 
   it('says what the route promised at the end', () => {

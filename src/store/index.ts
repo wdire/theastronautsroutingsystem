@@ -83,7 +83,7 @@ export interface Walker {
   moving: boolean;
 }
 
-export type Overlay = 'none' | 'geology' | 'olivine' | 'carbonate' | 'slope';
+export type Overlay = 'none' | 'geology' | 'olivine' | 'carbonate' | 'slope' | 'night' | 'elevation';
 
 export interface LayerState {
   /** Official feature names. */

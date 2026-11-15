@@ -1,8 +1,15 @@
 import type { Map as MapLibreMap } from 'maplibre-gl';
 import { useApp } from '@/store';
+import { isPhone } from '@/lib/device';
+import { isOrbiting } from './orbit';
 
 /** The pitch the map leans to at a zoom, degrees: flat over the region, tilting in as the ground comes close. */
 export function pitchForZoom(zoom: number): number {
+  // On a phone the map leans less: a steep lean fills a tall screen with distant ground, many times the tiles.
+  return isPhone() ? Math.min(52, leanFor(zoom)) : leanFor(zoom);
+}
+
+function leanFor(zoom: number): number {
   const stops: [number, number][] = [
     [9.5, 0],
     [12, 30],
@@ -25,27 +32,53 @@ export function pitchForZoom(zoom: number): number {
  * while the visitor zooms, and stops the moment they tilt the map themselves; zooming back out to the
  * regional view hands it the tilt again.
  */
+/**
+ * Who sets the tilt: the zoom ('auto'), the visitor's own drag ('held', handed back to the zoom when they zoom out
+ * to the region flat), or the 2D/3D button ('flat' stays straight down at every zoom, 'tilted' keeps the lean).
+ */
+type TiltOwner = 'auto' | 'held' | 'flat' | 'tilted';
+let owner: TiltOwner = 'auto';
+
+/** The 2D/3D button: straight down and staying so, or leaning in and staying so. */
+export function chooseTilt(map: MapLibreMap, flat: boolean): void {
+  owner = flat ? 'flat' : 'tilted';
+  map.easeTo({ pitch: flat ? 0 : Math.max(55, pitchForZoom(map.getZoom())), duration: 600 });
+}
+
+/** The visitor took the camera from a flight that leaned in (the circling of a found place): keep its lean. */
+export function holdTilt(): void {
+  if (owner === 'auto') owner = 'held';
+}
+
+/** The pitch a flight should end at: the zoom's, or straight down when the visitor chose 2D. */
+export function flightPitch(zoom: number): number {
+  return owner === 'flat' ? 0 : pitchForZoom(zoom);
+}
+
 export function addAutoTilt(map: MapLibreMap): () => void {
-  let theirs = false;
+  owner = 'auto';
+  const theirsNow = () => owner !== 'auto';
 
   const idle = () => {
     const s = useApp.getState();
-    return s.mode === 'map' && !s.flying && !s.flyover && !s.picking;
+    return s.mode === 'map' && !s.flying && !s.flyover && !s.picking && !isOrbiting();
   };
   const onPitch = (e: { originalEvent?: unknown }) => {
-    if (e.originalEvent) theirs = true;
+    if (e.originalEvent && owner === 'auto') owner = 'held';
+    // Leaning a flat map by hand leaves 2D.
+    if (e.originalEvent && owner === 'flat') owner = 'held';
   };
   // While the visitor zooms (wheel, pinch, buttons) the tilt follows each step.
   const onZoom = (e: { originalEvent?: unknown }) => {
-    if (theirs || !idle() || !e.originalEvent) return;
+    if (theirsNow() || !idle() || !e.originalEvent) return;
     const want = pitchForZoom(map.getZoom());
     if (Math.abs(map.getPitch() - want) > 0.3) map.setPitch(want);
   };
   // After a flight or a jump, ease to the tilt the zoom calls for.
   const onMoveEnd = () => {
     const zoom = map.getZoom();
-    if (theirs && zoom < 8 && map.getPitch() < 5) theirs = false;
-    if (theirs || !idle()) return;
+    if (owner === 'held' && zoom < 8 && map.getPitch() < 5) owner = 'auto';
+    if (theirsNow() || !idle()) return;
     const want = pitchForZoom(zoom);
     if (Math.abs(map.getPitch() - want) > 2) map.easeTo({ pitch: want, duration: 700 });
   };

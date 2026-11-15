@@ -173,6 +173,22 @@ describe('computeTrip on foot', () => {
     expect(r.feasible).toBe(true);
   });
 
+  it('on a leg that heads home, counts carrying on as getting home, not going back to where the leg began', () => {
+    // A reroute part way through: the leg starts where the crew stood and ends at home, 6 km on.
+    const path = line(6000, 100);
+    expect(computeTrip(path, opts('foot', { homeAt: 'end', startO2Kg: 1.4 })).pointOfNoReturnIndex).toBeNull();
+    // A one-way leg after a reroute has no home on it, so no point of no return either.
+    expect(computeTrip(line(20_000, 100), opts('foot', { homeAt: 'none' })).pointOfNoReturnIndex).toBeNull();
+  });
+
+  it('counts suit time already worn when the trip starts part way through a mission', () => {
+    const path = line(12_000, 100);
+    const fresh = computeTrip(path, opts('foot')).pointOfNoReturnIndex;
+    const worn = computeTrip(path, opts('foot', { startSuitS: 3 * 3600 })).pointOfNoReturnIndex;
+    expect(worn).not.toBeNull();
+    expect(worn ?? 0).toBeLessThan(fresh ?? Infinity);
+  });
+
   it('marks where the tanks hit zero and says how many km in', () => {
     // Four hours of work at the start leaves 0.54 kg each: about 7 h of walking, 23 km.
     const path = line(30_000, 100);

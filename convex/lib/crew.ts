@@ -3,7 +3,7 @@ import { ConvexError, v } from 'convex/values';
 import { checkPerson } from './auth';
 import type { Doc, Id } from '../_generated/dataModel';
 import type { MutationCtx, QueryCtx } from '../_generated/server';
-import { MAX_CREW } from '../shared';
+import { dropCrewFrom, MAX_CREW } from '../shared';
 import { isActive } from './auth';
 import { crewColorV, crewKindV, crewStateV } from './validators';
 
@@ -95,8 +95,8 @@ export async function requireFree(ctx: Ctx, person: Doc<'people'>): Promise<void
 
 /** Forgets a crew member's tasks, so nothing stays assigned to someone who is gone. */
 export async function dropAssignments(ctx: MutationCtx, mission: Doc<'missions'>, crewId: Id<'crew'>): Promise<void> {
-  const kept = Object.fromEntries(Object.entries(mission.assignments).filter(([, id]) => id !== crewId));
-  if (Object.keys(kept).length !== Object.keys(mission.assignments).length) await ctx.db.patch(mission._id, { assignments: kept });
+  const kept = dropCrewFrom(mission.assignments, crewId);
+  if (kept) await ctx.db.patch(mission._id, { assignments: kept });
 }
 
 /** Clears a person's current mission, but only if it still points at this one. */

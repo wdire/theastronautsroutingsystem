@@ -3,11 +3,11 @@ import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
 import { MeshoptDecoder } from 'three/examples/jsm/libs/meshopt_decoder.module.js';
 import { MODELS, type ModelName } from './modelSpecs';
 import { separateWheels } from './wheels';
-import { landingPad, radioMast, solarArray, tunnel } from './baseProps';
+import { landingPad, radioMast, solarArray, station, tunnel } from './baseProps';
 
 /** The base parts with no model file. */
 function drawn(name: ModelName): Group {
-  return name === 'solar' ? solarArray() : name === 'pad' ? landingPad() : name === 'tunnel' ? tunnel() : radioMast();
+  return name === 'solar' ? solarArray() : name === 'pad' ? landingPad() : name === 'tunnel' ? tunnel() : name === 'station' ? station() : radioMast();
 }
 
 const loader = new GLTFLoader();

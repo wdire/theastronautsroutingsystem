@@ -310,7 +310,7 @@ export function computeTrip(path: PathPoint[], opts: TripOptions): TripResult {
   let workS = 0;
   let waitS = 0;
   let darkMoveS = 0;
-  let suitS = 0;
+  let suitS = opts.startSuitS !== undefined && Number.isFinite(opts.startSuitS) ? Math.max(0, opts.startSuitS) : 0;
   let capped = false;
   let minTempC = Number.POSITIVE_INFINITY;
   let o2Out: TripEvent | null = null;
@@ -565,8 +565,12 @@ export function computeTrip(path: PathPoint[], opts: TripOptions): TripResult {
     onS[i] = (onS[i + 1] ?? 0) + s;
     onO2[i] = (onO2[i + 1] ?? 0) + o2;
   }
+  const homeAt = opts.homeAt ?? 'start';
   const loop =
-    n > 2 && distanceM(lons[0] ?? 0, lats[0] ?? 0, lons[n - 1] ?? 0, lats[n - 1] ?? 0) <= LOOP_CLOSE_M && totalM > LOOP_CLOSE_M;
+    homeAt === 'end' ||
+    (homeAt === 'start' && n > 2 && distanceM(lons[0] ?? 0, lats[0] ?? 0, lons[n - 1] ?? 0, lats[n - 1] ?? 0) <= LOOP_CLOSE_M && totalM > LOOP_CLOSE_M);
+  // Walking back along the path reaches home only when the path starts there.
+  const backHome = homeAt === 'start';
   const limitS = (1 - RESERVE) * SUIT.scrubberH * 3600;
   const limitO2 = (1 - RESERVE) * SUIT.o2KgPerPerson;
 
@@ -576,7 +580,7 @@ export function computeTrip(path: PathPoint[], opts: TripOptions): TripResult {
     for (let k = 0; k < n; k += 1) {
       const s0 = usedS(k);
       const o0 = usedO2(k);
-      const ok = fits(s0 + (backS[k] ?? 0), o0 + (backO2[k] ?? 0)) || (loop && fits(s0 + (onS[k] ?? 0), o0 + (onO2[k] ?? 0)));
+      const ok = (backHome && fits(s0 + (backS[k] ?? 0), o0 + (backO2[k] ?? 0))) || (loop && fits(s0 + (onS[k] ?? 0), o0 + (onO2[k] ?? 0)));
       if (!ok) return Math.max(0, k - 1);
     }
     return null;
@@ -584,7 +588,7 @@ export function computeTrip(path: PathPoint[], opts: TripOptions): TripResult {
 
   let pointOfNoReturnIndex: number | null = null;
   let walkbackIndex: number | null = null;
-  if (crew > 0 && n > 1) {
+  if (crew > 0 && n > 1 && homeAt !== 'none') {
     const usedS = (k: number) => (suitedRiding ? (suitAt[k] ?? 0) : 0);
     const usedO2 = (k: number) => (suitedRiding ? (o2PerPersonAt[k] ?? 0) : 0);
     if (v.kind === 'walk') pointOfNoReturnIndex = lastHomeable(usedS, usedO2);

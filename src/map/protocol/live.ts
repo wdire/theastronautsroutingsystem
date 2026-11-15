@@ -89,15 +89,64 @@ export const VIKING: EquirectSource = {
 };
 
 /**
+ * THEMIS night-time infrared, about 100 m a pixel, 60 N to 60 S (NASA Mars Trek). Ground that stays warm
+ * through the night has high thermal inertia: rock and bedrock. Ground that cools fast is dust and fine sand.
+ */
+export const THEMIS_NIGHT: EquirectSource = {
+  id: 'themis-night',
+  tileSize: 256,
+  baseRes: 0.703125,
+  maxLevel: 9,
+  levelFor: (z) => z - 1,
+  url: (l, r, c) => `${TREK}/THEMIS_NightIR_ControlledMosaics_100m_v2_oct2018/1.0.0/default/default028mm/${l}/${r}/${c}.png`,
+  pool: 'trek',
+};
+
+/**
+ * THEMIS daytime infrared, about 100 m a pixel (NASA Mars Trek): afternoon warmth, which picks out slopes and
+ * textures much as shaded relief does. Fills the strips the CTX mosaic has no image for.
+ */
+export const THEMIS_DAY: EquirectSource = {
+  id: 'themis-day',
+  tileSize: 256,
+  baseRes: 0.703125,
+  maxLevel: 9,
+  levelFor: (z) => z - 1,
+  url: (l, r, c) => `${TREK}/THEMIS_DayIR_ControlledMosaics_100m_v2_oct2018/1.0.0/default/default028mm/${l}/${r}/${c}.png`,
+  pool: 'trek',
+};
+
+/** MOLA elevation in colour over its shaded relief, 463 m a pixel (NASA Mars Trek). */
+export const MOLA_COLOUR: EquirectSource = {
+  id: 'mola-colour',
+  tileSize: 256,
+  baseRes: 0.703125,
+  maxLevel: 7,
+  levelFor: (z) => z - 1,
+  url: (l, r, c) => `${TREK}/Mars_MGS_MOLA_ClrShade_merge_global_463m/1.0.0/default/default028mm/${l}/${r}/${c}.jpg`,
+  pool: 'trek',
+};
+
+/**
  * Decoded source tiles, most recently used last, kept to a budget in bytes: a 512 px tile is a megabyte
  * decoded, and every tile worker keeps its own. Evicted tiles come back from the browser's HTTP cache (every
  * source here is served cacheable), so the budget only has to hold what the tiles being made right now share.
  */
-const tileCache = new Map<string, { made: Promise<ImageBitmap | null>; bytes: number }>();
+/**
+ * What a service gave for one source tile. `failed` tells a tile that could not be fetched (a timeout, a dropped
+ * connection, a server error) from one the service simply does not have: the first is worth asking for again,
+ * and a map tile made without it is not finished.
+ */
+interface SourceAnswer {
+  bitmap: ImageBitmap | null;
+  failed: boolean;
+}
+
+const tileCache = new Map<string, { made: Promise<SourceAnswer>; bytes: number }>();
 const TILE_CACHE_BYTES = 12 * 1024 * 1024;
 let tileCacheBytes = 0;
 
-function rememberTile(url: string, made: Promise<ImageBitmap | null>, bytes: number): void {
+function rememberTile(url: string, made: Promise<SourceAnswer>, bytes: number): void {
   const old = tileCache.get(url);
   if (old) tileCacheBytes -= old.bytes;
   tileCache.delete(url);
@@ -111,7 +160,7 @@ function rememberTile(url: string, made: Promise<ImageBitmap | null>, bytes: num
   }
 }
 
-function forgetTile(url: string, made: Promise<ImageBitmap | null>): void {
+function forgetTile(url: string, made: Promise<SourceAnswer>): void {
   const entry = tileCache.get(url);
   if (entry?.made !== made) return;
   tileCache.delete(url);
@@ -177,8 +226,31 @@ function nextJob(queue: Job[]): Job | undefined {
   return best < 0 ? undefined : queue.splice(best, 1)[0];
 }
 
-/** One source tile, or null if the service has none there, does not answer in time, or nobody wants it any more. Never rejects. */
-function sourceTile(src: EquirectSource, level: number, row: number, col: number, timeoutMs: number, signal?: AbortSignal): Promise<ImageBitmap | null> {
+/** Tries per source tile, and the wait before each retry, ms: a busy server often answers the second time. */
+const RETRY_WAIT_MS = [700, 2500];
+
+/** One fetch of a source tile. A missing tile (404, 400: off the grid) is an answer; an error or timeout is not. */
+async function fetchSource(url: string, timeoutMs: number): Promise<SourceAnswer> {
+  const abort = new AbortController();
+  const timer = setTimeout(() => abort.abort(), timeoutMs);
+  try {
+    const res = await fetch(url, { signal: abort.signal, mode: 'cors' });
+    if (res.status === 404 || res.status === 400 || res.status === 204) return { bitmap: null, failed: false };
+    if (!res.ok) return { bitmap: null, failed: true };
+    if (!(res.headers.get('content-type') ?? '').startsWith('image/')) return { bitmap: null, failed: false };
+    return { bitmap: await createImageBitmap(await res.blob()), failed: false };
+  } catch {
+    return { bitmap: null, failed: true };
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
+/**
+ * One source tile: the image, or no image with whether that was a failure. Never rejects. A failed fetch is tried
+ * again twice, holding its place in the pool, before it counts as failed.
+ */
+function sourceTile(src: EquirectSource, level: number, row: number, col: number, timeoutMs: number, signal?: AbortSignal): Promise<SourceAnswer> {
   const url = src.url(level, row, col);
   const hit = tileCache.get(url);
   if (hit) {
@@ -191,7 +263,7 @@ function sourceTile(src: EquirectSource, level: number, row: number, col: number
   const poolId = src.pool ?? src.id;
   const p = pool(poolId);
   let job!: Job;
-  const made = new Promise<ImageBitmap | null>((resolve) => {
+  const made = new Promise<SourceAnswer>((resolve) => {
     job = {
       url,
       batch: Math.floor(performance.now() / BATCH_MS),
@@ -199,22 +271,22 @@ function sourceTile(src: EquirectSource, level: number, row: number, col: number
       dropped: false,
       drop: () => {
         job.dropped = true;
-        resolve(null);
+        resolve({ bitmap: null, failed: true });
       },
       start: () => {
         p.running += 1;
         jobs.delete(url);
-        const abort = new AbortController();
-        const timer = setTimeout(() => abort.abort(), timeoutMs);
-        void fetch(url, { signal: abort.signal, mode: 'cors' })
-          .then(async (res) => (res.ok && (res.headers.get('content-type') ?? '').startsWith('image/') ? createImageBitmap(await res.blob()) : null))
-          .catch(() => null)
-          .then((bitmap) => {
-            clearTimeout(timer);
-            p.running -= 1;
-            resolve(bitmap);
-            pump(poolId);
-          });
+        void (async () => {
+          let answer = await fetchSource(url, timeoutMs);
+          for (const wait of RETRY_WAIT_MS) {
+            if (!answer.failed || job.wanted <= 0) break;
+            await new Promise((r) => setTimeout(r, wait));
+            answer = await fetchSource(url, timeoutMs);
+          }
+          p.running -= 1;
+          resolve(answer);
+          pump(poolId);
+        })();
       },
     };
   });
@@ -223,8 +295,8 @@ function sourceTile(src: EquirectSource, level: number, row: number, col: number
   p.queue.push(job);
   pump(poolId);
   // A miss (or a dropped request) is not kept: the service may answer next time.
-  void made.then((bitmap) => {
-    if (!bitmap) forgetTile(url, made);
+  void made.then((answer) => {
+    if (!answer.bitmap) forgetTile(url, made);
   });
   rememberTile(url, made, src.tileSize * src.tileSize * 4);
   return made;
@@ -254,6 +326,11 @@ function want(job: Job, signal?: AbortSignal): void {
   );
 }
 
+/** Filled in by warpToTile: whether any source tile it needed could not be fetched. */
+export interface Gaps {
+  failed: boolean;
+}
+
 export interface Warped {
   /** RGBA, (256 + 2 * pad) squared. Alpha is 0 where the source had nothing. */
   rgba: Uint8ClampedArray;
@@ -266,7 +343,7 @@ export interface Warped {
  * The part of a source that covers map tile (z, x, y) plus `pad` pixels on every side, in Web Mercator.
  * Null if the source has no level for this zoom or nothing came back.
  */
-export async function warpToTile(src: EquirectSource, z: number, x: number, y: number, pad: number, timeoutMs = 15000, signal?: AbortSignal): Promise<Warped | null> {
+export async function warpToTile(src: EquirectSource, z: number, x: number, y: number, pad: number, timeoutMs = 15000, signal?: AbortSignal, gaps?: Gaps): Promise<Warped | null> {
   const level = Math.min(src.maxLevel, src.levelFor(z));
   if (level < 0) return null;
   const size = 256 + 2 * pad;
@@ -291,11 +368,12 @@ export async function warpToTile(src: EquirectSource, z: number, x: number, y: n
   const row1 = Math.min(levelRows - 1, Math.floor(((sy[size - 1] ?? 0) + 1) / ts));
   if (col1 < col0 || row1 < row0 || (col1 - col0 + 1) * (row1 - row0 + 1) > 16) return null;
 
-  const work: Promise<{ bitmap: ImageBitmap | null; r: number; c: number }>[] = [];
+  const work: Promise<{ bitmap: ImageBitmap | null; failed: boolean; r: number; c: number }>[] = [];
   for (let r = row0; r <= row1; r += 1) {
-    for (let c = col0; c <= col1; c += 1) work.push(sourceTile(src, level, r, c, src.timeoutMs ?? timeoutMs, signal).then((bitmap) => ({ bitmap, r, c })));
+    for (let c = col0; c <= col1; c += 1) work.push(sourceTile(src, level, r, c, src.timeoutMs ?? timeoutMs, signal).then((answer) => ({ ...answer, r, c })));
   }
   const tiles = await Promise.all(work);
+  if (gaps && tiles.some((t) => t.failed)) gaps.failed = true;
   if (tiles.every((t) => !t.bitmap)) return null;
 
   // Only the source pixels under the tile are read back: close in, a tile spans a sliver of one source tile, and

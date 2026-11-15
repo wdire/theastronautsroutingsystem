@@ -3,6 +3,7 @@ import { Camera, FlaskConical, MapPin, Mountain, Rocket, Search, X } from 'lucid
 import { loadMarsNames, loadNames, loadPlaces, loadSamples, loadSites } from '@/data/datasets';
 import { inBox, REGION } from '@/lib/constants';
 import { searchItems, type SearchItem } from '@/data/search';
+import { orbitTo } from '@/map/orbit';
 import { getMap } from '@/map/instance';
 import { useApp } from '@/store';
 import { cn } from '@/lib/cn';
@@ -186,7 +187,8 @@ export function SearchBox({ leading }: { leading: ReactNode }) {
     if (map) {
       const far = Math.abs(map.getCenter().lng - item.lon) > 3 || Math.abs(map.getCenter().lat - item.lat) > 3;
       // Far away, frame the whole feature; nearby, keep at least the zoom the visitor was at.
-      map.flyTo({ center: [item.lon, item.lat], zoom: far ? item.zoom : Math.max(item.zoom, Math.min(map.getZoom(), 15)), duration: far ? 3200 : 1600 });
+      // Then circle it slowly, leaning in, until the visitor takes the camera.
+      orbitTo(map, [item.lon, item.lat], far ? item.zoom : Math.max(item.zoom, Math.min(map.getZoom(), 15)), far ? 3200 : 1600);
     }
     openPlace(item.kind === 'coordinates' ? `@${item.lat.toFixed(5)},${item.lon.toFixed(5)}` : item.key);
   };

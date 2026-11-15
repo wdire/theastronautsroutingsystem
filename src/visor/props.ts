@@ -95,7 +95,19 @@ export function createProps(scene: Scene, frame: Frame, specs: readonly PropSpec
     scene.add(anchor);
     return { spec, x, z, anchor, body: null, asked: false, suit: null, shadows: true };
   });
-  const clearings: readonly Clearing[] = items.map((i) => ({ x: i.x, z: i.z, r: MODELS[i.spec.model].clearM }));
+  /** A footprint disc's place in the scene, turned with the prop's heading. */
+  const onGround = (item: Item, lx: number, lz: number): [number, number] => {
+    const h = item.spec.headingDeg * RAD;
+    return [item.x + Math.cos(h) * lx - Math.sin(h) * lz, item.z + Math.sin(h) * lx + Math.cos(h) * lz];
+  };
+  const clearings: readonly Clearing[] = items.flatMap((i) => {
+    const { footprint, clearM } = MODELS[i.spec.model];
+    if (!footprint) return [{ x: i.x, z: i.z, r: clearM }];
+    return footprint.map(([lx, lz, r]) => {
+      const [x, z] = onGround(i, lx, lz);
+      return { x, z, r };
+    });
+  });
 
   /** Puts it on the ground. False where there is no fine ground under it yet. */
   const seat = (item: Item): boolean => {
@@ -103,8 +115,17 @@ export function createProps(scene: Scene, frame: Frame, specs: readonly PropSpec
     const ground = heightAt(x, z);
     if (ground === null) return false;
     const h = spec.headingDeg * RAD;
-    const stance = MODELS[spec.model].stance;
+    const { stance, footprint } = MODELS[spec.model];
     let s: Seat = { y: ground, pitch: 0, roll: 0 };
+    if (footprint) {
+      // Level, at the mean height of the ground under its parts; walls and feet run down past any dip.
+      let sum = 0;
+      for (const [lx, lz] of footprint) {
+        const [fx, fz] = onGround(item, lx, lz);
+        sum += heightAt(fx, fz) ?? ground;
+      }
+      s = { y: sum / footprint.length, pitch: 0, roll: 0 };
+    }
     if (stance) {
       const fx = Math.sin(h);
       const fz = -Math.cos(h);

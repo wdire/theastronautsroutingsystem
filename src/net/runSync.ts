@@ -8,9 +8,9 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { useQuery } from 'convex/react';
 import { api } from '../../convex/_generated/api';
 import type { Id } from '../../convex/_generated/dataModel';
-import { LIMITS, SUIT_COLOR_HEX, type CrewColor } from '../../convex/shared';
+import { assigneeWords, LIMITS, SUIT_COLOR_HEX, type CrewColor } from '../../convex/shared';
 import { stopLabel } from '@/planner/labels';
-import { closeMission, resumeMission, sayToBase, setMirror, startMission } from '@/sim/controller';
+import { clockTicking, closeMission, resumeMission, sayToBase, setMirror, startMission } from '@/sim/controller';
 import type { World } from '@/sim/types';
 import { useApp } from '@/store';
 import { fmtDistance, fmtDuration } from '@/lib/format';
@@ -19,7 +19,9 @@ import { buildDebrief } from './debrief';
 import { runEvents } from './events';
 import { flushPendingPlan, type MissionData } from './mission';
 import { encodeRoute, encodeSnapshot, parseRoute, parseSnapshot, plannedFrom, rebuildWorld, routeOf, type Planned, type RouteDoc } from './snapshot';
+import { followClock, type ClockAnchor } from './smoothClock';
 import { useCrew } from './state';
+import { baseQuestion } from './words';
 import { toast } from 'sonner';
 
 const PUBLISH_MS = 1000;
@@ -43,7 +45,7 @@ export async function startCrewMission(missionId: Id<'missions'>): Promise<boole
   if (!world || !run) return false;
   const planned = plannedFrom(run.trip, run.startedUtcMs, run.startLevels);
   const routeJson = encodeRoute(routeOf(run));
-  const snapshotJson = encodeSnapshot(world, planned);
+  const snapshotJson = encodeSnapshot(world, planned, clockTicking(world));
   if (bytes(routeJson) > LIMITS.routeBytes || bytes(snapshotJson) > LIMITS.snapshotBytes) {
     closeMission();
     toast('This route is too long to share with the crew. Shorten it or split it into two missions.');
@@ -81,7 +83,7 @@ function useLiveWorld(missionId: Id<'missions'> | null, enabled: boolean) {
   const routeDoc = parsed ?? kept?.doc ?? null;
   const snapshot = useMemo(() => (live ? parseSnapshot(live.snapshotJson) : null), [live]);
   const world = useMemo(() => (snapshot ? rebuildWorld(snapshot, routeDoc) : null), [snapshot, routeDoc]);
-  return { world, planned: snapshot?.planned ?? null, updatedAt: live?.updatedAt ?? null, hasLive: live !== undefined && live !== null };
+  return { world, planned: snapshot?.planned ?? null, ticking: snapshot?.ticking ?? null, updatedAt: live?.updatedAt ?? null, hasLive: live !== undefined && live !== null };
 }
 
 /**
@@ -119,32 +121,36 @@ export function useCommanderRun(data: MissionData | null): void {
     let publishedLeg = prev?.run?.leg ?? 0;
     let lastPublish = 0;
     let inFlight = false;
-    let dirty = false;
     let finished = false;
+    // A change of pace (pause, speed, a held clock, the end) goes out at once: members run their own clock on
+    // from the last snapshot, and would run on wrongly until the next.
+    const stateKey = (w: World) => `${w.paused}:${w.speed}:${w.run?.status}:${clockTicking(w)}:${w.run?.leg}`;
+    let lastState = prev ? stateKey(prev) : '';
+    let changed = false;
     const pendingLogs: Promise<unknown>[] = [];
 
     const assigneeOf = (taskId: string): string | null => {
       const d = dataRef.current;
-      const crewId = d?.mission.assignments[taskId];
-      return crewId ? (d?.crew.find((c) => c._id === crewId)?.name ?? null) : null;
+      return d ? assigneeWords(d.mission.assignments[taskId], (id) => d.crew.find((c) => c._id === id)?.name) : null;
     };
 
     const publish = async (): Promise<void> => {
       const w = useApp.getState().world;
       if (!w?.run || finished) return;
       if (inFlight) {
-        dirty = true;
+        changed = true;
         return;
       }
       inFlight = true;
       lastPublish = Date.now();
       const leg = w.run.leg;
       const planned = plannedFor.get(missionId) ?? null;
+      lastState = stateKey(w);
       try {
         await client.mutation(api.missions.publish, {
           auth: auth(),
           missionId,
-          snapshotJson: encodeSnapshot(w, planned),
+          snapshotJson: encodeSnapshot(w, planned, clockTicking(w)),
           ...(leg !== publishedLeg ? { routeJson: encodeRoute(routeOf(w.run)) } : {}),
         });
         publishedLeg = leg;
@@ -153,10 +159,6 @@ export function useCommanderRun(data: MissionData | null): void {
         if (errorText(err) !== errorText(null)) toastError(err);
       } finally {
         inFlight = false;
-      }
-      if (dirty) {
-        dirty = false;
-        if (Date.now() - lastPublish >= PUBLISH_MS) void publish();
       }
     };
 
@@ -199,20 +201,30 @@ export function useCommanderRun(data: MissionData | null): void {
         const ended = prev?.run?.status === 'running' && next.run.status !== 'running';
         prev = next;
         if (ended) void finish(next);
-        else if (Date.now() - lastPublish >= PUBLISH_MS) void publish();
+        else if (stateKey(next) !== lastState || Date.now() - lastPublish >= PUBLISH_MS) void publish();
+        else changed = true;
       },
     );
+    // A change that came too soon after the last snapshot goes in the next one, a moment later, never dropped.
+    // A held clock (a proposal on screen) changes no world, so its start and end are watched here too.
     const keepAlive = window.setInterval(() => {
-      if (Date.now() - lastPublish >= KEEPALIVE_MS) void publish();
-    }, 1000);
+      const w = useApp.getState().world;
+      const since = Date.now() - lastPublish;
+      if ((w && stateKey(w) !== lastState) || (changed && since >= PUBLISH_MS) || since >= KEEPALIVE_MS) {
+        changed = false;
+        void publish();
+      }
+    }, 250);
 
-    // Crew radio calls go to the simulated base too, so it answers whoever asked. Calls already in the log are not replayed.
+    // Crew calls addressed "@Base" go to the simulated base, so it answers whoever asked; the rest is crew talk.
+    // Calls already in the log are not replayed.
     const relayed = new Set(useCrew.getState().log.map((l) => l.id));
     const offLog = useCrew.subscribe((s) => {
       for (const l of s.log) {
         if (relayed.has(l.id)) continue;
         relayed.add(l.id);
-        if (l.kind === 'radio' && useApp.getState().world?.run?.status === 'running') sayToBase(l.text);
+        const question = l.kind === 'radio' ? baseQuestion(l.text) : null;
+        if (question && useApp.getState().world?.run?.status === 'running') sayToBase(question);
       }
     });
 
@@ -237,18 +249,48 @@ export function useMemberRun(data: MissionData | null): void {
   const watching = !!data && !data.isCommander && ((status === 'underway' && data.isCrew) || ((status === 'complete' || status === 'aborted') && ended === missionId && data.mission.startedAt !== null));
   const live = useLiveWorld(missionId, watching);
   const applied = useRef(false);
+  // The latest snapshot's world and clock; the member's own clock runs on from it (src/net/smoothClock.ts).
+  const latest = useRef<{ world: World; anchor: ClockAnchor } | null>(null);
 
   useEffect(() => {
     if (!watching || !live.world) return;
-    setMirror(true);
-    applied.current = true;
-    useApp.setState({ world: live.world, utcMs: live.world.utcMs, clockLive: false, clockPaused: true, proposed: null, routingAlertId: null, plannerOpen: false, picking: null });
-  }, [watching, live.world]);
+    const w = live.world;
+    const ticking = live.ticking ?? clockTicking(w);
+    latest.current = { world: w, anchor: { simUtcMs: w.utcMs, realMs: performance.now(), speed: w.speed, ticking } };
+    if (!applied.current) {
+      setMirror(true);
+      applied.current = true;
+      useApp.setState({ world: w, utcMs: w.utcMs, clockLive: false, clockPaused: true, proposed: null, routingAlertId: null, plannerOpen: false, picking: null });
+      return;
+    }
+    // What the snapshot says (alerts, tasks, levels) shows at once; the clock carries on from where it was shown.
+    const shown = useApp.getState().world?.utcMs ?? w.utcMs;
+    const utcMs = followClock(shown, latest.current.anchor, performance.now(), 0);
+    useApp.setState({ world: { ...w, utcMs }, utcMs });
+  }, [watching, live.world, live.ticking]);
+
+  // Ten times a second, as the commander's own tick: the crew moves on smoothly between snapshots.
+  useEffect(() => {
+    if (!watching) return;
+    let last = performance.now();
+    const id = window.setInterval(() => {
+      const now = performance.now();
+      const dt = Math.min(1000, now - last);
+      last = now;
+      const cur = latest.current;
+      const shown = useApp.getState().world;
+      if (!cur || !shown?.run || shown.run.id !== cur.world.run?.id) return;
+      const utcMs = followClock(shown.utcMs, cur.anchor, now, dt);
+      if (utcMs !== shown.utcMs) useApp.setState({ world: { ...shown, utcMs }, utcMs });
+    }, 100);
+    return () => window.clearInterval(id);
+  }, [watching]);
 
   // Stopped watching (left the crew, or put the ended run away): take the mirrored run off the screen.
   useEffect(() => {
     if (watching || !applied.current) return;
     applied.current = false;
+    latest.current = null;
     closeMission();
   }, [watching]);
 

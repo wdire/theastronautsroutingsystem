@@ -83,7 +83,7 @@ export function addRangeRings(map: MapLibreMap): () => void {
       const el = document.createElement('div');
       el.className = 'map-label ring-label';
       el.textContent = labelFor(ring.hours);
-      labels.push(new Marker({ element: el, anchor: 'left', offset: [5, 0] }).setLngLat([east[0], east[1]]).addTo(map));
+      labels.push(new Marker({ element: el, anchor: 'left', offset: [5, 0], opacityWhenCovered: '0' }).setLngLat([east[0], east[1]]).addTo(map));
     }
     fitLabels();
     map.getSource<GeoJSONSource>(SRC)?.setData({ type: 'FeatureCollection', features });

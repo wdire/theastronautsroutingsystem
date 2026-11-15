@@ -1,9 +1,10 @@
 import { mapToneAmount, mapToneLut } from '@/engines/grading';
 import { hdTile, imgTile, packageImage } from './img';
 import { toBitmap, type TileData } from './common';
+import type { Gaps } from './live';
 import { pxToLat } from '@/lib/geo';
 
-type TileHandler = (rest: string[], z: number, x: number, y: number, signal: AbortSignal) => Promise<TileData>;
+type TileHandler = (rest: string[], z: number, x: number, y: number, signal: AbortSignal, gaps?: Gaps) => Promise<TileData>;
 
 const luts = new Map<number, Uint8ClampedArray>();
 
@@ -125,15 +126,15 @@ async function polarCap(data: TileData, z: number, y: number): Promise<TileData>
  * The base image as the map shows it: the tile, with its shadows lifted so dark ground can be read.
  * Rover View takes the untouched tile (`imgTile`) and grades it for eye level itself.
  */
-export const mapImgTile: TileHandler = async (rest, z, x, y, signal) => forMap(await polarCap(await imgTile(rest, z, x, y, signal), z, y), z, sharpenFor(z), signal);
+export const mapImgTile: TileHandler = async (rest, z, x, y, signal, gaps) => forMap(await polarCap(await imgTile(rest, z, x, y, signal, gaps), z, y), z, sharpenFor(z), signal);
 
 /** The base image from the package alone, toned the same: what stands in while the live detail is fetched. */
 export const mapQuickImgTile: TileHandler = async (_rest, z, x, y, signal) => forMap(await polarCap(await packageImage(z, x, y, signal), z, y), z, sharpenFor(z), signal);
 
 
 /** The 25 cm HiRISE layer, toned like the base under it. A clear tile (nothing here) passes as it is. */
-export const mapHdTile: TileHandler = async (rest, z, x, y, signal) => {
-  const data = await hdTile(rest, z, x, y, signal);
+export const mapHdTile: TileHandler = async (rest, z, x, y, signal, gaps) => {
+  const data = await hdTile(rest, z, x, y, signal, gaps);
   const lut = lutFor(z);
   if (!lut || signal.aborted || (data instanceof ImageBitmap && data.width === 1)) return data;
   try {

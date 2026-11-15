@@ -9,6 +9,7 @@ import { api } from '../../convex/_generated/api';
 import type { Id } from '../../convex/_generated/dataModel';
 import { SUIT_COLOR_HEX } from '../../convex/shared';
 import type { FunctionReturnType } from 'convex/server';
+import { fleetOf, peopleOf } from '@/engines/fleet';
 import type { MissionPlan } from '@/engines/types';
 import { useApp, type RosterMember } from '@/store';
 import { auth, convex, toastError } from './client';
@@ -67,6 +68,12 @@ export function useCurrentMission(registered: boolean): MissionData | null {
   useEffect(() => {
     const roster = currentId && data && data.mission._id === currentId ? rosterOf(data.crew, myId) : null;
     if (!sameRoster(useApp.getState().roster, roster)) useApp.setState({ roster });
+    // The commander's plan is costed for the crew list as it stands, whether or not the planner is open: everyone
+    // sees the same head count and budget, and Start judges the fleet against the people really going.
+    if (roster && data?.isCommander && data.mission.status === 'planning') {
+      const app = useApp.getState();
+      if (app.world?.run?.status !== 'running' && peopleOf(app.plan) !== roster.length) app.setFleet(fleetOf(app.plan), roster.length);
+    }
   }, [currentId, data, myId]);
 
   return data;

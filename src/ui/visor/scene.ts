@@ -34,24 +34,23 @@ async function perseverance(): Promise<PropSpec | null> {
 }
 
 /**
- * The base around its airlock door (the point missions leave from): the habitat beside the way out, its solar
- * array, radio mast and landing pad around it, and the pressurised rover parked by the door. Laid out from the
- * way out, so the first steps of a route are clear of it.
+ * The base around its airlock door (the point missions leave from): Jezero Station just behind it, its door
+ * facing the way out, a NASA habitat module standing apart, the solar array, radio mast and landing pad around
+ * it, and the pressurised rover parked by the door. Laid out from the way out, so the first steps of a route are
+ * clear of it.
  */
 export function baseProps(lon: number, lat: number, outDeg: number): PropSpec[] {
   const at = (bearing: number, m: number) => destination(lon, lat, outDeg + bearing, m);
-  // Two habitat modules side by side, joined by a tunnel, beside the way out.
-  const [hlon, hlat] = at(90, 26);
-  const [h2lon, h2lat] = destination(hlon, hlat, outDeg + 90, 17.5);
-  const [tlon, tlat] = destination(hlon, hlat, outDeg + 90, 8.75);
+  // The station's middle 12.5 m behind the door point: its airlock door stands about 3 m behind it.
+  const [clon, clat] = at(180, 12.5);
+  const [hlon, hlat] = at(-115, 45);
   const [slon, slat] = at(150, 50);
-  const [mlon, mlat] = at(115, 14);
+  const [mlon, mlat] = at(-70, 18);
   const [plon, plat] = at(200, 85);
   const [vlon, vlat] = at(60, 13);
   return [
-    { id: 'habitat', model: 'habitat', lon: hlon, lat: hlat, headingDeg: outDeg - 90 },
-    { id: 'habitat-2', model: 'habitat', lon: h2lon, lat: h2lat, headingDeg: outDeg + 90 },
-    { id: 'base-tunnel', model: 'tunnel', lon: tlon, lat: tlat, headingDeg: outDeg + 90 },
+    { id: 'base-station', model: 'station', lon: clon, lat: clat, headingDeg: outDeg },
+    { id: 'habitat', model: 'habitat', lon: hlon, lat: hlat, headingDeg: outDeg + 90 },
     { id: 'base-solar', model: 'solar', lon: slon, lat: slat, headingDeg: 0 },
     { id: 'base-mast', model: 'mast', lon: mlon, lat: mlat, headingDeg: outDeg },
     { id: 'base-pad', model: 'pad', lon: plon, lat: plat, headingDeg: 0 },
@@ -94,5 +93,5 @@ export function standpoint(lon: number, lat: number, props: readonly PropSpec[])
 export function propCaption(id: string): string {
   if (id === 'perseverance') return "Perseverance, standing where it last reported its position. NASA’s 3D model of the rover.";
   if (id === 'ingenuity') return "Ingenuity, where it came to rest after its last flight in January 2024. NASA’s 3D model.";
-  return "Your base, illustrative: NASA’s models of a habitat and a pressurised rover, with a drawn solar array, radio mast and landing pad. Nothing stands here on Mars yet.";
+  return "Your base, illustrative: a drawn station (a domed hub, two laboratories and a greenhouse, joined by tunnels), NASA’s models of a habitat module and a pressurised rover, a solar array, radio mast and landing pad. Nothing stands here on Mars yet.";
 }

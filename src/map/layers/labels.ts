@@ -66,7 +66,7 @@ export function addLabels(map: MapLibreMap): () => void {
 
   const add = (el: HTMLElement, lon: number, lat: number, group: Label['group'], minZoom: number, maxZoom: number, anchor: 'center' | 'left') => {
     if (disposed) return;
-    const marker = new Marker({ element: el, anchor, ...(anchor === 'left' ? { offset: [-5, 0] as [number, number] } : {}) }).setLngLat([lon, lat]).addTo(map);
+    const marker = new Marker({ element: el, anchor, opacityWhenCovered: '0', ...(anchor === 'left' ? { offset: [-5, 0] as [number, number] } : {}) }).setLngLat([lon, lat]).addTo(map);
     labels.push({ marker, el, group, minZoom, maxZoom });
   };
 

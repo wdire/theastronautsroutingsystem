@@ -5,10 +5,10 @@
  */
 import { useMemo, useState } from 'react';
 import { useMutation, useQuery } from 'convex/react';
-import { ArrowDown, ArrowUp, Bot, ChevronDown, Pencil, Play, Plus, Route, X } from 'lucide-react';
+import { ArrowDown, ArrowUp, Bot, ChevronDown, Pencil, Play, Plus, Route, Users, X } from 'lucide-react';
 import { api } from '../../../convex/_generated/api';
 import type { Id } from '../../../convex/_generated/dataModel';
-import { COMMANDER_ROLE, DEFAULT_ROLE, LIMITS, MAX_CREW, ROLE_PRESETS, SUIT_COLOR_HEX, type CrewColor } from '../../../convex/shared';
+import { assigneeIds, assigneeWords, COMMANDER_ROLE, DEFAULT_ROLE, EVERYONE, LIMITS, MAX_CREW, ROLE_PRESETS, SUIT_COLOR_HEX, type CrewColor } from '../../../convex/shared';
 import { marsTime, nextLtst, SOL_MS } from '@/engines/marsTime';
 import type { VehicleId } from '@/engines/types';
 import { VEHICLES } from '@/engines/vehicles';
@@ -19,10 +19,11 @@ import { preEvaChecklist } from '@/net/checklist';
 import type { CrewRow, MissionData } from '@/net/mission';
 import { parsePlan } from '@/net/planSync';
 import { useCrew } from '@/net/state';
-import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from '@/ui/components/ui/dropdown-menu';
+import { DropdownMenu, DropdownMenuCheckboxItem, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger } from '@/ui/components/ui/dropdown-menu';
 import { fmtClock, fmtNumber, fmtUtc } from '@/lib/format';
 import { cn } from '@/lib/cn';
 import { stopLabel } from '@/planner/labels';
+import { startProblem } from '@/planner/startCheck';
 import { fmtFromNow, fmtMarsMoment, vehicleName } from './format';
 import { CrewMark, FIELD, Heading, ICON_BTN, PRIMARY_BTN, QUIET_BTN, StatusChip } from './parts';
 import { Notes } from './Notes';
@@ -305,38 +306,87 @@ export function RosterBlock({ data }: { data: MissionData }) {
 
 /* ---------- the plan and its tasks ---------- */
 
+/** Who a task's assignee names, as crew rows in walking order. */
+function assignedRows(data: MissionData, taskId: string): { everyone: boolean; rows: CrewRow[] } {
+  const { everyone, ids } = assigneeIds(data.mission.assignments[taskId]);
+  const rows = data.crew.filter((c) => c.state !== 'left' && (everyone ? c.state === 'joined' : ids.includes(c._id))).sort((a, b) => a.order - b.order);
+  return { everyone, rows };
+}
+
+/** Up to three crew marks, overlapping, for a task done by several people. */
+function MarkStack({ rows }: { rows: readonly CrewRow[] }) {
+  return (
+    <span className="flex shrink-0 items-center -space-x-1">
+      {rows.slice(0, 3).map((c) => (
+        <span key={c._id} className="rounded-full ring-2 ring-background">
+          <CrewMark color={c.color as CrewColor} android={c.kind === 'android'} />
+        </span>
+      ))}
+    </span>
+  );
+}
+
 function AssignMenu({ data, taskId, label }: { data: MissionData; taskId: string; label: string }) {
   const assign = useMutation(api.missions.assign);
-  const crewId = data.mission.assignments[taskId];
-  const who = crewId ? data.crew.find((c) => c._id === crewId) : undefined;
+  const { everyone, rows } = assignedRows(data, taskId);
+  const ids = everyone ? [] : rows.map((c) => c._id);
   const joined = data.crew.filter((c) => c.state === 'joined').sort((a, b) => a.order - b.order);
   const canAssign = data.isCommander && (data.mission.status === 'planning' || data.mission.status === 'underway');
+  const full = assigneeWords(data.mission.assignments[taskId], (id) => data.crew.find((c) => c._id === id)?.name);
+  // Two names fit the button; more read as a count, with every name in the tooltip.
+  const words = !everyone && rows.length > 2 ? `${rows.length} people` : full;
+  const to = (next: 'all' | Id<'crew'>[] | null) => run(assign({ auth: auth(), missionId: data.mission._id, taskId, to: next }));
   const shown = (
     <>
-      {who ? <CrewMark color={who.color as CrewColor} android={who.kind === 'android'} /> : null}
-      <span className={cn('truncate', !who && 'text-faint')}>{who?.name ?? 'No one yet'}</span>
+      {everyone ? <Users className="size-3.5 shrink-0 text-primary" aria-hidden /> : rows.length > 0 ? <MarkStack rows={rows} /> : null}
+      <span className={cn('truncate', !words && 'text-faint')}>{words ?? 'No one yet'}</span>
     </>
   );
-  if (!canAssign) return <span className="flex min-w-0 items-center gap-1.5 text-xs">{shown}</span>;
+  if (!canAssign)
+    return (
+      <span className="flex min-w-0 items-center gap-1.5 text-xs" title={full ?? undefined}>
+        {shown}
+      </span>
+    );
   return (
     <DropdownMenu>
       <DropdownMenuTrigger asChild>
-        <button type="button" aria-label={`${label}: ${who ? `assigned to ${who.name}` : 'not assigned'}. Assign`} className="flex min-w-0 max-w-[9.5rem] items-center gap-1.5 rounded-md border px-2 py-1 text-xs transition-colors hover:bg-secondary">
+        <button
+          type="button"
+          title={full ?? undefined}
+          aria-label={`${label}: ${full ? `assigned to ${full}` : 'not assigned'}. Assign`}
+          className="flex min-w-0 max-w-[9.5rem] items-center gap-1.5 rounded-md border px-2 py-1 text-xs transition-colors hover:bg-secondary data-[state=open]:bg-secondary"
+        >
           {shown}
           <ChevronDown className="size-3 shrink-0 text-muted-foreground" aria-hidden />
         </button>
       </DropdownMenuTrigger>
-      <DropdownMenuContent align="end" className="w-52">
+      <DropdownMenuContent align="end" className="w-56">
+        <DropdownMenuCheckboxItem checked={everyone} onSelect={(e) => e.preventDefault()} onCheckedChange={(on) => to(on ? EVERYONE : null)} className="gap-2 text-[13px]">
+          <Users className="size-3.5 text-muted-foreground" aria-hidden />
+          Everyone
+        </DropdownMenuCheckboxItem>
+        <DropdownMenuSeparator />
+        <DropdownMenuLabel className="text-[11px] font-medium text-faint">Or pick who</DropdownMenuLabel>
         {joined.map((c) => (
-          <DropdownMenuItem key={c._id} onSelect={() => run(assign({ auth: auth(), missionId: data.mission._id, taskId, crewId: c._id }))} className="gap-2">
+          <DropdownMenuCheckboxItem
+            key={c._id}
+            checked={!everyone && ids.includes(c._id)}
+            // Several people can share a task: the menu stays open while they are picked.
+            onSelect={(e) => e.preventDefault()}
+            onCheckedChange={(on) => to(on ? [...ids, c._id] : ids.filter((id) => id !== c._id))}
+            className="gap-2 text-[13px]"
+          >
             <CrewMark color={c.color as CrewColor} android={c.kind === 'android'} />
-            {c.name}
-          </DropdownMenuItem>
+            <span className="truncate">{c.name}</span>
+          </DropdownMenuCheckboxItem>
         ))}
-        {crewId ? (
+        {everyone || ids.length > 0 ? (
           <>
             <DropdownMenuSeparator />
-            <DropdownMenuItem onSelect={() => run(assign({ auth: auth(), missionId: data.mission._id, taskId, crewId: null }))}>No one</DropdownMenuItem>
+            <DropdownMenuItem onSelect={() => to(null)} className="text-[13px]">
+              No one
+            </DropdownMenuItem>
           </>
         ) : null}
       </DropdownMenuContent>
@@ -349,14 +399,13 @@ const TASK_STATE_WORD = { todo: 'To do', doing: 'Under way', done: 'Done', skipp
 function PlanBlock({ data }: { data: MissionData }) {
   const shared = useMemo(() => parsePlan(data.mission.planJson), [data.mission.planJson]);
   const runTasks = useApp((s) => s.world?.run?.tasks);
-  const route = useApp((s) => s.route);
   const start = useCrew((s) => s.start);
   const [starting, setStarting] = useState(false);
   const planning = data.mission.status === 'planning';
   const plan = shared?.plan;
   const stateOf = useMemo(() => new Map((runTasks ?? []).map((t) => [t.id, t.state])), [runTasks]);
   const taskCount = plan?.stops.reduce((n, s) => n + s.tasks.length, 0) ?? 0;
-  const ready = route.status === 'ready' && route.hasBudget;
+  const problem = useApp(startProblem);
 
   const openPlanner = () => {
     useApp.getState().openDock(null);
@@ -417,7 +466,7 @@ function PlanBlock({ data }: { data: MissionData }) {
           <button
             type="button"
             className={PRIMARY_BTN}
-            disabled={!ready || !start || starting}
+            disabled={problem !== null || !start || starting}
             onClick={() => {
               if (!start) return;
               setStarting(true);
@@ -427,8 +476,8 @@ function PlanBlock({ data }: { data: MissionData }) {
             <Play className="size-3.5" aria-hidden />
             {starting ? 'Starting…' : 'Start the mission'}
           </button>
-          <p className="mt-1.5 text-xs text-muted-foreground">
-            {ready ? 'Starts the run for the whole crew. Open invites lapse.' : route.status === 'routing' ? 'Working out the route…' : 'The route must be worked out, with its budget, before the mission can start.'}
+          <p aria-live="polite" className="mt-1.5 text-xs leading-relaxed text-muted-foreground">
+            {problem ?? 'Starts the run for the whole crew. Open invites lapse.'}
           </p>
         </div>
       ) : null}

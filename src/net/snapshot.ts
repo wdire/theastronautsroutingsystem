@@ -28,6 +28,8 @@ export interface LiveSnapshot {
   leg: number;
   world: StrippedWorld;
   planned: Planned | null;
+  /** Whether the commander's clock was moving when this was sent, so a member can run its own on between snapshots. */
+  ticking?: boolean;
 }
 
 export interface RouteDoc {
@@ -83,8 +85,8 @@ export function routeOf(run: MissionRun): RouteDoc {
   return { leg: run.leg, path: run.path, stopIndices: run.stopIndices, trip: run.trip };
 }
 
-export function encodeSnapshot(world: World, planned: Planned | null): string {
-  return encode(stripWorld(world, planned));
+export function encodeSnapshot(world: World, planned: Planned | null, ticking: boolean): string {
+  return encode({ ...stripWorld(world, planned), ticking });
 }
 
 export function encodeRoute(route: RouteDoc): string {
@@ -119,7 +121,7 @@ export function parseSnapshot(json: string): LiveSnapshot | null {
   if (!isObj(x) || x.v !== 1 || !isNum(x.leg) || !isObj(x.world)) return null;
   const world = x.world;
   if (world.run !== null && !isObj(world.run)) return null;
-  return { v: 1, leg: x.leg, world: world as unknown as StrippedWorld, planned: parsePlanned(x.planned) };
+  return { v: 1, leg: x.leg, world: world as unknown as StrippedWorld, planned: parsePlanned(x.planned), ...(typeof x.ticking === 'boolean' ? { ticking: x.ticking } : {}) };
 }
 
 /** A route if the text is a well-formed one, else null. */

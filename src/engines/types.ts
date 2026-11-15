@@ -146,6 +146,15 @@ export interface TripOptions {
   /** What is left at departure, when the trip starts part way through a mission (a reroute). Full if absent. */
   startO2Kg?: number;
   startBatteryKWh?: number;
+  /** Suit time already worn when the trip starts part way through a mission, s. */
+  startSuitS?: number;
+  /**
+   * Where home is on this path. A mission's first leg starts there (and a round trip ends there too); a leg adopted
+   * part way through starts wherever the crew was, so going back to its start is not going home. With 'end', only
+   * carrying on along the path counts as getting home; with 'none' (a one-way leg after a reroute) nothing does,
+   * and no point of no return is reported. 'start' if absent.
+   */
+  homeAt?: 'start' | 'end' | 'none';
 }
 
 /** One per path point, taken on arrival at that point (after any work or wait there). */

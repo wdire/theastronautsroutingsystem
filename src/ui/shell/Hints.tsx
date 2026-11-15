@@ -54,7 +54,7 @@ export function Hints() {
   ][shown];
 
   return (
-    <div role="note" className="panel pointer-events-auto absolute bottom-3 left-1/2 flex max-w-[min(34rem,calc(100vw-1.5rem))] -translate-x-1/2 items-center gap-3 py-2 pr-1.5 pl-3.5 max-md:bottom-[5.25rem]">
+    <div role="note" className="panel pointer-events-auto absolute bottom-3 left-1/2 flex max-w-[min(34rem,calc(100vw-1.5rem))] -translate-x-1/2 items-center gap-3 py-2 pr-1.5 pl-3.5 max-md:right-[4.5rem] max-md:bottom-[5.25rem] max-md:left-3 max-md:max-w-none max-md:translate-x-0">
       <span className="figure shrink-0 text-xs text-muted-foreground">
         {shown + 1} of {STEPS}
       </span>

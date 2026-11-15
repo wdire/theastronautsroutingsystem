@@ -20,7 +20,8 @@ import { NET_ENABLED } from '@/net/config';
 import { startsAtBase, withBase } from '@/planner/base';
 import { useIsPhone } from '@/ui/hooks/useMediaQuery';
 import { FleetPicker } from './FleetPicker';
-import { checkFleet, fleetOf, peopleOf } from '@/engines/fleet';
+import { fleetOf, peopleOf } from '@/engines/fleet';
+import { startProblem } from '@/planner/startCheck';
 
 // Who goes: loaded with the crew code, only when there is a crew server.
 const PlannerCrew = lazy(() => import('@/ui/crew/PlannerCrew'));
@@ -168,7 +169,7 @@ function RouteResult() {
   // In a crew mission only the commander starts the run, and it starts for everyone.
   const locked = useCrew(planLocked);
   const crewStart = useCrew((s) => s.start);
-  const fleetProblem = useApp((s) => checkFleet(fleetOf(s.plan), peopleOf(s.plan)).problems[0] ?? null);
+  const problem = useApp(startProblem);
 
   if (route.status === 'idle') {
     return (
@@ -238,8 +239,7 @@ function RouteResult() {
           <button
             type="button"
             // A plan that runs out of air, battery or daylight is not flown: the crew would not come back.
-            disabled={!chosen.trip.feasible || fleetProblem !== null}
-            title={fleetProblem ?? (chosen.trip.feasible ? undefined : 'This plan does not work as it stands. Change it until it does.')}
+            disabled={problem !== null}
             onClick={() => (crewStart ? void crewStart() : startMission())}
             className="inline-flex h-9 items-center gap-2 rounded-md bg-primary px-3.5 text-[13px] font-semibold text-primary-foreground transition-opacity hover:opacity-90 disabled:pointer-events-none disabled:opacity-40 pointer-coarse:h-11"
           >
@@ -258,6 +258,7 @@ function RouteResult() {
         </button>
         <Exports alt={chosen} hasBudget={route.hasBudget} />
       </div>
+      {route.hasBudget && !missionRunning && !locked && problem ? <p aria-live="polite" className="mt-2 text-xs leading-relaxed text-muted-foreground">{problem}</p> : null}
       {!route.hasBudget ? (
         <p className="mt-3 text-xs leading-relaxed text-faint">
           The route follows the real terrain at {fmtNumber(route.cellM)} m detail. The trip budget did not load, so there is no time, oxygen, power or radiation for it.

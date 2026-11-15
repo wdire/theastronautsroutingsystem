@@ -1,6 +1,8 @@
 import { peopleOf } from '@/engines/fleet';
 import type { PathPoint } from '@/engines/types';
 import { pathStats } from '@/planner/geometry';
+import { clockTicking } from '@/sim/controller';
+import { createSmoothTime } from '@/sim/smoothTime';
 import { crewAt } from '@/sim/world';
 import { useApp } from '@/store';
 import { VEHICLES } from '@/engines/vehicles';
@@ -33,21 +35,23 @@ export function missionFeed(): MissionFeed | null {
     ...Array.from({ length: seats - 1 }, (_, i) => ({ id: `partner-${i}`, name: i === 0 ? 'Partner' : `Partner ${i + 1}`, role: 'Crew', color: ['#3f8fd8', '#7ab55c', '#c9a227'][i % 3] ?? '#3f8fd8', android: false, me: false })),
   ];
   const crew = roster && roster.length > 0 ? roster.map((m) => ({ ...m })) : solo;
+  const frameUtc = createSmoothTime();
   return {
     vehicle: run.vehicle,
     roster: crew,
     crew() {
       const w = useApp.getState().world;
       if (!w?.run) return null;
-      const c = crewAt(w.run, w.utcMs);
-      const held = w.paused || w.run.status !== 'running';
+      const c = crewAt(w.run, frameUtc(w));
+      const held = !clockTicking(w);
       return { lon: c.lon, lat: c.lat, headingDeg: c.headingDeg, speedMs: c.speedMs * w.speed, moving: c.state === 'move' && !held };
     },
     ahead() {
       const w = useApp.getState().world;
       if (!w?.run) return { path: [], objective: null };
       const { path, stopIndices } = w.run;
-      const c = crewAt(w.run, w.utcMs);
+      // The same moment the party is drawn at, so the guides start where the crew stands.
+      const c = crewAt(w.run, frameUtc(w));
       const a = alongOf(path);
       // At the end of the route, or once the mission is over, there is nowhere left to point.
       if (w.run.status !== 'running' || c.distM >= (a[a.length - 1] ?? 0) - 0.5) return { path: [], objective: null };

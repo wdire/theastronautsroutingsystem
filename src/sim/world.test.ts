@@ -8,6 +8,7 @@ import { forceEvent } from './events';
 import type { World } from './types';
 import {
   abortMission,
+  answerPending,
   adoptRoute,
   createWorld,
   crewAt,
@@ -350,23 +351,32 @@ describe('look-ahead alerts in the world', () => {
 });
 
 describe('chat with the base', () => {
-  it('answers 30 to 120 simulated seconds after a crew line, with a number from the crew state', () => {
-    let w = until(started(), 400);
+  it('answers a few seconds after a crew line at 1x, with a number from the crew state', () => {
+    let w = setSpeed(until(started(), 400), 1);
     const asked = w.utcMs;
     w = say(w, '  How is our oxygen?  ');
     expect(w.messages.at(-1)).toMatchObject({ from: 'crew', text: 'How is our oxygen?' });
     expect(w.pendingReplies).toHaveLength(1);
-    w = tick(w, 29);
+    w = tick(w, 2);
     expect(w.messages.some((m) => m.from === 'base')).toBe(false);
-    w = tick(w, 92);
+    w = tick(w, 5);
     const reply = w.messages.find((m) => m.from === 'base')!;
     expect(reply).toBeDefined();
     const delay = (reply.atUtcMs - asked) / 1000;
-    expect(delay).toBeGreaterThanOrEqual(30);
-    expect(delay).toBeLessThanOrEqual(120);
+    expect(delay).toBeGreaterThanOrEqual(3);
+    expect(delay).toBeLessThanOrEqual(6);
     const pct = Math.round(crewAt(w.run!, reply.atUtcMs).o2Frac! * 100);
     expect(reply.text).toContain(`${pct}%`);
     expect(w.pendingReplies).toHaveLength(0);
+  });
+
+  it('answers within two minutes of mission time at 100x, and at once when asked to', () => {
+    const fast = say(setSpeed(until(started(), 400), 100), 'status');
+    const due = fast.pendingReplies[0]!.dueUtcMs - fast.utcMs;
+    expect(due).toBeLessThanOrEqual(120_000);
+    const now = answerPending(fast);
+    expect(now.pendingReplies).toHaveLength(0);
+    expect(now.messages.at(-1)).toMatchObject({ from: 'base', atUtcMs: fast.utcMs });
   });
 
   it('ignores an empty line and replies even with no mission', () => {

@@ -70,3 +70,44 @@ export const STALE_MS = 40_000;
 
 /** The mapped region, [west, south, east, north] degrees: the base must stand inside it (mirrors src/lib/constants REGION). */
 export const BASE_REGION = [71.8, 13.1, 83.1, 23.8] as const;
+
+/** A task's assignee: the whole crew, or one or more crew rows (by id). Older missions store a single id. */
+export const EVERYONE = 'all' as const;
+/** 'all', or crew ids. A lone id (a string) only on missions from before multi-assign. */
+export type Assignee = string | string[];
+
+/** Who a stored assignee names: everyone, or a list of crew ids (empty when nobody). */
+export function assigneeIds(value: Assignee | undefined | null): { everyone: boolean; ids: string[] } {
+  if (value === undefined || value === null) return { everyone: false, ids: [] };
+  if (value === EVERYONE) return { everyone: true, ids: [] };
+  return { everyone: false, ids: Array.isArray(value) ? value : [value] };
+}
+
+/** An assignee with one crew row taken off it; undefined when nobody is left on the task. */
+export function withoutCrew(value: Assignee, crewId: string): Assignee | undefined {
+  if (value === EVERYONE) return value;
+  const ids = assigneeIds(value).ids.filter((id) => id !== crewId);
+  return ids.length > 0 ? ids : undefined;
+}
+
+/** The assignments with one crew row taken off every task; null when nothing changed. */
+export function dropCrewFrom<A extends Assignee>(assignments: Record<string, A>, crewId: string): Record<string, A> | null {
+  let changed = false;
+  const kept: Record<string, A> = {};
+  for (const [task, value] of Object.entries(assignments)) {
+    const next = withoutCrew(value, crewId) as A | undefined;
+    if (next !== value) changed = true;
+    if (next !== undefined) kept[task] = next;
+  }
+  return changed ? kept : null;
+}
+
+/** The assignee in words: "Everyone", "Ana", "Ana and Bo", "Ana, Bo and Cy". Null when nobody. */
+export function assigneeWords(value: Assignee | undefined | null, nameOf: (crewId: string) => string | undefined): string | null {
+  const { everyone, ids } = assigneeIds(value);
+  if (everyone) return 'Everyone';
+  const names = ids.map(nameOf).filter((n): n is string => !!n);
+  if (names.length === 0) return null;
+  if (names.length === 1) return names[0] ?? null;
+  return `${names.slice(0, -1).join(', ')} and ${names[names.length - 1]}`;
+}

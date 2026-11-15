@@ -20,7 +20,7 @@ export function addBaseMarker(map: MapLibreMap): () => void {
     openPlace('base');
     map.flyTo({ center: [base.lon, base.lat], zoom: Math.max(map.getZoom(), 14.5), duration: 1200 });
   });
-  const marker = new Marker({ element: el, anchor: 'left', offset: [-14, 0] });
+  const marker = new Marker({ element: el, anchor: 'left', offset: [-14, 0], opacityWhenCovered: '0' });
   const sync = () => {
     const { base } = useApp.getState();
     name.textContent = base.name;

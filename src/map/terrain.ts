@@ -4,6 +4,15 @@ import { mapLighting } from '@/engines/lighting';
 import { sunPosition } from '@/engines/marsTime';
 import { useApp } from '@/store';
 import { MAP_DEM_MAX_ZOOM } from './protocol/dem';
+import { MARS_RADIUS_M } from '@/lib/constants';
+
+/**
+ * The map library draws every planet at Earth's size, while the elevation tiles hold Mars metres: on its
+ * own, a mountain came out at 0.53 of its true height against the ground around it, and "x1.6 exaggerated"
+ * was in fact flatter than Mars. The terrain is stretched by this ratio too, so the factor the chip shows is
+ * the one the visitor sees.
+ */
+const GLOBE_SCALE = 6_371_008.8 / MARS_RADIUS_M;
 
 const SOURCE_DEM = 'dem';
 const SOURCE_SHADE = 'dem-shade';
@@ -50,12 +59,24 @@ export function addTerrain(map: MapLibreMap): () => void {
     );
   }
 
+  // The stretch handed to the map library, which also lifts the ground's absolute height: on the volcanoes
+  // (Olympus Mons stands 21 km up) a full stretch put the ground above the camera and the screen went black. So
+  // the stretch is held under what keeps the ground in view below LIFT_LIMIT_M, never less than the old factor.
+  let applied = 0;
+  const LIFT_LIMIT_M = 45_000;
   const applyRelief = () => {
-    const next = Math.round(reliefExaggeration(map.getZoom()) * 20) / 20;
-    if (next === exaggeration && map.getTerrain()) return;
-    exaggeration = next;
+    const want = reliefExaggeration(map.getZoom());
+    const raw = applied > 0 ? map.queryTerrainElevation(map.getCenter()) : null;
+    const elev = raw !== null && raw !== undefined && applied > 0 ? Math.abs(raw / applied) : 0;
+    const full = want * GLOBE_SCALE;
+    const safe = Math.max(want, Math.min(full, LIFT_LIMIT_M / Math.max(1, elev)));
+    const next = Math.round(safe * 20) / 20;
+    if (next === applied && map.getTerrain()) return;
+    applied = next;
     map.setTerrain({ source: SOURCE_DEM, exaggeration: next });
-    for (const cb of listeners) cb(next);
+    // The chip says how much taller than true the ground stands, against the ground around it.
+    exaggeration = Math.round((next / GLOBE_SCALE) * 10) / 10;
+    for (const cb of listeners) cb(exaggeration);
   };
 
   const applyLight = () => {
@@ -102,6 +123,9 @@ export function addTerrain(map: MapLibreMap): () => void {
   };
   map.on('zoom', onZoom);
   map.on('moveend', applyLight);
+  map.on('moveend', applyRelief);
+  // The height under the camera is known only once its elevation tiles are in.
+  map.on('idle', applyRelief);
   // The clock moves every second; the sun does not move visibly that fast.
   const offClock = useApp.subscribe((s) => Math.floor(s.utcMs / 60_000), applyLight);
   const offDaylight = useApp.subscribe((s) => s.layers.followSun || !s.clockLive, applyLight);
@@ -115,6 +139,8 @@ export function addTerrain(map: MapLibreMap): () => void {
   return () => {
     map.off('zoom', onZoom);
     map.off('moveend', applyLight);
+    map.off('moveend', applyRelief);
+    map.off('idle', applyRelief);
     unsubscribe();
   };
 }

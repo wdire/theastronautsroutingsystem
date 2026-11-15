@@ -1,11 +1,11 @@
-import { Group, type Object3D, type Scene } from 'three';
+import { CircleGeometry, DoubleSide, Group, Mesh, MeshBasicMaterial, type Object3D, type Scene } from 'three';
 import { clone as cloneSkinned } from 'three/examples/jsm/utils/SkeletonUtils.js';
 import type { VehicleId } from '@/engines/types';
 import { VEHICLES } from '@/engines/vehicles';
 import { loadModel, standIn } from './models';
 import { MODELS, type ModelName } from './modelSpecs';
 import { seatOnWheels } from './props';
-import { cyclesPerMetre, rigSuit, type Suit } from './suit';
+import { cyclesPerMetre, rigSuit, standLower, type Suit } from './suit';
 import { rollWheels, wheelsOf } from './wheels';
 import { dress, nameTag, type CrewLook } from './crewLook';
 
@@ -32,6 +32,49 @@ interface Member {
   walk: number;
   look: CrewLook | null;
   undress: (() => void) | null;
+  /** The ground's rise per metre ahead and to the right, under a walker, so each boot meets it. */
+  grade: { ahead: number; right: number };
+  /** Ingenuity's rotor, turned about the mast, and the blur disc it leaves at speed. */
+  rotor: { pivot: Group; blur: Mesh[] } | null;
+}
+
+/** Rotor turns per second as drawn: fast enough to read as spinning, slow enough not to strobe backwards. */
+const ROTOR_REV_S = 7;
+
+/**
+ * Pulls Ingenuity's rotor out so it can turn: the model holds both rotors and the mast in one node, tilted in
+ * its file, so it is hung from an upright pivot at its own place. Two faint discs stand for the blades' blur.
+ */
+function rigRotor(body: Object3D): Member['rotor'] {
+  let rotor: Object3D | undefined;
+  body.traverse((o) => {
+    if (!rotor && o.name.startsWith('rotors')) rotor = o;
+  });
+  const parent = rotor?.parent;
+  if (!rotor || !parent) return null;
+  const pivot = new Group();
+  pivot.name = 'rotor-pivot';
+  pivot.position.copy(rotor.position);
+  parent.add(pivot);
+  pivot.add(rotor);
+  rotor.position.set(0, 0, 0);
+  const material = new MeshBasicMaterial({ color: 0x2a2724, transparent: true, opacity: 0.14, depthWrite: false, side: DoubleSide });
+  const blur: Mesh[] = [];
+  // The two rotors sit about 18 cm apart on the mast; the parent's scale is undone so the discs are in metres.
+  const s = 1 / (parent.getWorldScale(pivot.position.clone()).y || 1);
+  for (const dy of [-0.085, 0.085]) {
+    const disc = new Mesh(new CircleGeometry(0.6 * s, 40), material);
+    disc.rotation.x = -Math.PI / 2;
+    disc.position.set(pivot.position.x, pivot.position.y + dy * s, pivot.position.z);
+    disc.renderOrder = 2;
+    disc.userData.dispose = () => {
+      disc.geometry.dispose();
+      material.dispose();
+    };
+    parent.add(disc);
+    blur.push(disc);
+  }
+  return { pivot, blur };
 }
 
 const RAD = Math.PI / 180;
@@ -68,7 +111,7 @@ export function createParty(scene: Scene, vehicle: VehicleId, heightAt: (x: numb
     anchor.add(standIn(model));
     anchor.visible = false;
     scene.add(anchor);
-    return { anchor, suit: null, x: 0, z: 0, heading: 0, phase: 0, wheels: [], walk: 0, look, undress: null };
+    return { anchor, suit: null, x: 0, z: 0, heading: 0, phase: 0, wheels: [], walk: 0, look, undress: null, rotor: null, grade: { ahead: 0, right: 0 } };
   });
   // The helmet camera sits in the visitor's own member; without a roster, the last in file.
   const meIndex = Math.max(0, looks.findIndex((l) => l?.me));
@@ -90,6 +133,7 @@ export function createParty(scene: Scene, vehicle: VehicleId, heightAt: (x: numb
         m.wheels = suit ? [] : wheelsOf(body);
         m.anchor.clear();
         m.anchor.add(body);
+        if (vehicle === 'heli') m.rotor = rigRotor(body);
         if (suit && m.look) {
           m.undress = dress(suit.root, m.look);
           m.anchor.add(nameTag(m.look));
@@ -112,10 +156,36 @@ export function createParty(scene: Scene, vehicle: VehicleId, heightAt: (x: numb
       m.anchor.position.set(m.x, s.y, m.z);
       m.anchor.rotation.set(s.pitch, -h, s.roll, 'YXZ');
     } else {
-      m.anchor.position.set(m.x, heightAt(m.x, m.z), m.z);
+      // A walker stands upright: the body is at the height of the ground under its middle, and each boot is
+      // lowered or raised to the ground under it (the grade below), so neither floats nor sinks on a slope.
+      const fx = Math.sin(h);
+      const fz = -Math.cos(h);
+      const ahead = (heightAt(m.x + fx * 0.4, m.z + fz * 0.4) - heightAt(m.x - fx * 0.4, m.z - fz * 0.4)) / 0.8;
+      const right = (heightAt(m.x - fz * 0.25, m.z + fx * 0.25) - heightAt(m.x + fz * 0.25, m.z - fx * 0.25)) / 0.5;
+      m.grade.ahead = Math.max(-0.6, Math.min(0.6, ahead));
+      m.grade.right = Math.max(-0.6, Math.min(0.6, right));
+      // On a slope the boot on the low side reaches down, so the body is lowered as far as that boot needs.
+      m.anchor.position.set(m.x, heightAt(m.x, m.z) - standLower(m.grade), m.z);
       m.anchor.rotation.set(0, -h, 0, 'YXZ');
     }
     m.anchor.visible = true;
+  };
+
+  /** The point `gap` metres back from the leader along its trail, or null while the trail is shorter than that. */
+  const alongTrail = (lead: { x: number; z: number }, gap: number): { x: number; z: number } | null => {
+    let along = 0;
+    let prev = { x: lead.x, z: lead.z };
+    for (let i = trail.length - 1; i >= 0; i -= 1) {
+      const p = trail[i]!;
+      const seg = Math.hypot(prev.x - p.x, prev.z - p.z);
+      if (along + seg >= gap && seg > 0) {
+        const t = (gap - along) / seg;
+        return { x: prev.x + (p.x - prev.x) * t, z: prev.z + (p.z - prev.z) * t };
+      }
+      along += seg;
+      prev = p;
+    }
+    return null;
   };
 
   return {
@@ -135,11 +205,14 @@ export function createParty(scene: Scene, vehicle: VehicleId, heightAt: (x: numb
           m.z = target.z + Math.cos(h) * FILE_GAP_M * i;
           m.heading = h;
         });
+        // The file just laid out is the trail the followers walk on, last in file first.
+        for (let i = members.length - 1; i >= 0; i -= 1) trail.push({ x: members[i]!.x, z: members[i]!.z });
       } else {
         const beforeX = lead.x;
         const beforeZ = lead.z;
-        // Ease onto the target: the simulation reports ten times a second, the screen draws sixty.
-        const k = Math.min(1, dt * 8);
+        // Ease onto the target. It moves every frame (src/sim/smoothTime.ts), so the easing only rounds off a
+        // correction; a slow one would leave the party trailing far behind at 100x.
+        const k = Math.min(1, dt * 18);
         lead.x += (target.x - lead.x) * k;
         lead.z += (target.z - lead.z) * k;
         const stepM = Math.hypot(lead.x - beforeX, lead.z - beforeZ);
@@ -155,26 +228,17 @@ export function createParty(scene: Scene, vehicle: VehicleId, heightAt: (x: numb
           trail.push({ x: lead.x, z: lead.z });
           if (trail.length > 400) trail.shift();
         }
-        // Each follower heads for the leader's footstep its place in file back, measured along the trail.
+        // Each follower stands on the leader's footsteps exactly its place in file back, measured along the
+        // trail: the file keeps its spacing at any clock speed instead of stretching out behind the camera.
         for (let n = 1; n < members.length; n += 1) {
           const follower = members[n]!;
-          const gap = FILE_GAP_M * n;
-          let spot = trail[0] ?? { x: lead.x, z: lead.z };
-          let along = 0;
-          let prev = { x: lead.x, z: lead.z };
-          for (let i = trail.length - 1; i >= 0; i -= 1) {
-            const p = trail[i]!;
-            along += Math.hypot(prev.x - p.x, prev.z - p.z);
-            prev = p;
-            if (along >= gap) {
-              spot = p;
-              break;
-            }
-          }
+          const spot = alongTrail(lead, FILE_GAP_M * n);
           const bx = follower.x;
           const bz = follower.z;
-          follower.x += (spot.x - follower.x) * k;
-          follower.z += (spot.z - follower.z) * k;
+          if (spot) {
+            follower.x = spot.x;
+            follower.z = spot.z;
+          }
           const moved = Math.hypot(follower.x - bx, follower.z - bz);
           if (moved > 0.004) {
             follower.heading = turnToward(follower.heading, Math.atan2(follower.x - bx, -(follower.z - bz)), dt * 3.2);
@@ -186,7 +250,9 @@ export function createParty(scene: Scene, vehicle: VehicleId, heightAt: (x: numb
         seat(m);
         // The walk eases in and out rather than snapping between standing and striding.
         m.walk += ((target.moving ? 1 : 0) - m.walk) * Math.min(1, dt * 3);
-        m.suit?.pose(m.phase, m.walk, 1 / cyclesPerMetre(target.speedMs), clock);
+        m.suit?.pose(m.phase, m.walk, 1 / cyclesPerMetre(target.speedMs), clock, m.grade);
+        // Ingenuity hovers, so its rotor never stops; it turns one way, as the two counter-rotating blades blur.
+        if (m.rotor) m.rotor.pivot.rotation.y = (clock * ROTOR_REV_S * Math.PI * 2) % (Math.PI * 2);
       }
       // Seen through its own eyes, the visitor's member (or the vehicle) is not drawn: the camera is inside it.
       const own = members[viewIndex];

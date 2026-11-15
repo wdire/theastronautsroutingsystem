@@ -36,6 +36,70 @@ new folder under `src/ui`, or Tailwind misses the new classes); screenshots with
 The model that wrote most of this stopped on the trip-budget content; Opus subagents wrote `tripComputer.ts`,
 `departure.ts`, `export.ts`, `validate.ts`, `missions.ts`, `alerts.ts` and `src/sim/*` without trouble.
 
+## Ninth session (2026-11-15, afternoon): map that fills in, honest relief, a tablet in hand, a real station, phones
+
+- Map tiles: a source tile that fails (timeout, dropped connection, 5xx) is told apart from one the service has
+  none of (404/400) and retried twice (`fetchSource` in `protocol/live.ts`). A map tile made while a source failed is
+  shown but not kept as finished: it stands in and is made again after 4, 12, 30, 90 s (`retries` in
+  `protocol/serve.ts`). `PENDING_MAX` 192 (48 dropped the view's own tiles). The CTX mosaic has real gaps between
+  its image strips; there THEMIS daytime IR (100 m) gives the texture up to z13 (`THEMIS_FILL_TO` in `img.ts`), and
+  masked detail is blurred over covered pixels only, so strip edges no longer get bright rims (`detail.ts`).
+- Relief: the map library draws Mars at Earth's size, so Mars metres came out at 0.53 of true height. The terrain
+  is now stretched by 6371/3396 too, capped where the ground under the camera is high (45 km lifted, Olympus Mons)
+  so the camera never ends up inside it; the chip shows the true factor (`terrain.ts`, `reliefLabel`).
+- 2D/3D button now holds (`chooseTilt`/`flightPitch` in `tilt.ts`). A place chosen in search is flown to and
+  circled at 50 degrees until the visitor touches the map (`src/map/orbit.ts`). Markers hidden by terrain are hidden,
+  not shown at 20% (Jezero labels showed through the planet).
+- New overlays: Rock or dust (THEMIS night IR, colour ramp) and Elevation (MOLA colour), via `mars://live/...`.
+- Rover View: Jezero Station (`station()` in `baseProps.ts`, numbers in `stationPlan.ts`): a 14 m domed hub with an
+  airlock at the door point, two laboratory modules and a greenhouse, joined by tunnels laid out from one set of
+  sizes; props can have a `footprint` of discs (clearings, level seating). The NASA habitat stands apart. Ingenuity's
+  rotor turns with a blur disc. Suit: gloves were left out of the arm's weights and stayed in front of the chest as
+  bars; arms swung in phase with the same leg; both fixed, and boots follow the slope and roll without digging in.
+- Walk in your own eyes (desktop): a tablet in the left hand (`Tablet.tsx`), projected from where it is held, so
+  it peeks at the bottom when looking ahead and comes up in perspective when looking down; it shows the map with the
+  chosen overlay. The Overlays menu sits in the corner (`OverlayMenu.tsx`). Vehicles are a list at the top right;
+  Eyes/Close/Far sit above the time of day.
+- An arrival from the map that was interrupted by a drag or key froze the eye where it was (100 m up); the eye now
+  lands anyway.
+- Place card: hero photo, summary, rock unit, primary actions, a line of quiet links, four numbers, sections with
+  icons; NASA's image library moved into "About this place".
+- Phones (`src/lib/device.ts`): the map draws at pixel ratio 2 (not 3) and with 256 px tiles (128 px meant four
+  times the tiles), leans at most 52 degrees; Rover View starts on the light setting at 1.25x; its controls are a
+  right-hand column of icons; the long captions are hidden. Walking-range rings are smoothed (`smoothField`,
+  `smoothRing`). Not yet tried on a real phone.
+
+## Eighth session (2026-11-15, noon): crew runs that flow, one Start gate, @Base, shared tasks
+
+- Members' view of a crew run no longer jumps once a second (at 100x it teleported: >60 m a snapshot). The
+  commander's snapshot carries `ticking` (`clockTicking` in `src/sim/controller.ts`: paused, over, routing, a
+  proposal, or a warning awaiting a decision); a pause, speed or hold change is published at once and no change is
+  dropped (250 ms interval). Members run their own clock at 10 Hz (`src/net/smoothClock.ts`, never backward, snaps
+  only on large gaps). The 3D party and the map marker read `createSmoothTime()` (`src/sim/smoothTime.ts`), which
+  carries the clock between ticks every frame. Measured on the real GPU (`tools/.cache/shots/crew-smooth.mjs`,
+  `crew-ride.mjs`): member clock changes 10 times a second at 1x/20x/100x, 60 fps riding along, no jumps.
+- Walking file: followers stand exactly on the leader's trail at their gap (`alongTrail` in `src/visor/party.ts`);
+  before, they lagged ~v/8 and fell behind the chase camera at 100x.
+- A commander's hidden tab makes up missed time in one-second steps (up to 90 s per timer call), stopping at a
+  decision.
+- One Start gate: `startProblem` (`src/planner/startCheck.ts`) for the planner, the crew room and
+  `startMission()` itself; the server refuses more crewed rovers than joined crew (`crewedVehicles`). The plan's
+  head count follows the roster globally (`useCurrentMission`), not only while the fleet picker is mounted (that
+  was how three rovers left with one person).
+- Point of no return after a reroute: `TripOptions.homeAt` ('end' when the new leg ends at home, 'none' for a
+  one-way leg) and `startSuitS`. Before, a rerouted leg counted "home" as where the reroute began, so a crew walking
+  home got a bogus "point of no return soon".
+- Radio: on a crew mission the base answers only calls with `@Base` (`baseQuestion` in `src/net/words.ts`; an
+  @Base toggle in the radio). Base replies come 3-6 s of real time later at any speed (capped at 120 s of mission
+  time), and while the clock stands still they come after 3 s (`answerPending`).
+- Task assignment: Everyone, or several people (`assignments` values `'all' | Id<'crew'>[]`, a lone id still read;
+  helpers in `convex/shared.ts`).
+- Route chevrons on the plan, the mission route and a proposed route (`src/map/layers/arrows.ts`), from zoom 11.
+- Escape in a menu opened from a dock panel no longer closes the panel. A run that ended but whose commander closed
+  the tab before filing is closed as it ended after a minute (`runEnd` in the sweep), not as "link lost".
+- Dev: `.env.local` now points at the cloud dev deployment `nautical-otter-98`; a prod deployment exists
+  (`elegant-albatross-616`) and needs `npx convex deploy` for this session's schema and function changes.
+
 ## Seventh session (2026-11-15, night): one shared base, fleets, named stops
 
 - One base for everyone (`convex/base.ts`, table `bases`, one row `key: 'main'`; `src/net/base.ts` keeps the
@@ -87,7 +151,7 @@ The model that wrote most of this stopped on the trip-budget content; Opus subag
   Ingenuity (`setRoam` in `src/visor/index.ts`, `RoamBar.tsx`); camera Eyes, Close, Far, wheel for distance.
   Rover View rides along only from Ride along (`VisorAt.ride`).
 - Ground: rust grade, pale slabs and veins, dark drifts (`groundPatches` in `groundShader.ts`); HiRISE relief
-  cutoff 6 m. Base: two habitat modules joined by a drawn tunnel.
+  cutoff 6 m. Base: two habitat modules joined by a drawn tunnel (replaced by Jezero Station in the ninth session).
 - A bug hunt (subagent) found 14 issues; fixed: reroute at a stop, verdict from `run.missionId`, leaving an
   underway crew mission, commander finish race, ride-along entry, links (`m=` template id, drone stations kept),
   Belva helipad, solo partners in 3D, base move after a run, flyover drag.

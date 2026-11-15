@@ -50,9 +50,14 @@ export const STEP_S = 60;
 export const MAX_TICK_S = 7 * SOL_S;
 /** Messages kept in the world; older lines drop off so snapshots stay small. */
 export const MAX_MESSAGES = 300;
-/** Base replies arrive this many simulated seconds after a crew line (build spec). */
-export const REPLY_MIN_S = 30;
-export const REPLY_MAX_S = 120;
+/**
+ * Base replies come a few seconds of the visitor's own time after a crew line, whatever the clock speed (at 1x the
+ * spec's 30 to 120 simulated seconds was a two-minute wait), and never more than two minutes of mission time later
+ * (at 100x the answer would otherwise describe a crew long gone from where it asked).
+ */
+export const REPLY_MIN_S = 3;
+export const REPLY_MAX_S = 6;
+export const REPLY_CAP_SIM_S = 120;
 
 const CLEAR: Scenario = { dust: 'clear', solarEvent: false, solarCycle: 0.5 };
 
@@ -625,6 +630,16 @@ function deliverReplies(world: World, untilUtcMs: number): World {
   return w;
 }
 
+/**
+ * Answers every waiting crew line now, at the current mission time. For a clock that stands still (paused, or held
+ * on a decision): the base is not on the crew's clock, and a question asked then should not wait for the clock.
+ */
+export function answerPending(world: World): World {
+  if (world.pendingReplies.length === 0) return world;
+  const pending = world.pendingReplies.map((r) => ({ ...r, dueUtcMs: world.utcMs }));
+  return deliverReplies({ ...world, pendingReplies: pending }, world.utcMs);
+}
+
 function stepRun(world: World, t1: number): World {
   let w = world;
   const run0 = w.run;
@@ -691,7 +706,8 @@ export function say(world: World, text: string): World {
   if (!clean) return world;
   const w = post(world, 'crew', clean);
   const [r, rng] = rngNext(w.rng);
-  const delayS = REPLY_MIN_S + Math.floor(r * (REPLY_MAX_S - REPLY_MIN_S + 1));
+  const realS = REPLY_MIN_S + r * (REPLY_MAX_S - REPLY_MIN_S);
+  const delayS = Math.max(REPLY_MIN_S, Math.min(REPLY_CAP_SIM_S, Math.round(realS * w.speed)));
   const [id, w2] = nextId({ ...w, rng }, 'r');
   return { ...w2, pendingReplies: [...w2.pendingReplies, { id, dueUtcMs: w.utcMs + delayS * 1000, question: clean }] };
 }

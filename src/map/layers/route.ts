@@ -4,6 +4,7 @@ import { VEHICLES } from '@/engines/vehicles';
 import { gradesAlong, pathStats } from '@/planner/geometry';
 import { useApp } from '@/store';
 import { startsAtBase } from '@/planner/base';
+import { addArrowLayer } from './arrows';
 
 const SRC_ROUTE = 'route';
 const SRC_ALT = 'route-alternatives';
@@ -91,6 +92,8 @@ export function addRouteLayers(map: MapLibreMap): () => void {
     layout: { 'line-cap': 'round', 'line-join': 'round' },
     paint: { 'line-width': 4.5, 'line-gradient': ['interpolate', ['linear'], ['line-progress'], 0, EASY, 1, EASY] },
   });
+
+  const arrows = addArrowLayer(map, 'route-arrows');
 
   let markers: Marker[] = [];
   /** A pin the visitor can drag: letting go moves the start or the stop there and the route follows. */
@@ -187,9 +190,11 @@ export function addRouteLayers(map: MapLibreMap): () => void {
       // While a new route is worked out the old one stays, dimmed, so the map does not blink.
       const stale = s.route.status === 'routing';
       map.setPaintProperty('route-line', 'line-opacity', stale ? 0.45 : 1);
+      arrows.setOpacity(stale ? 0.45 : 1);
       if (!stale) {
         alt.setData(EMPTY);
         main.setData(EMPTY);
+        arrows.set(null);
         clearMarks();
       }
       return;
@@ -199,10 +204,13 @@ export function addRouteLayers(map: MapLibreMap): () => void {
     alt.setData({ type: 'FeatureCollection', features: others.map((a) => ({ ...line(a.path), properties: { id: a.id, label: a.label } })) });
     if (!chosen || chosen.path.length < 2) {
       main.setData(EMPTY);
+      arrows.set(null);
       return;
     }
     const vehicle = VEHICLES[s.plan.vehicle];
     main.setData(line(chosen.path));
+    arrows.set(chosen.path, chosen.stopIndices);
+    arrows.setOpacity(1);
     drawMarks(chosen);
     map.setPaintProperty('route-line', 'line-gradient', slopeGradient(chosen.path, vehicle.comfortSlopeDeg, vehicle.blockSlopeDeg));
     map.setPaintProperty('route-line', 'line-opacity', 1);
@@ -223,6 +231,7 @@ export function addRouteLayers(map: MapLibreMap): () => void {
     map.off('mouseleave', 'route-line', noPointer);
     for (const m of markers) m.remove();
     clearMarks();
+    arrows.remove();
     for (const id of ['route-line', 'route-casing', 'route-alt', 'route-alt-casing']) if (map.getLayer(id)) map.removeLayer(id);
     for (const id of [SRC_ROUTE, SRC_ALT]) if (map.getSource(id)) map.removeSource(id);
   };

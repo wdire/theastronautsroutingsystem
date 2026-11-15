@@ -2,6 +2,7 @@ import { toBitmap } from './common';
 import { imgTile, liveDetailWanted, tileTouchesHirise, transparentTile } from './img';
 import { mapHdTile, mapImgTile, mapQuickImgTile } from './tone';
 import { demTile, dtmWanted } from './dem';
+import type { Gaps } from './live';
 
 /**
  * How every map tile is put together, progressively. A tile whose full version waits on a live service
@@ -30,7 +31,13 @@ const STAND_IN_AGE: Record<TileKind, number> = { img: 8, hd: 10, dem: 10, raw: 0
  */
 const HOLD_MS: Record<TileKind, number> = { img: 70, hd: 260, dem: 120, raw: 0 };
 /** Give up on a background tile after this long, ms; the map asks again when the stand-in expires. */
-const GIVE_UP_MS: Record<TileKind, number> = { img: 30_000, hd: 90_000, dem: 90_000, raw: 60_000 };
+const GIVE_UP_MS: Record<TileKind, number> = { img: 60_000, hd: 90_000, dem: 90_000, raw: 60_000 };
+/**
+ * A tile made while a live source failed is shown (it beats the stand-in) but not kept as finished: it is made
+ * again after this wait, longer each time, s. Before, such a tile was final, and a busy moment on Esri's server
+ * left patches of blurry ground that never filled in.
+ */
+const RETRY_AFTER_S = [4, 12, 30, 90];
 
 /**
  * Finished tiles that took live sources to make, most recently used last. Only until the map has taken them:
@@ -41,11 +48,24 @@ const finals = new Map<string, ImageBitmap>();
 const FINALS_MAX = 24;
 /** Stand-ins, so the map's repeat requests while a tile is being made cost nothing. */
 const standIns = new Map<string, ImageBitmap>();
-const STAND_INS_MAX = 12;
+const STAND_INS_MAX = 40;
+/** Tiles that came out unfinished: when to try again, and how many times they have been tried. */
+const retries = new Map<string, { at: number; tries: number }>();
+const RETRIES_MAX = 600;
 /** Full tiles being made in the background. */
-const pending = new Map<string, { promise: Promise<ImageBitmap | null>; abort: AbortController; notify: ReadyCallback | null }>();
-/** Background jobs beyond this give way, oldest first: the view has moved on from them. */
-const PENDING_MAX = 48;
+const pending = new Map<string, { promise: Promise<Made | null>; abort: AbortController; notify: ReadyCallback | null }>();
+/**
+ * Background jobs beyond this give way, oldest first: the view has moved on from them. A tilted view on a
+ * high-density screen asks for well over a hundred tiles, so this must hold a whole view: at 48 the oldest tiles
+ * of the view itself were dropped and kept their stand-ins.
+ */
+const PENDING_MAX = 192;
+
+/** A tile made in full, and whether every live source it needed answered. */
+interface Made {
+  bitmap: ImageBitmap;
+  complete: boolean;
+}
 
 function take(cache: Map<string, ImageBitmap>, key: string): ImageBitmap | undefined {
   const hit = cache.get(key);
@@ -75,16 +95,43 @@ function copy(bitmap: ImageBitmap): Promise<ImageBitmap> {
   return createImageBitmap(bitmap);
 }
 
-async function full(kind: TileKind, z: number, x: number, y: number, signal: AbortSignal): Promise<ImageBitmap> {
+async function make(kind: TileKind, z: number, x: number, y: number, signal: AbortSignal): Promise<Made> {
+  const gaps: Gaps = { failed: false };
+  let bitmap: ImageBitmap;
   switch (kind) {
     case 'img':
-      return toBitmap(await mapImgTile([], z, x, y, signal));
+      bitmap = await toBitmap(await mapImgTile([], z, x, y, signal, gaps));
+      break;
     case 'hd':
-      return toBitmap(await mapHdTile([], z, x, y, signal));
+      bitmap = await toBitmap(await mapHdTile([], z, x, y, signal, gaps));
+      break;
     case 'dem':
-      return toBitmap(await demTile([], z, x, y, signal));
+      bitmap = await toBitmap(await demTile([], z, x, y, signal));
+      break;
     case 'raw':
-      return toBitmap(await imgTile([], z, x, y, signal));
+      bitmap = await toBitmap(await imgTile([], z, x, y, signal, gaps));
+      break;
+  }
+  return { bitmap, complete: !gaps.failed };
+}
+
+async function full(kind: TileKind, z: number, x: number, y: number, signal: AbortSignal): Promise<ImageBitmap> {
+  return (await make(kind, z, x, y, signal)).bitmap;
+}
+
+function retryWait(key: string): number {
+  const r = retries.get(key);
+  return r ? Math.max(0, r.at - Date.now()) : 0;
+}
+
+function noteRetry(key: string): void {
+  const tries = (retries.get(key)?.tries ?? 0) + 1;
+  retries.delete(key);
+  retries.set(key, { tries, at: Date.now() + (RETRY_AFTER_S[Math.min(tries, RETRY_AFTER_S.length) - 1] ?? 90) * 1000 });
+  while (retries.size > RETRIES_MAX) {
+    const oldest = retries.keys().next().value;
+    if (oldest === undefined) break;
+    retries.delete(oldest);
   }
 }
 
@@ -114,7 +161,7 @@ async function standIn(kind: TileKind, z: number, x: number, y: number, signal: 
   }
 }
 
-function background(key: string, kind: TileKind, z: number, x: number, y: number, onReady: ReadyCallback | null): Promise<ImageBitmap | null> {
+function background(key: string, kind: TileKind, z: number, x: number, y: number, onReady: ReadyCallback | null): Promise<Made | null> {
   const running = pending.get(key);
   if (running) {
     // A job started for a warm-up may now have a map waiting on it too.
@@ -122,18 +169,25 @@ function background(key: string, kind: TileKind, z: number, x: number, y: number
     return running.promise;
   }
   const abort = new AbortController();
-  const entry = { promise: null as unknown as Promise<ImageBitmap | null>, abort, notify: onReady };
+  const entry = { promise: null as unknown as Promise<Made | null>, abort, notify: onReady };
   const timer = setTimeout(() => abort.abort(), GIVE_UP_MS[kind] || 30_000);
-  const promise = full(kind, z, x, y, abort.signal)
-    .then((bitmap) => {
+  const promise = make(kind, z, x, y, abort.signal)
+    .then((made) => {
       if (abort.signal.aborted) {
-        bitmap.close();
+        made.bitmap.close();
         return null;
       }
-      put(finals, key, bitmap, FINALS_MAX);
-      standIns.delete(key);
+      if (made.complete) {
+        retries.delete(key);
+        put(finals, key, made.bitmap, FINALS_MAX);
+        standIns.delete(key);
+      } else {
+        // Better than the stand-in, so it becomes the stand-in, and the tile is made again later.
+        noteRetry(key);
+        put(standIns, key, made.bitmap, STAND_INS_MAX);
+      }
       entry.notify?.(kind, z, x, y);
-      return bitmap;
+      return made;
     })
     .catch(() => null)
     .finally(() => {
@@ -179,16 +233,22 @@ async function serve(kind: TileKind, z: number, x: number, y: number, mode: Serv
 
   if (!(await slow(kind, z, x, y))) return { bitmap: await full(kind, z, x, y, signal) };
 
+  // A tile that came out unfinished a moment ago waits before it is made again: until then its unfinished
+  // version stands in, and the map asks again when the wait is over.
+  const wait = retryWait(key);
+  const held = wait > 0 ? take(standIns, key) : undefined;
+  if (held) return { bitmap: await copy(held), ...(mode === 'progressive' ? { maxAge: Math.ceil(wait / 1000) + 1 } : {}) };
+
   const job = background(key, kind, z, x, y, mode === 'progressive' ? onReady : null);
   if (mode === 'full') {
     const made = await Promise.race([job, new Promise<never>((_, reject) => signal.addEventListener('abort', () => reject(new DOMException('aborted', 'AbortError')), { once: true }))]);
-    if (made) return { bitmap: await copy(made) };
+    if (made) return { bitmap: await copy(made.bitmap) };
     // The live sources failed: the package's own version, as the map would draw it offline.
     return { bitmap: await full(kind, z, x, y, signal) };
   }
 
   const early = await Promise.race([job, delay(HOLD_MS[kind])]);
-  if (early) return { bitmap: await copy(early) };
+  if (early) return { bitmap: await copy(early.bitmap), ...(early.complete ? {} : { maxAge: Math.ceil(retryWait(key) / 1000) + 1 }) };
   if (signal.aborted) throw new DOMException('aborted', 'AbortError');
   let stand = take(standIns, key);
   if (!stand) {

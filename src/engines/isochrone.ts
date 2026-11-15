@@ -283,3 +283,59 @@ export function contour(grid: Grid, field: Float64Array, levelS: number): LonLat
   }
   return rings;
 }
+
+/**
+ * A walking-time field with the grid's own grain taken out: each reached cell becomes the mean of the reached
+ * cells around it, `passes` times over. A step search over a grid has a wavefront of short facets, and a
+ * contour of it zigzags from cell to cell; a ring a person reads should be as smooth as the ground allows.
+ * Cells never reached stay so.
+ */
+export function smoothField(field: Float64Array, rows: number, cols: number, passes = 2): Float64Array {
+  let src = field;
+  for (let pass = 0; pass < passes; pass++) {
+    const out = new Float64Array(src.length);
+    for (let r = 0; r < rows; r++) {
+      for (let c = 0; c < cols; c++) {
+        const i = r * cols + c;
+        const own = src[i] as number;
+        if (!Number.isFinite(own)) {
+          out[i] = own;
+          continue;
+        }
+        let sum = 0;
+        let n = 0;
+        for (let dr = -1; dr <= 1; dr++) {
+          for (let dc = -1; dc <= 1; dc++) {
+            const rr = r + dr;
+            const cc = c + dc;
+            if (rr < 0 || cc < 0 || rr >= rows || cc >= cols) continue;
+            const v = src[rr * cols + cc] as number;
+            if (!Number.isFinite(v)) continue;
+            const w = dr === 0 && dc === 0 ? 4 : dr === 0 || dc === 0 ? 2 : 1;
+            sum += v * w;
+            n += w;
+          }
+        }
+        out[i] = sum / n;
+      }
+    }
+    src = out;
+  }
+  return src;
+}
+
+/** Rounds a closed ring's corners (Chaikin's corner cutting), `passes` times. The ring stays closed. */
+export function smoothRing(ring: readonly LonLat[], passes = 2): LonLat[] {
+  let pts = ring.slice(0, -1);
+  if (pts.length < 4) return ring.slice();
+  for (let pass = 0; pass < passes; pass++) {
+    const next: LonLat[] = [];
+    for (let i = 0; i < pts.length; i++) {
+      const a = pts[i] as LonLat;
+      const b = pts[(i + 1) % pts.length] as LonLat;
+      next.push([a[0] * 0.75 + b[0] * 0.25, a[1] * 0.75 + b[1] * 0.25], [a[0] * 0.25 + b[0] * 0.75, a[1] * 0.25 + b[1] * 0.75]);
+    }
+    pts = next;
+  }
+  return [...pts, pts[0] as LonLat];
+}

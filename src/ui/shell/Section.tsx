@@ -7,7 +7,7 @@ import { cn } from '@/lib/cn';
  * A detail section that opens on request. The first level of every card stays short;
  * measurements, models and sources live in sections like this one.
  */
-export function Section({ id, title, hint, children }: { id: string; title: string; hint?: string; children: ReactNode }) {
+export function Section({ id, title, hint, icon, children }: { id: string; title: string; hint?: string; icon?: ReactNode; children: ReactNode }) {
   const open = useApp((s) => Boolean(s.sections[id]));
   const toggle = useApp((s) => s.toggleSection);
   return (
@@ -20,7 +20,8 @@ export function Section({ id, title, hint, children }: { id: string; title: stri
           onClick={() => toggle(id)}
           className="flex w-full items-center justify-between gap-3 px-4 py-3 text-left transition-colors hover:bg-muted"
         >
-          <span className="min-w-0">
+          {icon ? <span className="-mr-1 inline-flex shrink-0 text-muted-foreground [&_svg]:size-4">{icon}</span> : null}
+          <span className="min-w-0 flex-1">
             <span className="block text-sm font-medium">{title}</span>
             {hint && !open ? <span className="block truncate text-xs text-muted-foreground">{hint}</span> : null}
           </span>

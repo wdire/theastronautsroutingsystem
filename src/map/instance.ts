@@ -5,6 +5,7 @@ import { useApp } from '@/store';
 import { baseStyle } from './style';
 import { registerMarsProtocol } from './protocol';
 import { globeView } from './camera';
+import { drawRatio } from '@/lib/device';
 
 declare global {
   interface Window {
@@ -43,6 +44,8 @@ export function createMap(container: HTMLElement): MapLibreMap {
     maxZoom: 19,
     maxPitch: 80,
     attributionControl: false,
+    // A phone's screen is often three times as dense: drawn at 2 it looks the same and costs half the pixels.
+    pixelRatio: drawRatio(),
     renderWorldCopies: false,
     dragRotate: true,
     fadeDuration: 0,

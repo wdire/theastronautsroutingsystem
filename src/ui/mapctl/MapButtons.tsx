@@ -1,5 +1,6 @@
 import { Binoculars, LocateFixed, Minus, Navigation2, Plus } from 'lucide-react';
 import { getMap } from '@/map/instance';
+import { chooseTilt } from '@/map/tilt';
 import { LANDING_SITE } from '@/lib/constants';
 import { useApp } from '@/store';
 import { useMapState } from '@/ui/hooks/useMapState';
@@ -22,7 +23,10 @@ export function MapButtons({ compact = false }: { compact?: boolean }) {
         <IconButton
           label={tilted ? 'Look straight down' : 'Tilt the view'}
           active={tilted}
-          onClick={() => getMap()?.easeTo({ pitch: tilted ? 0 : 55, duration: 500 })}
+          onClick={() => {
+            const map = getMap();
+            if (map) chooseTilt(map, tilted);
+          }}
         >
           <span className="figure text-[13px] font-semibold tracking-tight">{tilted ? '2D' : '3D'}</span>
         </IconButton>

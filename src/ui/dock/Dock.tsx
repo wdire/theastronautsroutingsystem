@@ -70,7 +70,9 @@ export function DockPanel({ tab, children }: { tab: DockTab; children: ReactNode
       aria-labelledby={`dock-tab-${tab}`}
       className="panel flex max-h-full w-[316px] max-w-[calc(100vw-1.5rem)] xl:w-[332px] 2xl:w-[344px] flex-col overflow-hidden max-md:w-full max-md:max-w-none"
       onKeyDown={(e) => {
-        if (e.key === 'Escape') {
+        // A menu or popover opened from the panel lives elsewhere in the page but bubbles here through React:
+        // its Escape closes only itself.
+        if (e.key === 'Escape' && e.currentTarget.contains(e.target as Node)) {
           e.stopPropagation();
           openDock(null);
           document.getElementById(`dock-tab-${tab}`)?.focus();

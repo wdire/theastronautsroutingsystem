@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { contour, suitPaceKmh, walkingField } from './isochrone';
+import { contour, suitPaceKmh, walkingField, smoothField, smoothRing } from './isochrone';
 import { flatGrid, haversineM, slopedGrid, syntheticGrid } from './terrain';
 import type { Grid, LonLat } from './types';
 
@@ -202,5 +202,33 @@ describe('contour', () => {
 
   it('rejects a field of the wrong size', () => {
     expect(() => contour(flatGrid(4, 4, 10), new Float64Array(3), 1)).toThrow(/does not match/);
+  });
+});
+
+describe('smoothing the rings', () => {
+  it('keeps a ring closed and inside its corners', () => {
+    const square: [number, number][] = [
+      [0, 0],
+      [1, 0],
+      [1, 1],
+      [0, 1],
+      [0, 0],
+    ];
+    const round = smoothRing(square);
+    expect(round[0]).toEqual(round[round.length - 1]);
+    expect(round.length).toBe(4 * 4 + 1);
+    for (const [x, y] of round) {
+      expect(x).toBeGreaterThanOrEqual(0);
+      expect(x).toBeLessThanOrEqual(1);
+      // No corner survives: the square's corners are cut.
+      expect(Math.min(x, 1 - x) + Math.min(y, 1 - y)).toBeGreaterThan(0);
+    }
+  });
+  it('evens out a field without spreading into unreached cells', () => {
+    const f = new Float64Array([0, 10, Infinity, 10, 20, Infinity, Infinity, Infinity, Infinity]);
+    const s = smoothField(f, 3, 3, 1);
+    expect(s[2]).toBe(Infinity);
+    expect(s[0]).toBeGreaterThan(0);
+    expect(s[4]).toBeLessThan(20);
   });
 });

@@ -1,11 +1,11 @@
 import { useIsPhone } from '@/ui/hooks/useMediaQuery';
 import { StationReadings } from './Stations';
 import { useEffect, useState, type ReactNode } from 'react';
-import { Binoculars, ClipboardList, Ellipsis, ExternalLink, House, Link2, MapPinPlus, Move, X, ZoomIn } from 'lucide-react';
+import { Binoculars, ClipboardList, Compass, Database, ExternalLink, Gem, Info, MapPinPlus, Sun, X } from 'lucide-react';
 import { toast } from 'sonner';
 import { baseMoveBlocked, moveBaseTo } from '@/planner/moveBase';
 import type { Base } from '@/planner/base';
-import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from '@/ui/components/ui/dropdown-menu';
+import { cn } from '@/lib/cn';
 import { useApp } from '@/store';
 import { getMap } from '@/map/instance';
 import { containingFeature, nearby, resolvePlace, typeWord, type Neighbour, type PlaceView } from '@/data/places';
@@ -46,7 +46,7 @@ function baseView(base: Base): PlaceView {
     subtitle: 'The crew’s base, shared by everyone',
     lon: base.lon,
     lat: base.lat,
-    summary: `Two habitats joined by a tunnel, a solar field, a radio mast and a landing pad, on level ground. Every crewed mission leaves from here and comes back here.${moved}`,
+    summary: `A domed hub with two laboratories and a greenhouse joined by tunnels, a second habitat module, a solar field, a radio mast and a landing pad, on level ground. Every crewed mission leaves from here and comes back here.${moved}`,
     photos: [],
     zoom: 15.5,
   };
@@ -127,13 +127,21 @@ function pointSummary(ctx: Context | null): string {
 
 function Glance({ label, value, unit }: { label: string; value: string; unit?: string }) {
   return (
-    <div>
-      <dt className="text-xs text-muted-foreground">{label}</dt>
-      <dd className="figure mt-0.5 text-[21px] leading-tight font-medium tracking-[-0.01em] [font-stretch:92%]">
+    <div className="min-w-0">
+      <dt className="truncate text-[11px] text-muted-foreground">{label}</dt>
+      <dd className="figure mt-0.5 truncate text-[15px] leading-tight font-medium tracking-[-0.01em] [font-stretch:92%]">
         {value}
-        {unit ? <span className="ml-1 text-[13px] font-normal text-muted-foreground">{unit}</span> : null}
+        {unit ? <span className="ml-0.5 text-[11px] font-normal text-muted-foreground">{unit}</span> : null}
       </dd>
     </div>
+  );
+}
+
+function TextAction({ children, ...props }: { children: ReactNode } & React.ComponentProps<'button'>) {
+  return (
+    <button type="button" className="rounded-sm py-0.5 transition-colors hover:text-foreground disabled:pointer-events-none disabled:opacity-45" {...props}>
+      {children}
+    </button>
   );
 }
 
@@ -217,82 +225,81 @@ export function PlaceCard() {
     }
   };
 
-  return (
-    <article className="panel flex min-h-0 flex-col overflow-hidden" aria-label={v.name}>
-      <div className="scroll-quiet min-h-0 flex-1 overflow-y-auto">
-        {phone ? null : <Photos photos={v.photos} name={v.name} />}
+  const hero = !phone && v.photos.length > 0;
+  const zoomIn = () => getMap()?.flyTo({ center: [v.lon, v.lat], zoom: Math.min(16, Math.max(v.zoom, (getMap()?.getZoom() ?? 0) + 1.5)), duration: 1400 });
+  const closeButton = (
+    <button
+      type="button"
+      aria-label={`Close ${v.name}`}
+      onClick={() => openPlace(null)}
+      className={cn(
+        'absolute inline-flex items-center justify-center rounded-full transition-colors pointer-coarse:size-11',
+        hero ? 'top-2.5 right-2.5 z-10 size-9 bg-black/60 text-white backdrop-blur-sm hover:bg-black/80' : 'top-3 right-2.5 size-9 rounded-md text-muted-foreground hover:bg-secondary hover:text-foreground max-md:top-0.5',
+      )}
+    >
+      <X className="size-4" aria-hidden />
+    </button>
+  );
 
-        <header className="relative px-4 pt-4 pr-12 max-md:pt-1.5">
+  return (
+    <article className="panel relative flex min-h-0 flex-col overflow-hidden" aria-label={v.name}>
+      {hero ? closeButton : null}
+      <div className="scroll-quiet min-h-0 flex-1 overflow-y-auto">
+        {hero ? <Photos photos={v.photos} name={v.name} hero /> : null}
+
+        <header className={cn('relative px-4 pt-3.5', hero ? '' : 'pr-12 max-md:pt-1.5')}>
           <h2 className="text-[19px] leading-snug font-semibold tracking-[-0.01em]">{v.name}</h2>
           <p className="mt-0.5 text-[13px] text-muted-foreground">{v.subtitle}</p>
-          <button
-            type="button"
-            aria-label={`Close ${v.name}`}
-            onClick={() => openPlace(null)}
-            className="absolute top-3 right-2.5 inline-flex size-9 items-center max-md:top-0.5 pointer-coarse:size-11 justify-center rounded-md text-muted-foreground transition-colors hover:bg-secondary hover:text-foreground"
-          >
-            <X className="size-4" aria-hidden />
-          </button>
+          {hero ? null : closeButton}
         </header>
 
-        <p className="px-4 pt-3 text-sm leading-relaxed">{v.kind === 'point' ? pointSummary(ctx) : v.summary}</p>
+        <p className="px-4 pt-2.5 text-sm leading-relaxed">{v.kind === 'point' ? pointSummary(ctx) : v.summary}</p>
+        {ctx?.unit ? (
+          <p className="flex items-center gap-2 px-4 pt-2 text-[13px] text-muted-foreground">
+            <span className="size-3 shrink-0 rounded-[3px] ring-1 ring-black/20" style={{ background: ctx.unit.colour }} aria-hidden />
+            <span className="truncate">{ctx.unit.name}</span>
+          </p>
+        ) : null}
         {/* On a phone the sheet opens half way: the name and the summary come before the photos. */}
         {phone && v.photos.length > 0 ? (
           <div className="mt-3">
             <Photos photos={v.photos} name={v.name} />
           </div>
         ) : null}
-        {v.detail ? <p className="px-4 pt-2 text-[13px] leading-relaxed text-muted-foreground">{v.detail}</p> : null}
-        {v.kind === 'point' || isBase ? null : <NasaImages name={v.name} />}
 
-        <div className="flex flex-wrap gap-1.5 px-4 pt-4">
+        <div className="flex flex-wrap gap-1.5 px-4 pt-3.5">
           {isBase ? (
             <Button onClick={() => useApp.getState().openPlanner(true)} className="h-9 px-3.5 text-[13px] font-semibold">
               <ClipboardList aria-hidden />
               Plan a mission
             </Button>
           ) : (
-            <>
-              <Button onClick={routeHere} disabled={!planOpen} className="h-9 px-3.5 text-[13px] font-semibold">
-                <MapPinPlus aria-hidden />
-                Add to the route
-              </Button>
-            </>
+            <Button onClick={routeHere} disabled={!planOpen} className="h-9 px-3.5 text-[13px] font-semibold">
+              <MapPinPlus aria-hidden />
+              Add to the route
+            </Button>
           )}
           <ActionButton icon={<Binoculars aria-hidden />} disabled={!inRegion} onClick={() => useApp.getState().openVisor({ lon: v.lon, lat: v.lat })}>
             Rover View
           </ActionButton>
-          <DropdownMenu>
-            <DropdownMenuTrigger asChild>
-              <ActionButton icon={<Ellipsis aria-hidden />} aria-label="More actions">
-                <span className="sr-only">More</span>
-              </ActionButton>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent align="end" className="w-56">
-              <DropdownMenuItem
-                onSelect={() => getMap()?.flyTo({ center: [v.lon, v.lat], zoom: Math.min(16, Math.max(v.zoom, (getMap()?.getZoom() ?? 0) + 1.5)), duration: 1400 })}
-              >
-                <ZoomIn aria-hidden />
-                Zoom in
-              </DropdownMenuItem>
-              <DropdownMenuItem onSelect={() => void share()}>
-                <Link2 aria-hidden />
-                Copy a link
-              </DropdownMenuItem>
-              {inRegion ? <DropdownMenuSeparator /> : null}
-              {isBase ? (
-                <DropdownMenuItem disabled={moveBlocked !== null} onSelect={() => useApp.getState().setPicking('base')}>
-                  <Move aria-hidden />
-                  Move the base…
-                </DropdownMenuItem>
-              ) : inRegion ? (
-                <DropdownMenuItem disabled={moveBlocked !== null} onSelect={() => void moveBaseTo(v.lon, v.lat)}>
-                  <House aria-hidden />
-                  Move the base here…
-                </DropdownMenuItem>
-              ) : null}
-            </DropdownMenuContent>
-          </DropdownMenu>
+        </div>
+        {/* The quieter actions, as one line of links. */}
+        <div className="flex flex-wrap items-center gap-x-3.5 gap-y-1 px-4 pt-2.5 text-[13px] text-muted-foreground">
+          <TextAction onClick={zoomIn}>Zoom in</TextAction>
+          <TextAction onClick={() => void share()}>Share</TextAction>
+          <a href={trekUrl(v.lon, v.lat, v.zoom)} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1 rounded-sm py-0.5 transition-colors hover:text-foreground">
+            Mars Trek
+            <ExternalLink className="size-3" aria-hidden />
+          </a>
+          {isBase ? (
+            <TextAction disabled={moveBlocked !== null} onClick={() => useApp.getState().setPicking('base')}>
+              Move the base…
+            </TextAction>
+          ) : inRegion ? (
+            <TextAction disabled={moveBlocked !== null} onClick={() => void moveBaseTo(v.lon, v.lat)}>
+              Move the base here…
+            </TextAction>
+          ) : null}
         </div>
         {isBase && moveBlocked ? <p className="px-4 pt-2 text-xs leading-relaxed text-muted-foreground">{moveBlocked}</p> : null}
         {!inRegion ? (
@@ -302,14 +309,25 @@ export function PlaceCard() {
           </p>
         ) : null}
 
-        <dl className="mt-4 grid grid-cols-2 gap-x-4 gap-y-3 border-t px-4 py-4">
+        <dl className="mt-3.5 grid grid-cols-4 gap-x-2 border-t px-4 py-3">
           <Glance label="Elevation" value={elevValue} unit={elevUnit} />
-          <Glance label="Slope here" value={ground ? fmtDeg(ground.slopeDeg, ground.slopeDeg < 10 ? 1 : 0) : '…'} />
-          <Glance label="Temperature now" value={tempValue} unit={tempUnit} />
-          <Glance label="Local time" value={fmtClock(time.ltstH)} unit="LTST" />
+          <Glance label="Slope" value={ground ? fmtDeg(ground.slopeDeg, ground.slopeDeg < 10 ? 1 : 0) : '…'} />
+          <Glance label="Air now" value={tempValue} unit={tempUnit} />
+          <Glance label="Local time" value={fmtClock(time.ltstH)} />
         </dl>
 
-        <Section id="place-geology" title="Geology" hint={ctx?.unit ? ctx.unit.name : 'What the ground is made of'}>
+        {v.detail || (v.kind !== 'point' && !isBase) ? (
+          <Section id="place-about" title="About this place" hint={v.kind !== 'point' && !isBase ? 'More, and pictures from NASA’s image library' : 'More about it'} icon={<Info aria-hidden />}>
+            {v.detail ? <p className="text-[13px] leading-relaxed text-muted-foreground">{v.detail}</p> : null}
+            {v.kind === 'point' || isBase ? null : (
+              <div className="-mx-4">
+                <NasaImages name={v.name} />
+              </div>
+            )}
+          </Section>
+        ) : null}
+
+        <Section id="place-geology" icon={<Gem aria-hidden />} title="Geology" hint={ctx?.unit ? ctx.unit.name : 'What the ground is made of'}>
           {ctx?.unit ? (
             <>
               <div className="flex items-start gap-3">
@@ -334,7 +352,7 @@ export function PlaceCard() {
           )}
         </Section>
 
-        <Section id="place-conditions" title="Conditions now" hint="Modelled for this spot, and what the rovers measured">
+        <Section id="place-conditions" icon={<Sun aria-hidden />} title="Conditions now" hint="Modelled for this spot, and what the rovers measured">
           {cond && ground ? (
             <>
               <Row label="Air temperature" value={fmtTemp(cond.tempC)} />
@@ -355,7 +373,7 @@ export function PlaceCard() {
           )}
         </Section>
 
-        <Section id="place-data" title="Data and sources" hint="Where these numbers come from">
+        <Section id="place-data" icon={<Database aria-hidden />} title="Data and sources" hint="Where these numbers come from">
           <Row label="Coordinates" value={fmtLatLon(v.lat, v.lon)} />
           <Row label="Elevation from" value={<span className="font-sans font-normal">{elevationSource(sourceZoom)}</span>} />
           <Row label="Heights measured from" value={<span className="font-sans font-normal">the Mars areoid</span>} />
@@ -371,7 +389,7 @@ export function PlaceCard() {
           </a>
         </Section>
 
-        <Section id="place-nearby" title="Nearby" hint={ctx?.near.length ? `${ctx.near.length} named places within 40 km` : 'Named places around here'}>
+        <Section id="place-nearby" icon={<Compass aria-hidden />} title="Nearby" hint={ctx?.near.length ? `${ctx.near.length} named places within 40 km` : 'Named places around here'}>
           {ctx && ctx.near.length > 0 ? (
             <ul className="-mx-2">
               {ctx.near.map((n) => (

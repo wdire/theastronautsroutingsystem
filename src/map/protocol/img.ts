@@ -1,7 +1,7 @@
 import { getCoverage, loadCoverage, nearestTile, tileUrl, type Coverage, type TileRef } from '@/data/coverage';
 import { flatTile, MARS_FLAT, type TileData } from './common';
 import { blendDetail, highPassRadius, luminance, type DetailLayer } from './detail';
-import { CTX, HIRISE, USGS_HIRISE, VIKING, warpToTile, type EquirectSource } from './live';
+import { CTX, HIRISE, THEMIS_DAY, USGS_HIRISE, VIKING, warpToTile, type EquirectSource, type Gaps } from './live';
 import { insideHirise } from '@/data/hiriseGrid';
 import { pxToLat, pxToLon } from '@/lib/geo';
 
@@ -12,6 +12,8 @@ const BITMAP_CACHE_MAX = 24;
 /** Zoom from which each live source adds detail, and the zoom whose detail it already matches. */
 const VIKING_FROM = 5;
 const CTX_FROM = 9;
+/** THEMIS (100 m) fills the CTX mosaic's gaps up to this zoom; closer in its pixels would only blur. */
+const THEMIS_FILL_TO = 13;
 const HIRISE_FROM = 14;
 /** A package tile at this zoom or deeper already holds everything the source could add. */
 const VIKING_NATIVE = 7;
@@ -82,8 +84,9 @@ async function detailLayer(
   gain: number,
   masked: boolean,
   signal?: AbortSignal,
+  gaps?: Gaps,
 ): Promise<DetailLayer | null> {
-  const warped = await warpToTile(src, z, x, y, pad, 15000, signal);
+  const warped = await warpToTile(src, z, x, y, pad, 15000, signal, gaps);
   if (!warped || warped.coverage < 0.02) return null;
   const layer: DetailLayer = { lum: luminance(warped.rgba), radius, gain };
   if (masked || warped.coverage < 0.999) {
@@ -162,9 +165,10 @@ export async function packageImage(z: number, x: number, y: number, signal: Abor
 /**
  * Base imagery for any tile to zoom 19. The package tile if there is one; otherwise the nearest
  * package ancestor, upsampled for colour, with live detail blended into its brightness (see detailPlan).
- * With no connection the upsampled ancestor is returned as it is, so there is always ground.
+ * With no connection the upsampled ancestor is returned as it is, so there is always ground. `gaps` says
+ * whether a live source failed on the way, so the tile is not finished and is worth making again.
  */
-export async function imgTile(_rest: string[], z: number, x: number, y: number, signal: AbortSignal): Promise<TileData> {
+export async function imgTile(_rest: string[], z: number, x: number, y: number, signal: AbortSignal, gaps?: Gaps): Promise<TileData> {
   const cov = getCoverage() ?? (await loadCoverage());
   if (!cov) return flatTile(MARS_FLAT);
   const ref = nearestTile(cov, ['img', 'planetImg'], z, x, y);
@@ -175,8 +179,27 @@ export async function imgTile(_rest: string[], z: number, x: number, y: number, 
   const plan = detailPlan(z, ref.z);
   if (plan.length === 0 || offline()) return canvas.transferToImageBitmap();
   const pad = 32;
-  const layers = (await Promise.all(plan.map((p) => detailLayer(p.src, z, x, y, pad, p.radius, p.gain, p.masked, signal)))).filter((l): l is DetailLayer => l !== null);
+  const made = await Promise.all(plan.map((p) => detailLayer(p.src, z, x, y, pad, p.radius, p.gain, p.masked, signal, gaps)));
   if (signal.aborted) throw new DOMException('aborted', 'AbortError');
+  const layers = made.filter((l): l is DetailLayer => l !== null);
+  // The CTX mosaic has gaps between its image strips; there the coarser THEMIS daytime mosaic gives the ground
+  // its texture, so a strip of bare upsampled colour does not look like a tile that failed to load.
+  const ctxAt = plan.findIndex((p) => p.src === CTX);
+  if (ctxAt >= 0 && z <= THEMIS_FILL_TO) {
+    const ctx = made[ctxAt] ?? null;
+    if (!ctx || ctx.mask) {
+      const fill = await detailLayer(THEMIS_DAY, z, x, y, pad, Math.min(highPassRadius(z, ref.z), 24), 0.85, true, signal, gaps);
+      if (signal.aborted) throw new DOMException('aborted', 'AbortError');
+      if (fill) {
+        const own = fill.mask;
+        const gap = ctx?.mask;
+        const mask = new Float32Array(fill.lum.length);
+        for (let i = 0; i < mask.length; i += 1) mask[i] = (own ? (own[i] ?? 0) : 1) * (gap ? 1 - (gap[i] ?? 0) : 1);
+        fill.mask = mask;
+        layers.unshift(fill);
+      }
+    }
+  }
   if (layers.length === 0) return canvas.transferToImageBitmap();
   const ctx = canvas.getContext('2d', { willReadFrequently: true });
   if (!ctx) return canvas.transferToImageBitmap();
@@ -197,13 +220,13 @@ export function transparentTile(): Promise<ImageBitmap> {
  * 15: the base tile draws at once, and this one fades in over it when the slower USGS cut arrives. Its colour
  * is the base tile's, its detail HiRISE's at full gain; transparent off the mosaic.
  */
-export async function hdTile(_rest: string[], z: number, x: number, y: number, signal: AbortSignal): Promise<TileData> {
+export async function hdTile(_rest: string[], z: number, x: number, y: number, signal: AbortSignal, gaps?: Gaps): Promise<TileData> {
   if (!tileTouchesHirise(z, x, y)) return transparentTile();
   // A wide margin, for the wide blur below: tiles must agree at their edges.
   const pad = 64;
   // The colour comes from the package alone: this layer's own detail replaces whatever finer grain the base
   // tile carries, and the tile never waits on the base's live services as well as its own.
-  const [baseData, warped] = await Promise.all([packageImage(z, x, y, signal), warpToTile(USGS_HIRISE, z, x, y, pad, 45_000, signal)]);
+  const [baseData, warped] = await Promise.all([packageImage(z, x, y, signal), warpToTile(USGS_HIRISE, z, x, y, pad, 45_000, signal, gaps)]);
   if (signal.aborted) throw new DOMException('aborted', 'AbortError');
   if (!warped || warped.coverage < 0.02) return transparentTile();
   const base = baseData instanceof ArrayBuffer ? await createImageBitmap(new Blob([baseData])) : baseData;

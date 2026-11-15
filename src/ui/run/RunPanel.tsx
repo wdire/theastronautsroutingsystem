@@ -11,6 +11,7 @@ import { fmtClock, fmtDistance, fmtDuration, fmtNumber, fmtPercent } from '@/lib
 import { cn } from '@/lib/cn';
 import { useCrew, watchingRun } from '@/net/state';
 import { stateWords } from './runState';
+import { baseQuestion, splitBaseCalls, withoutBaseCall } from '@/net/words';
 
 /** A level as a number and a bar; the bar turns amber, then red, as the reserve comes near. */
 export function Gauge({ label, frac, detail }: { label: string; frac: number | null; detail?: string }) {
@@ -45,6 +46,7 @@ export function Chat({ world }: { world: World }) {
   const [text, setText] = useState('');
   const [open, setOpen] = useState(false);
   const end = useRef<HTMLDivElement>(null);
+  const input = useRef<HTMLInputElement>(null);
   // On a crew mission everyone's calls go to the crew log, and the commander's browser passes them to the base.
   const radio = useCrew((s) => s.radio);
   const log = useCrew((s) => s.log);
@@ -91,8 +93,14 @@ export function Chat({ world }: { world: World }) {
         <h2 className="border-b px-3.5 py-2.5 text-[13px] font-semibold">{radio ? 'Crew radio' : 'Radio'}</h2>
         <div className="scroll-quiet min-h-0 flex-1 overflow-y-auto px-3.5 py-3" aria-live="polite">
           {lines.length === 0 ? (
-            <p className="text-[13px] text-muted-foreground">
-              {radio ? 'The whole crew hears what you say here. ' : ''}Ask the base about air, power, time, the next stop, dust or radiation. It answers from what the crew’s instruments say.
+            <p className="text-[13px] leading-relaxed text-muted-foreground">
+              {radio ? (
+                <>
+                  The whole crew hears what you say here. To call the base, start with <span translate="no" className="font-semibold text-primary">@Base</span>: it answers about air, power, time, the next stop, dust or radiation, from what the crew’s instruments say.
+                </>
+              ) : (
+                'Ask the base about air, power, time, the next stop, dust or radiation. It answers from what the crew’s instruments say.'
+              )}
             </p>
           ) : null}
           <ul className="flex flex-col gap-2.5">
@@ -105,7 +113,17 @@ export function Chat({ world }: { world: World }) {
                 )}
               >
                 {m.from === 'base' ? <span className="block text-[11px] font-medium text-faint">Base</span> : m.who && !m.mine ? <span className="block text-[11px] font-medium text-faint">{m.who}</span> : null}
-                {m.text}
+                {radio && m.from === 'crew'
+                  ? splitBaseCalls(m.text).map((part, i) =>
+                      part.call ? (
+                        <span key={i} translate="no" className="font-semibold text-primary">
+                          {part.text}
+                        </span>
+                      ) : (
+                        part.text
+                      ),
+                    )
+                  : m.text}
               </li>
             ))}
           </ul>
@@ -119,13 +137,29 @@ export function Chat({ world }: { world: World }) {
             setText('');
           }}
         >
+          {radio ? (
+            <button
+              type="button"
+              aria-pressed={baseQuestion(text) !== null}
+              title="Call the base: it answers calls that start with @Base"
+              onClick={() => {
+                setText((t) => (baseQuestion(t) !== null ? withoutBaseCall(t) : `@Base ${t.trimStart()}`));
+                input.current?.focus();
+              }}
+              translate="no"
+              className="h-9 shrink-0 rounded-md border px-2 text-[13px] font-semibold text-muted-foreground outline-none transition-colors hover:bg-secondary focus-visible:ring-1 focus-visible:ring-ring aria-pressed:border-primary/60 aria-pressed:bg-primary/15 aria-pressed:text-primary pointer-coarse:h-11"
+            >
+              @Base
+            </button>
+          ) : null}
           <input
+            ref={input}
             value={text}
             onChange={(e) => setText(e.target.value)}
             name="message"
             autoComplete="off"
             aria-label={radio ? 'Message to the crew and base' : 'Message to base'}
-            placeholder="How is our oxygen…"
+            placeholder={radio ? 'Talk to the crew…' : 'How is our oxygen…'}
             maxLength={400}
             className="h-9 min-w-0 flex-1 rounded-md border bg-transparent px-2.5 text-[13px] outline-none focus-visible:border-ring focus-visible:ring-1 focus-visible:ring-ring pointer-coarse:h-11"
           />

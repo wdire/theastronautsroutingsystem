@@ -1,7 +1,7 @@
 import type { Map as MapLibreMap } from 'maplibre-gl';
 import { REGION, inBox } from '@/lib/constants';
 import { useApp } from '@/store';
-import { pitchForZoom } from './tilt';
+import { flightPitch } from './tilt';
 import { warmView } from './warm';
 
 /** The centre of Jezero crater, and the zoom at which the whole crater fits a laptop screen. */
@@ -97,7 +97,7 @@ export function flyIn(map: MapLibreMap, target?: { center: [number, number]; zoo
   if (app.flying || app.mode === 'map') return;
   const view = target ?? LANDING_VIEW;
   const bearing = target ? 0 : LANDING_VIEW.bearing;
-  const pitch = pitchForZoom(view.zoom);
+  const pitch = flightPitch(view.zoom);
   app.setFlying(true);
   // The ground at the landing loads during the flight, so it is sharp when the camera arrives.
   warmView(view.center, view.zoom);
@@ -152,7 +152,7 @@ export function focusRunStart(map: MapLibreMap, path: readonly (readonly [number
     const p = path[i];
     if (p) warmView([p[0], p[1]], zoom);
   }
-  map.flyTo({ center: [first[0], first[1]], zoom, pitch: pitchForZoom(zoom), bearing: Number.isFinite(bearing) ? bearing : map.getBearing(), duration: prefersReducedMotion() ? 0 : 2200, essential: true });
+  map.flyTo({ center: [first[0], first[1]], zoom, pitch: flightPitch(zoom), bearing: Number.isFinite(bearing) ? bearing : map.getBearing(), duration: prefersReducedMotion() ? 0 : 2200, essential: true });
 }
 
 /** Brings the camera to the crew whenever a mission starts here or on the commander's browser. */

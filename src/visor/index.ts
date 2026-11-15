@@ -27,6 +27,8 @@ import { createRocks } from './rocks';
 import { skyState } from './skyModel';
 import { createProps, keepOutside } from './props';
 import { createParty } from './party';
+import { cyclesPerMetre } from './suit';
+import { isPhone } from '@/lib/device';
 import { createWalkers, type WalkerSpec } from './walkers';
 import { prefetchAhead } from './prefetch';
 import type { CrewLook } from './crewLook';
@@ -122,6 +124,12 @@ export interface VisorHandle {
   /** The resolution the scene is drawn at, as a share of CSS pixels (it adapts to the frame rate); for the checks. */
   ratio(): number;
   getState(): VisorState;
+  /**
+   * The eye this frame, cheap enough to read every frame: how far it looks down (degrees, positive down), the
+   * camera's vertical field of view, the walk (cycles walked, and 0 standing to 1 walking), how fast the view
+   * turns (radians a second), and whether the visitor walks in their own eyes, close to the ground.
+   */
+  view(): { lookDownDeg: number; fovDeg: number; walkPhase: number; walk: number; yawRate: number; ownEyes: boolean };
   /** Where each prop stands, in scene metres; for tests. */
   props(): { id: string; x: number; z: number; y: number; seated: boolean; real: boolean }[];
   /** The viewer’s place in scene metres (x east, z south). */
@@ -131,7 +139,7 @@ export interface VisorHandle {
   /** The route ahead of a ride, lon and lat from the party on (empty on foot), for the minimap. */
   route(): readonly (readonly [number, number])[];
   /** What the last frame cost, for the performance checks. */
-  stats(): { triangles: number; calls: number; rocks: number; layers: string; wheels: [number, number]; textures: number; geometries: number; programs: number };
+  stats(): { triangles: number; calls: number; rocks: number; layers: string; wheels: [number, number]; textures: number; geometries: number; programs: number; party: [number, number] | null };
   dispose(): void;
 }
 
@@ -220,7 +228,9 @@ export async function mountVisor(canvas: HTMLCanvasElement, options: VisorOption
 
   let disposed = false;
   let quality: Quality = 'auto';
-  let effective: 'high' | 'low' = 'high';
+  // A phone starts on the light setting (no fine ground shading, smaller shadows, fewer rocks): its graphics are a
+  // fraction of a laptop's, and the first seconds there were a slide show before the view stepped down by itself.
+  let effective: 'high' | 'low' = isPhone() ? 'low' : 'high';
   const state: VisorState = {
     ready: false,
     loading: 'Building the ground from orbital data…',
@@ -377,7 +387,7 @@ export async function mountVisor(canvas: HTMLCanvasElement, options: VisorOption
   // On foot the wheel lifts the eye off the ground, up to a drone's height, and brings it back down.
   let lift = options.mission ? 0 : Math.max(0, Math.min(MAX_LIFT_M, options.arrive?.liftM ?? 0));
   // The descent from the map's camera, eased over a few seconds once the ground is built; any input ends it.
-  let descent: { t: number; lift: number; pitch: number } | null = options.arrive && !options.mission ? { t: 0, lift, pitch: (-options.arrive.pitchDeg * Math.PI) / 180 } : null;
+  let descent: { t: number; lift: number; pitch: number; free?: boolean } | null = options.arrive && !options.mission ? { t: 0, lift, pitch: (-options.arrive.pitchDeg * Math.PI) / 180 } : null;
   // On your own, anything but walking in your own eyes: a body or vehicle that moves, and a camera that follows.
   let roamParty: ReturnType<typeof createParty> | null = null;
   const roamer = { x: 0, z: 0, heading: 0, speed: 0 };
@@ -439,7 +449,11 @@ export async function mountVisor(canvas: HTMLCanvasElement, options: VisorOption
   const onWheel = (e: WheelEvent) => {
     if (mission) return;
     e.preventDefault();
-    descent = null;
+    // During the arrival the eye is still coming down: the wheel waits for it to land.
+    if (descent) {
+      descent.free = true;
+      return;
+    }
     if (roamParty && state.roam.view !== 'eyes') {
       roamDist = Math.max(0.5, Math.min(6, roamDist * Math.exp(e.deltaY * 0.0016)));
       return;
@@ -463,7 +477,7 @@ export async function mountVisor(canvas: HTMLCanvasElement, options: VisorOption
    * long and raised again after a long stretch at full rate: a full-screen view on a laptop's graphics is
    * limited by how many pixels it shades, and a steady 60 frames reads better than a few more pixels.
    */
-  const maxRatio = Math.min(window.devicePixelRatio || 1, 1.5);
+  const maxRatio = Math.min(window.devicePixelRatio || 1, isPhone() ? 1.25 : 1.5);
   const minRatio = Math.min(1, maxRatio);
   let pixelRatio = maxRatio > 1.25 ? 1.25 : maxRatio;
   const ratioWatch = { since: performance.now(), frames: 0, slow: 0, slowWindows: 0, goodSince: performance.now(), raisedAt: -1e9, raiseBlocked: false };
@@ -563,6 +577,8 @@ export async function mountVisor(canvas: HTMLCanvasElement, options: VisorOption
   let fpsSmooth = 60;
   let slowSince = 0;
   let lastReport = 0;
+  /** What the eye is doing this frame, for the overlays that move with it (the tablet in hand). */
+  const eye = { lookDown: 0, yaw: 0, yawRate: 0, walkPhase: 0, walk: 0, stepMs: 0 };
   let raf = 0;
 
   const frameLoop = (now: number) => {
@@ -573,15 +589,14 @@ export async function mountVisor(canvas: HTMLCanvasElement, options: VisorOption
     if (state.ready && quality !== 'low') adaptResolution(now, dt);
 
     if (descent && state.ready) {
-      if (keys.size > 0 || dragging) {
-        descent = null;
-      } else {
-        descent.t = Math.min(1, descent.t + dt / 3.2);
-        const k = descent.t < 0.5 ? 4 * descent.t ** 3 : 1 - (-2 * descent.t + 2) ** 3 / 2;
-        lift = descent.lift * (1 - k);
-        pitch = descent.pitch + (-0.06 - descent.pitch) * k;
-        if (descent.t >= 1) descent = null;
-      }
+      // A key or a drag takes the look from the descent, but the eye still comes down to the ground: before,
+      // any input froze it where it was, and a visitor who looked around early was left hanging 100 m up.
+      if (keys.size > 0 || dragging) descent.free = true;
+      descent.t = Math.min(1, descent.t + dt / 3.2);
+      const k = descent.t < 0.5 ? 4 * descent.t ** 3 : 1 - (-2 * descent.t + 2) ** 3 / 2;
+      lift = descent.lift * (1 - k);
+      if (!descent.free) pitch = descent.pitch + (-0.06 - descent.pitch) * k;
+      if (descent.t >= 1) descent = null;
     }
     let viewYaw = yaw;
     let viewPitch = pitch;
@@ -674,6 +689,7 @@ export async function mountVisor(canvas: HTMLCanvasElement, options: VisorOption
       if (len > 0.01) {
         // High up the ground slides by slowly: the pace grows with the height.
         const speed = (keys.has('ShiftLeft') || keys.has('ShiftRight') || pad.fast ? FAST_MS : WALK_MS) * Math.min(1, len) * (1 + lift / 6);
+        eye.stepMs = lift < 0.5 ? speed : 0;
         const sin = Math.sin(yaw);
         const cos = Math.cos(yaw);
         // Facing direction for yaw 0 is north (-z); positive yaw turns toward the east.
@@ -682,6 +698,7 @@ export async function mountVisor(canvas: HTMLCanvasElement, options: VisorOption
         // Nobody walks through a rover: a step into one ends at its side.
         [pos.x, pos.z] = keepOutside(nx, nz, props.clearings, 0.75);
       }
+      if (len <= 0.01) eye.stepMs = 0;
       eyeAbove = EYE_M + lift;
     }
 
@@ -718,6 +735,14 @@ export async function mountVisor(canvas: HTMLCanvasElement, options: VisorOption
     }
     camera.position.copy(pos);
     camera.rotation.set(-Math.max(-1.3, Math.min(1.3, viewPitch)), -viewYaw, 0);
+    if (dt > 0) {
+      const turn = viewYaw - eye.yaw;
+      eye.yawRate += ((Math.abs(turn) < 1 ? turn / dt : 0) - eye.yawRate) * Math.min(1, dt * 8);
+    }
+    eye.yaw = viewYaw;
+    eye.lookDown = Math.max(-1.3, Math.min(1.3, viewPitch));
+    eye.walk += ((eye.stepMs > 0.05 ? 1 : 0) - eye.walk) * Math.min(1, dt * 4);
+    eye.walkPhase += eye.stepMs * dt * cyclesPerMetre(eye.stepMs);
     sky.mesh.position.copy(pos);
     sky.mesh.scale.setScalar(100_000);
 
@@ -862,6 +887,11 @@ export async function mountVisor(canvas: HTMLCanvasElement, options: VisorOption
     },
     setRoam(vehicle, view) {
       if (mission) return;
+      // Taking a vehicle (or a camera) lands the eye at once.
+      if (descent) {
+        descent = null;
+        lift = 0;
+      }
       const was = state.roam;
       state.roam = { vehicle, view };
       const needParty = vehicle !== 'foot' || view !== 'eyes';
@@ -897,11 +927,19 @@ export async function mountVisor(canvas: HTMLCanvasElement, options: VisorOption
     // For the checks: the resolution the scene is drawn at now.
     ratio: () => pixelRatio,
     getState: () => ({ ...state }),
+    view: () => ({
+      lookDownDeg: (eye.lookDown * 180) / Math.PI,
+      fovDeg: camera.fov,
+      walkPhase: eye.walkPhase,
+      walk: eye.walk,
+      yawRate: eye.yawRate,
+      ownEyes: !mission && !roamParty && lift < 1.5 && !descent,
+    }),
     props: () => props.list(),
     route: () => routeAhead,
     position: () => ({ x: pos.x, y: pos.y, z: pos.z }),
     eyeAboveGround: () => pos.y - heightAt(pos.x, pos.z),
-    stats: () => ({ triangles: renderer.info.render.triangles, calls: renderer.info.render.calls, rocks: rocks.count(), wheels: party ? [party.wheelCount(), Math.round(party.wheelTurn() * 100) / 100] : [0, 0], layers: ORDER.map((k) => `${k}:${layers[k].patch ? (layers[k].patch.hirise ? `hirise ${layers[k].patch.debug}` : 'package') : 'none'}`).join(' '), textures: renderer.info.memory.textures, geometries: renderer.info.memory.geometries, programs: renderer.info.programs?.length ?? 0 }),
+    stats: () => ({ triangles: renderer.info.render.triangles, calls: renderer.info.render.calls, rocks: rocks.count(), wheels: party ? [party.wheelCount(), Math.round(party.wheelTurn() * 100) / 100] : [0, 0], layers: ORDER.map((k) => `${k}:${layers[k].patch ? (layers[k].patch.hirise ? `hirise ${layers[k].patch.debug}` : 'package') : 'none'}`).join(' '), textures: renderer.info.memory.textures, geometries: renderer.info.memory.geometries, programs: renderer.info.programs?.length ?? 0, party: party ? [party.focus().x, party.focus().z] : null }),
     dispose() {
       disposed = true;
       cancelAnimationFrame(raf);

@@ -67,11 +67,26 @@ export interface DetailLayer {
 export function blendDetail(base: Uint8ClampedArray, size: number, pad: number, layers: readonly DetailLayer[]): void {
   const full = size + 2 * pad;
   for (const layer of layers) {
-    const low = blur(layer.lum, full, full, layer.radius);
+    // Where the detail has holes (the edge of an image strip), the blur is taken over the covered pixels only:
+    // with the empty pixels counted as black, every strip edge came out as a bright rim.
+    let low: Float32Array;
+    let reach: Float32Array | null = null;
+    if (layer.mask) {
+      const weighted = new Float32Array(layer.lum.length);
+      for (let i = 0; i < weighted.length; i += 1) weighted[i] = (layer.lum[i] ?? 0) * (layer.mask[i] ?? 0);
+      const num = blur(weighted, full, full, layer.radius);
+      reach = blur(layer.mask, full, full, layer.radius);
+      low = num;
+      for (let i = 0; i < low.length; i += 1) low[i] = (num[i] ?? 0) / Math.max(1e-3, reach[i] ?? 0);
+    } else {
+      low = blur(layer.lum, full, full, layer.radius);
+    }
     for (let y = 0; y < size; y += 1) {
       for (let x = 0; x < size; x += 1) {
         const q = (y + pad) * full + (x + pad);
-        const m = layer.mask ? (layer.mask[q] ?? 0) : 1;
+        // Feathered at a hole's edge, so detail fades in rather than starting at a hard line.
+        const edge = reach ? Math.max(0, Math.min(1, ((reach[q] ?? 0) - 0.25) / 0.5)) : 1;
+        const m = (layer.mask ? (layer.mask[q] ?? 0) : 1) * edge;
         if (m <= 0.004) continue;
         // High-pass as a fraction of full scale, limited softly so one bright rock cannot blow out.
         const hp = Math.tanh((((layer.lum[q] ?? 0) - (low[q] ?? 0)) / 255) * layer.gain * 2.2) / 2.2;

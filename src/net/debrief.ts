@@ -7,6 +7,7 @@ import type { Alert, Severity, VehicleId } from '@/engines/types';
 import { VEHICLES } from '@/engines/vehicles';
 import type { OutcomeKind, World } from '@/sim/types';
 import { fmtDistance, fmtDuration, fmtNumber } from '@/lib/format';
+import { assigneeWords, type Assignee } from '../../convex/shared';
 import { SEVERITY_WORD } from './words';
 import type { Planned } from './snapshot';
 
@@ -80,7 +81,7 @@ export interface Debrief {
 export interface DebriefInput {
   mission: { title: string; objective: string; vehicle: string; siteName: string | null; plannedStartUtc: number | null };
   crew: { _id: string; kind: 'human' | 'android'; name: string; role: string; color: string; state: 'invited' | 'joined' | 'left' }[];
-  assignments: Record<string, string>;
+  assignments: Record<string, Assignee>;
   world: World | null;
   planned: Planned | null;
   log: { authorName: string; kind: DebriefLine['kind']; text: string; missionUtcMs: number | null; taskId?: string | null }[];
@@ -126,8 +127,8 @@ export function buildDebrief(input: DebriefInput): Debrief {
       ? { kind: out.kind, text: out.text, durationS: out.durationS, distM: out.distM, o2Frac: out.o2Frac, batteryFrac: out.batteryFrac, doseMSv: out.doseMSv, tasksDone: out.tasksDone, tasksTotal: out.tasksTotal }
       : null,
     tasks: (run?.tasks ?? []).map((t) => {
-      const crewId = input.assignments[planTaskId(t.id)];
-      return { id: t.id, stopName: t.stopName, label: t.label, minutes: t.minutes, state: t.state, assignee: crewId ? (nameOf.get(crewId) ?? null) : null };
+      const assignee = assigneeWords(input.assignments[planTaskId(t.id)], (id) => nameOf.get(id));
+      return { id: t.id, stopName: t.stopName, label: t.label, minutes: t.minutes, state: t.state, assignee };
     }),
     alerts: (world?.alerts ?? []).map((a) => ({ atUtcMs: a.atUtcMs, severity: a.severity, title: a.title, resolved: a.resolved ?? null, action: a.action?.label ?? null })),
     routeChanges: run?.leg ?? 0,

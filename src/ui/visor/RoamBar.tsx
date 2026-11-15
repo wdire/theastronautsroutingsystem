@@ -18,44 +18,43 @@ const VIEWS: readonly { id: RoamView; icon: typeof Eye; label: string }[] = [
   { id: 'far', icon: ZoomOut, label: 'Far' },
 ];
 
-const ITEM = 'inline-flex h-9 items-center gap-1.5 rounded-md px-2.5 text-[13px] font-medium transition-colors pointer-coarse:h-11';
+const ITEM = 'inline-flex h-9 items-center gap-2 rounded-md px-2.5 text-[13px] font-medium transition-colors pointer-coarse:h-11';
+const on = 'bg-primary/20 text-foreground';
+const off = 'text-muted-foreground hover:bg-secondary hover:text-foreground';
 
-/** On your own in Rover View: what you move as, and where the camera stands. */
-export function RoamBar({ vehicle, view, onChange }: { vehicle: VehicleId; view: RoamView; onChange: (vehicle: VehicleId, view: RoamView) => void }) {
+/** On your own in Rover View: what you move as, one under another. Taking a vehicle shows it from close behind. */
+export function VehiclePicker({ vehicle, view, onChange, compact = false }: { vehicle: VehicleId; view: RoamView; onChange: (vehicle: VehicleId, view: RoamView) => void; compact?: boolean }) {
   return (
-    <div className="flex flex-col items-end gap-1.5">
-      <div role="radiogroup" aria-label="Move as" className="panel flex gap-0.5 p-0.5">
-        {CHOICES.map((c) => (
-          <button
-            key={c.id}
-            type="button"
-            role="radio"
-            aria-checked={vehicle === c.id}
-            title={c.id === 'foot' ? 'Walk in a suit' : `Drive the ${c.label}`}
-            // Taking a vehicle shows it from close behind; walking goes back to your own eyes.
-            onClick={() => onChange(c.id, c.id === 'foot' ? 'eyes' : view === 'eyes' ? 'close' : view)}
-            className={cn(ITEM, vehicle === c.id ? 'bg-primary/20 text-foreground' : 'text-muted-foreground hover:bg-secondary hover:text-foreground')}
-          >
-            <c.icon className="size-4" aria-hidden />
-            <span className="max-lg:sr-only">{c.label}</span>
-          </button>
-        ))}
-      </div>
-      <div role="radiogroup" aria-label="Camera" className="panel flex gap-0.5 p-0.5">
-        {VIEWS.map((v) => (
-          <button
-            key={v.id}
-            type="button"
-            role="radio"
-            aria-checked={view === v.id}
-            onClick={() => onChange(vehicle, v.id)}
-            className={cn(ITEM, view === v.id ? 'bg-primary/20 text-foreground' : 'text-muted-foreground hover:bg-secondary hover:text-foreground')}
-          >
-            <v.icon className="size-4" aria-hidden />
-            {v.label}
-          </button>
-        ))}
-      </div>
+    <div role="radiogroup" aria-label="Move as" className={cn('panel flex flex-col gap-0.5 p-0.5', !compact && 'w-[13.5rem]')}>
+      {CHOICES.map((c) => (
+        <button
+          key={c.id}
+          type="button"
+          role="radio"
+          aria-checked={vehicle === c.id}
+          title={c.id === 'foot' ? 'Walk in a suit' : `Drive the ${c.label}`}
+          // Taking a vehicle shows it from close behind; walking goes back to your own eyes.
+          onClick={() => onChange(c.id, c.id === 'foot' ? 'eyes' : view === 'eyes' ? 'close' : view)}
+          className={cn(ITEM, compact ? '' : 'w-full justify-start', vehicle === c.id ? on : off)}
+        >
+          <c.icon className="size-4 shrink-0" aria-hidden />
+          <span className={cn('truncate', compact && 'sr-only')}>{c.label}</span>
+        </button>
+      ))}
+    </div>
+  );
+}
+
+/** Where the camera stands: your own eyes, close behind, or far behind. */
+export function CameraPicker({ vehicle, view, onChange, compact = false }: { vehicle: VehicleId; view: RoamView; onChange: (vehicle: VehicleId, view: RoamView) => void; compact?: boolean }) {
+  return (
+    <div role="radiogroup" aria-label="Camera" className={cn('panel flex gap-0.5 p-0.5', compact && 'flex-col')}>
+      {VIEWS.map((v) => (
+        <button key={v.id} type="button" role="radio" aria-checked={view === v.id} aria-label={v.label} title={v.label} onClick={() => onChange(vehicle, v.id)} className={cn(ITEM, view === v.id ? on : off)}>
+          <v.icon className="size-4" aria-hidden />
+          <span className={cn(compact && 'sr-only')}>{v.label}</span>
+        </button>
+      ))}
     </div>
   );
 }

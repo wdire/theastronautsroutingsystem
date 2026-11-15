@@ -8,16 +8,22 @@ import { computeTrip } from '@/engines/tripComputer';
 import { missionById } from '@/engines/missions';
 import type { PathPoint, TripStop } from '@/engines/types';
 import { pathStats } from '@/planner/geometry';
+import { VEHICLES } from '@/engines/vehicles';
 import { distanceM } from '@/lib/geo';
 import { routeOnce } from '@/planner/single';
+import { startProblem } from '@/planner/startCheck';
 import { useApp } from '@/store';
 import { forceEvent } from './events';
 import type { EventKind, Speed, World } from './types';
-import { abortMission, adoptRoute, applyAlert, createWorld, crewAt, ignoreAlert, proposal, say, setPaused, setSpeed, startMission as startRun, tick } from './world';
+import { abortMission, adoptRoute, answerPending, applyAlert, createWorld, crewAt, ignoreAlert, proposal, say, setPaused, setSpeed, startMission as startRun, tick } from './world';
 
 const TICK_MS = 100;
+/** The most real time made up in one go after the tab was in the background, s. */
+const MAX_CATCH_UP_S = 90;
 let timer = 0;
 let lastTick = 0;
+/** When a question to the base began waiting on a clock that stands still (performance.now()), else 0. */
+let heldSince = 0;
 let spoken = new Set<string>();
 // Counts missions started: a reply to a route asked for one mission must never land on the next.
 let missionSerial = 0;
@@ -47,20 +53,48 @@ function speak(w: World): void {
 
 function loop(): void {
   const now = performance.now();
-  const dt = Math.min(1, (now - lastTick) / 1000);
+  // A tab in the background gets its timer a second, or even a minute, apart; the time missed is made up below.
+  let dt = Math.min(MAX_CATCH_UP_S, (now - lastTick) / 1000);
   lastTick = now;
   const w = world();
   if (!w?.run) return stopTimer();
   // A proposal whose alert has gone (answered, expired, another mission) must not hold the clock for ever.
   const pending = useApp.getState().proposed;
   if (pending && (w.run.status !== 'running' || !w.alerts.some((a) => a.id === pending.alertId && !a.resolved))) useApp.setState({ proposed: null });
-  // While a new route is being worked out or weighed, the crew waits where it is.
-  // So does it while a warning that asks for a decision is unanswered: at 100x it would be past before it was read.
-  const held = useApp.getState().routingAlertId !== null || useApp.getState().proposed !== null || w.alerts.some((a) => !a.resolved && a.severity === 'warning' && a.action);
-  if (w.paused || held || w.run.status !== 'running') return;
-  const next = tick(w, dt);
+  if (!clockTicking(w)) {
+    // The base answers a question asked while the clock stands still, after a moment of the visitor's own time.
+    if (w.run.status === 'running' && w.pendingReplies.length > 0) {
+      if (heldSince === 0) heldSince = now;
+      else if (now - heldSince >= 3000) {
+        heldSince = 0;
+        put(answerPending(w));
+      }
+    } else heldSince = 0;
+    return;
+  }
+  heldSince = 0;
+  // In steps of at most a second, stopping where the clock would stop (a warning that wants a decision), so a
+  // commander's hidden tab keeps the crew moving for everyone without carrying them past a choice.
+  let next = w;
+  while (dt > 1e-6) {
+    const step = Math.min(1, dt);
+    next = tick(next, step);
+    dt -= step;
+    if (!clockTicking(next)) break;
+  }
   put(next);
   speak(next);
+}
+
+/**
+ * Whether the mission clock is moving. It stands still while paused or over, while a new route is worked out or
+ * weighed, and while a warning that asks for a decision is unanswered: at 100x it would be past before it was read.
+ */
+export function clockTicking(w: World | null = world()): boolean {
+  if (!w?.run || w.paused || w.run.status !== 'running') return false;
+  const s = useApp.getState();
+  if (s.routingAlertId !== null || s.proposed !== null) return false;
+  return !w.alerts.some((a) => !a.resolved && a.severity === 'warning' && a.action);
 }
 
 function stopTimer(): void {
@@ -71,8 +105,13 @@ function stopTimer(): void {
 /** Starts the selected route as a mission. The app clock follows the mission from here. */
 export function startMission(): boolean {
   const s = useApp.getState();
-  // One mission at a time: a running one is ended by its own controls, never replaced by a stray Start.
-  if (s.world?.run?.status === 'running') return false;
+  // One mission at a time, and only a plan that works: whichever button asked, the same check decides.
+  const problem = startProblem(s);
+  if (problem) {
+    toast('The mission cannot start yet', { description: problem });
+    return false;
+  }
+  // startProblem has already ruled these out; this only narrows the types.
   if (s.route.status !== 'ready' || !s.plan.start) return false;
   const { alternatives, selected, departUtcMs } = s.route;
   const route = alternatives.find((a) => a.id === selected) ?? alternatives[0];
@@ -217,6 +256,10 @@ export async function apply(alertId: string): Promise<void> {
       campAtNight: run.plan.campAtNight,
       ...(crew.o2Kg !== null ? { startO2Kg: crew.o2Kg } : {}),
       ...(crew.batteryKWh !== null ? { startBatteryKWh: crew.batteryKWh } : {}),
+      // Suits worn since the mission set out: what they have left is what the new route can count on.
+      ...(VEHICLES[ask.vehicle].cabin ? {} : { startSuitS: Math.max(0, (now.utcMs - run.startedUtcMs) / 1000) }),
+      // The new leg starts where the crew is, not at home: only carrying on reaches home, and only if home is ahead.
+      homeAt: ask.homeIsAhead ? 'end' : 'none',
     });
     const oldLeftM = Math.max(0, pathStats(run.path).distM - crew.distM);
     const oldLeftS = Math.max(0, (run.legStartUtcMs + run.trip.totals.durationS * 1000 - now.utcMs) / 1000);

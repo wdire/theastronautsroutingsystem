@@ -25,6 +25,8 @@ const OVERLAYS: readonly { id: Overlay; label: string; hint: string }[] = [
   { id: 'olivine', label: 'Olivine and pyroxene', hint: 'Volcanic minerals seen from orbit by CRISM.' },
   { id: 'carbonate', label: 'Carbonate', hint: 'Minerals that form in water, seen from orbit by CRISM.' },
   { id: 'slope', label: 'Slope', hint: 'Where the ground is too steep for the chosen vehicle.' },
+  { id: 'night', label: 'Rock or dust', hint: 'How warm the ground stays at night, from THEMIS: rock holds heat, dust and sand lose it.' },
+  { id: 'elevation', label: 'Elevation', hint: 'Height above the Mars datum in colour, from MOLA. Whole planet.' },
 ];
 
 function Swatch({ colour }: { colour: string }) {
@@ -92,6 +94,33 @@ function Legend({ overlay }: { overlay: Overlay }) {
           CRISM on Mars Reconnaissance Orbiter, 21 targeted images over Jezero. Each image has its own colour stretch, so compare colours within one image,
           not between images. Zoom in to the crater to see them.
         </p>
+      </div>
+    );
+  }
+  if (overlay === 'night') {
+    return (
+      <div className="mt-2 rounded-md border p-3">
+        <div className="h-2.5 rounded-sm" style={{ background: 'linear-gradient(90deg, #1c1840, #5c285c, #c4543a, #ecaa58, #fceeba)' }} aria-hidden />
+        <div className="mt-1.5 flex justify-between text-xs text-muted-foreground">
+          <span>Dust, fine sand</span>
+          <span>Rock, bedrock</span>
+        </div>
+        <p className="mt-3 text-xs leading-relaxed text-faint">
+          THEMIS on Mars Odyssey, night-time infrared, about 100 m a pixel. Ground that stays warm through the night is solid; ground that cools fast is
+          loose, where wheels can sink. Stretched within each map tile, so read it against its surroundings. Covers 60 N to 60 S.
+        </p>
+      </div>
+    );
+  }
+  if (overlay === 'elevation') {
+    return (
+      <div className="mt-2 rounded-md border p-3">
+        <div className="h-2.5 rounded-sm" style={{ background: 'linear-gradient(90deg, #3b2a8f, #2f7fd0, #39b36a, #e8d34a, #e0743a, #b23a2e, #f4f0ec)' }} aria-hidden />
+        <div className="mt-1.5 flex justify-between text-xs text-muted-foreground">
+          <span>Low</span>
+          <span>High</span>
+        </div>
+        <p className="mt-3 text-xs leading-relaxed text-faint">MOLA on Mars Global Surveyor, 463 m a pixel. The colours span the whole planet, from the floor of Hellas to the top of Olympus Mons.</p>
       </div>
     );
   }

@@ -17,7 +17,8 @@ const JOINTS: Record<string, readonly [number, number, number]> = {
   head: [0, 1.62, 0],
   shoulder: [0.3, 1.5, -0.05],
   elbow: [0.33, 1.25, -0.24],
-  hand: [0.28, 1.1, -0.55],
+  // Measured on the model: the gloves' middle, held out in front at waist height.
+  hand: [0.26, 1.07, -0.46],
   hip: [0.12, 0.85, 0],
   knee: [0.18, 0.47, 0],
   ankle: [0.21, 0.13, 0],
@@ -71,8 +72,10 @@ export function suitWeights(p: Vector3): Partial<Record<BoneName, number>> {
   const hand = jointOf(`hand${side}`);
   const upper = toSegment(p, shoulder, elbow);
   const fore = toSegment(p, elbow, hand);
-  // Past the hand the glove still belongs to the forearm.
-  const beyondHand = p.z < hand.z && Math.hypot(p.x - hand.x, p.y - hand.y) < 0.16;
+  // The whole glove belongs to the hand: everything held out in front of the body at waist height, fingers too.
+  // Fingertips lie further from the arm's line than the arm test reaches; left to the torso they stayed behind
+  // in front of the suit as the arm swung down, and stretched into bars.
+  const beyondHand = (p.z < -0.34 && Math.abs(p.x) > 0.1 && p.y > 0.85 && p.y < 1.16) || p.distanceTo(hand) < 0.13;
   const armD = Math.min(upper.d, fore.d);
   const arm = Math.abs(p.x) > 0.2 && p.y > 0.95 && p.y < 1.62 ? 1 - ramp(0.12, 0.19, armD) : 0;
   const armShare = beyondHand ? 1 : arm;
@@ -124,11 +127,31 @@ export interface Suit {
   /**
    * Poses the suit. `phase` counts step cycles (one cycle is a left and a right step); `stride` is
    * 0 standing still and 1 walking; `cycleM` is the ground one cycle covers, so a planted boot stays
-   * where it was put; `timeS` drives breathing and the small movements of someone standing.
+   * where it was put; `timeS` drives breathing and the small movements of someone standing. `grade` is the
+   * ground's rise per metre ahead and to the right, so each boot meets the ground under it.
    */
-  pose(phase: number, stride: number, cycleM?: number, timeS?: number): void;
+  pose(phase: number, stride: number, cycleM?: number, timeS?: number, grade?: Grade): void;
   dispose(): void;
 }
+
+/** The ground's rise per metre ahead of a walker and to its right. */
+export interface Grade {
+  ahead: number;
+  right: number;
+}
+
+/**
+ * How far a walker's body is lowered on a slope, m: standing, the legs are nearly straight, so the boot on the
+ * low side could not reach the ground without the knees giving a little. The party lowers the body by this,
+ * and the pose bends the legs to match.
+ */
+export function standLower(grade: Grade): number {
+  return Math.abs(grade.right) * 0.21 + Math.abs(grade.ahead) * 0.3;
+}
+
+/** Heel behind and toe ahead of the ankle, m: a boot rolling on either stays on the ground, not in it. */
+const HEEL_M = 0.09;
+const TOE_M = 0.17;
 
 /** Thigh and shin lengths of the rig, m: hip to knee and knee to ankle. */
 const THIGH_M = Math.hypot(0.06, 0.38);
@@ -148,7 +171,9 @@ export function footAt(q: number, stepM: number, liftM: number): { ahead: number
     const u = t / STANCE;
     // Heel strike with the toe up, rolling flat, then onto the toe as it leaves.
     const pitch = u < 0.15 ? (1 - u / 0.15) * 0.25 : u > 0.8 ? -((u - 0.8) / 0.2) * 0.35 : 0;
-    return { ahead: stepM / 2 - stepM * u, lift: 0, pitch };
+    // Rolling on the heel or the toe raises the ankle by as much, or the other end of the boot digs in.
+    const lift = pitch > 0 ? HEEL_M * Math.sin(pitch) : TOE_M * Math.sin(-pitch);
+    return { ahead: stepM / 2 - stepM * u, lift: lift * Math.min(1, stepM * 4), pitch };
   }
   const u = (t - STANCE) / (1 - STANCE);
   return { ahead: -stepM / 2 + stepM * smoothstep01(u), lift: liftM * Math.sin(Math.PI * u) ** 1.3, pitch: -0.35 * (1 - u) + 0.25 * u };
@@ -261,7 +286,7 @@ export function rigSuit(model: Object3D): Suit | null {
   // Each walker breathes and fidgets on its own rhythm.
   const seed = Math.random() * 100;
 
-  const pose = (phase: number, stride: number, cycleM = 1.3, timeS = 0): void => {
+  const pose = (phase: number, stride: number, cycleM = 1.3, timeS = 0, grade: Grade = { ahead: 0, right: 0 }): void => {
     const s = clamp01(stride);
     const t = timeS + seed;
     const a = phase * Math.PI * 2;
@@ -282,26 +307,32 @@ export function rigSuit(model: Object3D): Suit | null {
     bones.head.rotation.set(-0.05 * s + Math.sin(t * 0.17) * 0.06 * (1 - s), -(bones.pelvis.rotation.y + bones.spine.rotation.y + bones.chest.rotation.y) * 0.8 + look, 0);
 
     const hipDrop = hipY + bob - ankleY;
+    const lowered = standLower(grade);
+    const slopePitch = Math.atan(grade.ahead);
     for (const side of ['L', 'R'] as const) {
       const offset = side === 'L' ? 0 : 0.5;
       // Phase 0: the left heel strikes.
       const foot = footAt(phase + offset, stepM, liftM);
       // Standing, the weight leg is straight and the other bends a little.
       const rest = (side === 'L' ? 1 : -1) * shift * 1.6;
-      const legs = legAngles(foot.ahead, hipDrop - foot.lift - Math.max(0, rest));
+      // The ground under this boot, against the body's own feet level (the party lowered the body to reach it).
+      const ground = grade.ahead * foot.ahead + grade.right * (side === 'L' ? -1 : 1) * jointOf('ankleR').x + lowered;
+      const legs = legAngles(foot.ahead, hipDrop - foot.lift - ground - Math.max(0, rest));
       // The pelvis turns and tilts; the thigh undoes that so the boot lands where it was aimed.
       bones[`hip${side}`].rotation.set(legs.hip - bones.pelvis.rotation.x, 0, (side === 'L' ? -1 : 1) * 0.02);
       bones[`knee${side}`].rotation.set(legs.knee, 0, 0);
-      // The boot meets the ground flat, rolls from heel to toe, and points its toe up in the swing.
-      bones[`ankle${side}`].rotation.set(-(legs.hip + legs.knee) + foot.pitch * s, 0, 0);
+      // The boot meets the ground flat (along the slope), rolls from heel to toe, and points its toe up in the swing.
+      bones[`ankle${side}`].rotation.set(-(legs.hip + legs.knee) + foot.pitch * s + slopePitch, 0, 0);
 
-      // Arms swing against the legs: the left arm forward as the right leg is.
-      const opposite = footAt(phase + offset + 0.5, 1, 0).ahead;
-      const swing = opposite * 0.42 * s;
-      bones[`shoulder${side}`].rotation.set(-0.62 - swing + breath * 0.008, 0, (side === 'L' ? 1 : -1) * (0.12 + 0.02 * s));
-      // The elbow bends more as the arm comes forward.
-      bones[`elbow${side}`].rotation.set(-0.5 - Math.max(0, swing) * 0.6 - 0.08 * s, 0, 0);
-      bones[`hand${side}`].rotation.set(-0.1 * s, 0, 0);
+      // Arms swing against the legs, as a person's do: this arm forward while this side's boot is back. In a suit
+      // the swing is shorter than in clothes, but it is there, and it carries the shoulders with it.
+      const own = footAt(phase + offset, 1, 0).ahead;
+      const forward = -own * 2 * s;
+      // The rest pose lowers the model's raised arms to hang at the sides, a little away from the bulky torso.
+      bones[`shoulder${side}`].rotation.set(-0.7 + forward * 0.32 + breath * 0.008, 0, (side === 'L' ? 1 : -1) * (0.13 + 0.015 * s));
+      // A relaxed elbow, bending a little more as the arm comes forward and straightening as it goes back.
+      bones[`elbow${side}`].rotation.set(-0.42 + 0.1 + Math.max(0, forward) * 0.22 - Math.max(0, -forward) * 0.04, 0, 0);
+      bones[`hand${side}`].rotation.set(0.05 * s, 0, 0);
     }
   };
   pose(0, 0);

@@ -33,7 +33,8 @@ export default defineSchema({
     createdAt: v.number(),
     startedAt: v.optional(v.number()),
     endedAt: v.optional(v.number()),
-    assignments: v.record(v.string(), v.id('crew')),
+    // A task's assignee: 'all' for the whole crew, or crew ids (a lone id on missions from before multi-assign).
+    assignments: v.record(v.string(), v.union(v.literal('all'), v.id('crew'), v.array(v.id('crew')))),
   }).index('by_status', ['status']),
 
   plans: defineTable({ missionId: v.id('missions'), planJson: v.string() }).index('by_missionId', ['missionId']),

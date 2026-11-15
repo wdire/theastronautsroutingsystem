@@ -1,5 +1,13 @@
 import type { RasterLayerSpecification, StyleSpecification } from 'maplibre-gl';
 import { REGION } from '@/lib/constants';
+import { isPhone } from '@/lib/device';
+
+/**
+ * On a high-density desktop screen, tiles one level finer than the zoom, so the ground is as sharp as the screen
+ * can show. Not on a phone: four times the tiles was more than its memory and network could keep up with, and
+ * whole stretches of the map stayed blank.
+ */
+const TILE_PX = typeof window !== 'undefined' && window.devicePixelRatio >= 1.5 && !isPhone() ? 128 : 256;
 
 export const SOURCE_BASE = 'base';
 export const SOURCE_REGION = 'region-outline';
@@ -28,7 +36,7 @@ export function baseStyle(): StyleSpecification {
         tiles: ['mars://img/{z}/{x}/{y}'],
         // On a high-density screen, tiles one level finer than the zoom, so the ground is as sharp as the
         // screen can show (at 256 each image would be stretched to twice its pixels).
-        tileSize: typeof window !== 'undefined' && window.devicePixelRatio >= 1.5 ? 128 : 256,
+        tileSize: TILE_PX,
         minzoom: 0,
         maxzoom: 19,
         attribution: 'NASA / JPL-Caltech / USGS / MSSS / ASU',
@@ -38,7 +46,7 @@ export function baseStyle(): StyleSpecification {
       hd: {
         type: 'raster',
         tiles: ['mars://hd/{z}/{x}/{y}'],
-        tileSize: typeof window !== 'undefined' && window.devicePixelRatio >= 1.5 ? 128 : 256,
+        tileSize: TILE_PX,
         minzoom: 14,
         maxzoom: 19,
         bounds: [77.2, 18.3, 77.6, 18.68],

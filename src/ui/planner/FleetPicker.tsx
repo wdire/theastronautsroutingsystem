@@ -2,7 +2,6 @@
  * Who and what goes: the number of people and the vehicles, each added and taken away on its own. The trip is
  * costed for whatever holds the convoy back, and the picker says what that is and why.
  */
-import { useEffect } from 'react';
 import { Bot, Car, Caravan, Footprints, Helicopter, Info, Minus, Plus, TriangleAlert, Users } from 'lucide-react';
 import type { FleetEntry, VehicleId } from '@/engines/types';
 import { VEHICLES } from '@/engines/vehicles';
@@ -85,17 +84,10 @@ export function FleetPicker() {
   const setFleet = useApp((s) => s.setFleet);
   const roster = useApp((s) => s.roster);
   const onCrewMission = useCrew((s) => s.current !== null);
-  const isCommander = useCrew((s) => s.current?.isCommander ?? false);
   const fleet = fleetOf(plan);
   const people = peopleOf(plan);
   const check = checkFleet(fleet, people);
   const crewCount = onCrewMission && roster ? roster.length : null;
-
-  // The commander's plan follows the crew list, so everyone sees the same head count and the same budget.
-  useEffect(() => {
-    if (crewCount === null || !isCommander || crewCount === people) return;
-    useApp.getState().setFleet(fleetOf(useApp.getState().plan), crewCount);
-  }, [crewCount, isCommander, people]);
 
   const setCount = (id: VehicleId, count: number) => {
     const next: FleetEntry[] = FLEET_VEHICLES.map((vehicle) => ({ vehicle, count: vehicle === id ? count : (fleet.find((f) => f.vehicle === vehicle)?.count ?? 0) }));

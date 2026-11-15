@@ -31,5 +31,7 @@ export function reliefExaggeration(zoom: number): number {
 
 /** "Relief x3.0 exaggerated", or "Relief at true scale" when it is not. */
 export function reliefLabel(factor: number): string {
-  return Math.abs(factor - 1) < 0.05 ? 'Relief at true scale' : `Relief x${factor.toFixed(1)} exaggerated`;
+  if (Math.abs(factor - 1) < 0.05) return 'Relief at true scale';
+  // On the tallest volcanoes the stretch is held back to keep the ground under the camera.
+  return factor < 1 ? `Relief x${factor.toFixed(1)}, flattened` : `Relief x${factor.toFixed(1)} exaggerated`;
 }

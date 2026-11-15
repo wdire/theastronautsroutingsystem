@@ -1,4 +1,6 @@
-export type ModelName = 'perseverance' | 'ingenuity' | 'sev' | 'habitat' | 'z2' | 'solar' | 'pad' | 'mast' | 'tunnel';
+import { STATION_FOOTPRINT } from './stationPlan';
+
+export type ModelName = 'perseverance' | 'ingenuity' | 'sev' | 'habitat' | 'z2' | 'solar' | 'pad' | 'mast' | 'tunnel' | 'station';
 
 export interface ModelSpec {
   /** The NASA model to load; null for the parts of a base drawn here (src/visor/baseProps.ts). */
@@ -11,6 +13,11 @@ export interface ModelSpec {
   stance: { width: number; length: number } | null;
   /** The radius it takes up on the ground, m: rocks and the viewer stay outside it. */
   clearM: number;
+  /**
+   * For something too large and uneven for one disc: the discs it stands on, [x, z, r] in its own frame (x to
+   * the right, front to -z). They replace `clearM` for rocks and walkers, and it stands level at their mean height.
+   */
+  footprint?: readonly (readonly [number, number, number])[];
   /**
    * Wheels to cut out of the model so they can turn: either every triangle of a named node, sorted
    * into `count` wheels by place, or the triangles inside a cylinder at each of `at` (centres in the
@@ -40,6 +47,7 @@ export const MODELS: Record<ModelName, ModelSpec> = {
   pad: { url: null, scale: 1, yawDeg: 0, stance: { width: 16, length: 16 }, clearM: 10 },
   mast: { url: null, scale: 1, yawDeg: 0, stance: null, clearM: 1.2 },
   tunnel: { url: null, scale: 1, yawDeg: 0, stance: { width: 2.6, length: 9 }, clearM: 5 },
+  station: { url: null, scale: 1, yawDeg: 0, stance: null, clearM: 23, footprint: STATION_FOOTPRINT },
 };
 
 /** Something that stands on the ground at a real place: a rover, the habitat, a parked vehicle. */

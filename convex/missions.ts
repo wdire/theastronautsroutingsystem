@@ -10,7 +10,7 @@ import { checkPerson, findPerson, isActive, requireCommander, requirePerson, req
 import * as check from './lib/check';
 import { crewOut, crewOutV, crewRows, findRow, isCrewOf, releasePerson, requireFree, requireRow, systemLog } from './lib/crew';
 import { authV, crewStateV, statusV } from './lib/validators';
-import { COMMANDER_ROLE, LIMITS } from './shared';
+import { COMMANDER_ROLE, dropCrewFrom, EVERYONE, LIMITS, MAX_CREW } from './shared';
 
 const LIST_CAP = 50;
 const HISTORY_CAP = 30;
@@ -33,11 +33,26 @@ const missionOutV = v.object({
   createdAt: v.number(),
   startedAt: v.union(v.number(), v.null()),
   endedAt: v.union(v.number(), v.null()),
-  assignments: v.record(v.string(), v.id('crew')),
+  assignments: v.record(v.string(), v.union(v.literal('all'), v.id('crew'), v.array(v.id('crew')))),
   debriefJson: v.union(v.string(), v.null()),
 });
 
 // One row per mission in each of these tables, looked up by the same index name.
+/** How many vehicles in a shared plan need someone at the wheel. Unreadable plans count none. */
+function crewedVehicles(planJson: string): number {
+  try {
+    const fleet: unknown = (JSON.parse(planJson) as { plan?: { fleet?: unknown } }).plan?.fleet;
+    if (!Array.isArray(fleet)) return 0;
+    let n = 0;
+    for (const f of fleet as { vehicle?: unknown; count?: unknown }[]) {
+      if ((f.vehicle === 'openRover' || f.vehicle === 'pressRover') && typeof f.count === 'number' && Number.isFinite(f.count)) n += Math.max(0, Math.round(f.count));
+    }
+    return n;
+  } catch {
+    return 0;
+  }
+}
+
 const planOf = (ctx: Ctx, missionId: Id<'missions'>) => ctx.db.query('plans').withIndex('by_missionId', (q) => q.eq('missionId', missionId)).unique();
 const debriefOf = (ctx: Ctx, missionId: Id<'missions'>) => ctx.db.query('debriefs').withIndex('by_missionId', (q) => q.eq('missionId', missionId)).unique();
 const liveOf = (ctx: Ctx, missionId: Id<'missions'>) => ctx.db.query('live').withIndex('by_missionId', (q) => q.eq('missionId', missionId)).unique();
@@ -131,7 +146,8 @@ export const setPlan = mutation({
 });
 
 export const assign = mutation({
-  args: { auth: authV, missionId: v.id('missions'), taskId: v.string(), crewId: v.union(v.id('crew'), v.null()) },
+  // Who does a task: nobody (null), the whole crew ('all'), or the crew members listed.
+  args: { auth: authV, missionId: v.id('missions'), taskId: v.string(), to: v.union(v.null(), v.literal('all'), v.array(v.id('crew'))) },
   returns: v.null(),
   handler: async (ctx, args) => {
     const person = await requirePerson(ctx, args.auth.clientId, args.auth.secret);
@@ -139,13 +155,17 @@ export const assign = mutation({
     requireStatus(mission, ['planning', 'underway']);
     const taskId = check.taskId(args.taskId);
     const assignments = { ...mission.assignments };
-    if (args.crewId === null) {
+    const ids = Array.isArray(args.to) ? [...new Set(args.to)] : [];
+    if (ids.length > MAX_CREW) throw new ConvexError('A task can go to at most the whole crew.');
+    for (const id of ids) {
+      const row = await requireRow(ctx, mission._id, id);
+      if (row.state === 'left') throw new ConvexError(`${row.name} has left the crew.`);
+    }
+    if (args.to === null || (Array.isArray(args.to) && ids.length === 0)) {
       delete assignments[taskId];
     } else {
-      const row = await requireRow(ctx, mission._id, args.crewId);
-      if (row.state === 'left') throw new ConvexError(`${row.name} has left the crew.`);
       if (!(taskId in assignments) && Object.keys(assignments).length >= MAX_ASSIGNMENTS) throw new ConvexError('This mission has too many assigned tasks.');
-      assignments[taskId] = row._id;
+      assignments[taskId] = args.to === EVERYONE ? EVERYONE : ids;
     }
     await ctx.db.patch(mission._id, { assignments });
     return null;
@@ -162,11 +182,16 @@ export const start = mutation({
     const routeJson = check.json(args.routeJson, 'The route', LIMITS.routeBytes);
     const snapshotJson = check.json(args.snapshotJson, 'The live snapshot', LIMITS.snapshotBytes);
     const now = Date.now();
+    const rows = await crewRows(ctx, mission._id);
+    // The browser checks this before it asks; a stale or altered one is refused here all the same.
+    const joined = rows.filter((r) => r.state === 'joined').length;
+    const crewed = crewedVehicles((await planOf(ctx, mission._id))?.planJson ?? '');
+    if (crewed > joined) throw new ConvexError(`${crewed} crewed vehicles need ${crewed} drivers, and the crew is ${joined}. Take fewer rovers or bring more people.`);
     // The crew is fixed once the run begins: unanswered invites lapse, and their tasks with them.
-    const assignments = { ...mission.assignments };
-    for (const row of await crewRows(ctx, mission._id)) {
+    let assignments = mission.assignments;
+    for (const row of rows) {
       if (row.state !== 'invited') continue;
-      for (const [task, crewId] of Object.entries(assignments)) if (crewId === row._id) delete assignments[task];
+      assignments = dropCrewFrom(assignments, row._id) ?? assignments;
       await ctx.db.delete(row._id);
     }
     await ctx.db.patch(mission._id, { status: 'underway', startedAt: now, assignments });
@@ -418,13 +443,26 @@ const STALE_PLAN_MS = 12 * 3_600_000;
  * ever, and their crew could never join anything else. No debrief is written (only the commander's browser
  * held the run); the crew log says why it ended.
  */
+/** How long the commander's browser may stay silent after the run ended before the server closes the mission. */
+const ENDED_SILENT_MS = 60_000;
+
+/** How the run in a live snapshot ended ('done' or 'aborted'), or null while it runs or the snapshot is unreadable. */
+function runEnd(snapshotJson: string): 'done' | 'aborted' | null {
+  try {
+    const status: unknown = (JSON.parse(snapshotJson) as { world?: { run?: { status?: unknown } } }).world?.run?.status;
+    return status === 'done' || status === 'aborted' ? status : null;
+  } catch {
+    return null;
+  }
+}
+
 export const sweepAbandoned = internalMutation({
   args: {},
   returns: v.null(),
   handler: async (ctx) => {
     const now = Date.now();
-    const close = async (mission: Doc<'missions'>, why: string) => {
-      await ctx.db.patch(mission._id, { status: 'aborted', endedAt: now });
+    const close = async (mission: Doc<'missions'>, why: string, status: 'aborted' | 'complete' = 'aborted') => {
+      await ctx.db.patch(mission._id, { status, endedAt: now });
       for (const row of await crewRows(ctx, mission._id)) {
         if (row.state === 'invited') {
           await ctx.db.delete(row._id);
@@ -438,7 +476,11 @@ export const sweepAbandoned = internalMutation({
     for (const mission of await ctx.db.query('missions').withIndex('by_status', (q) => q.eq('status', 'underway')).take(50)) {
       const live = await ctx.db.query('live').withIndex('by_missionId', (q) => q.eq('missionId', mission._id)).unique();
       const last = live?.updatedAt ?? mission.startedAt ?? mission.createdAt;
-      if (now - last > STALE_RUN_MS) await close(mission, 'Mission aborted: the commander’s link was lost for ten minutes.');
+      // A run that had already ended when the commander's browser went (closed before it filed the debrief) is
+      // closed as it ended, after a minute rather than ten, and is not called lost.
+      const ended = live ? runEnd(live.snapshotJson) : null;
+      if (ended && now - last > ENDED_SILENT_MS) await close(mission, `Mission ${ended === 'done' ? 'complete' : 'aborted'}. The commander’s browser closed before the debrief was written.`, ended === 'done' ? 'complete' : 'aborted');
+      else if (now - last > STALE_RUN_MS) await close(mission, 'Mission aborted: the commander’s link was lost for ten minutes.');
     }
     for (const mission of await ctx.db.query('missions').withIndex('by_status', (q) => q.eq('status', 'planning')).take(50)) {
       if (now - mission.createdAt < STALE_PLAN_MS) continue;

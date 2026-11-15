@@ -84,7 +84,7 @@ function Itinerary({ run, utcMs }: { run: MissionRun; utcMs: number }) {
           const at = eta.get(stop.id);
           return (
             <li key={stop.id}>
-              <div className="flex items-baseline gap-2">
+              <div className="flex items-center gap-2">
                 <span className={cn('figure grid size-5 shrink-0 place-items-center rounded-full text-[11px] font-bold', finished ? 'bg-ok/25 text-ok' : doing ? 'bg-primary text-primary-foreground' : 'bg-secondary text-foreground')}>{i + 1}</span>
                 <span className="min-w-0 flex-1 truncate text-[13px] font-medium">{stop.name ?? `Stop ${i + 1}`}</span>
                 {!finished && at !== undefined && at > utcMs ? <span className="figure shrink-0 text-xs text-muted-foreground">{fmtClock(marsTime(at, lon).ltstH)}</span> : null}
@@ -104,8 +104,10 @@ function Itinerary({ run, utcMs }: { run: MissionRun; utcMs: number }) {
           );
         })}
         {run.homeIsAhead ? (
-          <li className="flex items-baseline gap-2">
-            <House className="size-5 shrink-0 p-0.5 text-muted-foreground" aria-hidden />
+          <li className="flex items-center gap-2">
+            <span className="grid size-5 shrink-0 place-items-center rounded-full bg-secondary text-muted-foreground" aria-hidden>
+              <House className="size-3" />
+            </span>
             <span className="min-w-0 flex-1 truncate text-[13px] font-medium">Back at {run.plan.start?.name ?? 'the base'}</span>
             {homeEta !== null && homeEta > utcMs ? <span className="figure shrink-0 text-xs text-muted-foreground">{fmtClock(marsTime(homeEta, lon).ltstH)}</span> : null}
           </li>

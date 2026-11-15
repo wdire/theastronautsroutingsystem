@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { ArrowLeft } from 'lucide-react';
 import { useApp } from '@/store';
 import { nextLtst, marsTime, sunriseSunset } from '@/engines/marsTime';
@@ -10,7 +10,9 @@ import { useIsTouch } from '@/ui/hooks/useMediaQuery';
 import { MovePad } from './MovePad';
 import { missionFeed } from './missionFeed';
 import { MissionHud } from './MissionHud';
-import { RoamBar } from './RoamBar';
+import { CameraPicker, VehiclePicker } from './RoamBar';
+import { Tablet } from './Tablet';
+import { OverlayMenu } from './OverlayMenu';
 import { Minimap } from './Minimap';
 import { propCaption, sceneProps, standpoint } from './scene';
 import { returnToMap } from '@/map/descend';
@@ -63,6 +65,9 @@ export default function RoverView() {
   const closeVisor = useApp((s) => s.closeVisor);
   const minute = useApp((s) => Math.floor(s.utcMs / 60_000));
   const hostRef = useRef<HTMLDivElement>(null);
+  const rootRef = useRef<HTMLDivElement>(null);
+  const getHandle = useCallback(() => handleRef.current, []);
+  const getRoot = useCallback(() => rootRef.current, []);
   const handleRef = useRef<VisorHandle | null>(null);
   const [state, setState] = useState<VisorState | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -183,6 +188,14 @@ export default function RoverView() {
   const sun = sunriseSunset(utcMs, viewLat, viewLon);
   const toSunset = (sun.setUtcMs - utcMs) / 1000;
 
+  // Walking in your own eyes on a screen with a mouse: a tablet in hand carries the map.
+  const tablet = !touch && !riding && !replaying && state?.roam.vehicle === 'foot' && state.roam.view === 'eyes';
+  const openMapHere = () => {
+    const s = handleRef.current?.getState() ?? state;
+    closeVisor();
+    if (s) returnToMap(s.lon, s.lat, s.headingDeg);
+  };
+
   const setTime = (hour: number) => {
     const app = useApp.getState();
     app.setClock(nextLtst(app.utcMs, viewLon, hour), false);
@@ -190,7 +203,7 @@ export default function RoverView() {
   };
 
   return (
-    <div className="absolute inset-0 z-40 bg-black" role="region" aria-label="Rover View">
+    <div ref={rootRef} className="absolute inset-0 z-40 overflow-hidden bg-black" role="region" aria-label="Rover View">
       <div ref={hostRef} className="size-full" />
 
       <div className="pointer-events-none absolute inset-x-0 top-0 flex items-start justify-between p-3">
@@ -215,28 +228,35 @@ export default function RoverView() {
             </div>
           ) : null}
           {riding || replaying ? null : (
-            <div className={cn('pointer-events-auto absolute right-3', touch ? 'top-[7.5rem]' : 'top-3')}>
-              <RoamBar vehicle={state.roam.vehicle} view={state.roam.view} onChange={(v, view) => handleRef.current?.setRoam(v, view)} />
+            <div data-hud-fade className={cn('pointer-events-auto absolute right-3', touch ? 'top-[7.5rem]' : 'top-3')}>
+              <VehiclePicker compact={touch} vehicle={state.roam.vehicle} view={state.roam.view} onChange={(v, view) => handleRef.current?.setRoam(v, view)} />
+              {/* On a phone the camera choice sits under the vehicles, clear of the time of day across the top. */}
+              {touch ? (
+                <div className="mt-2">
+                  <CameraPicker compact vehicle={state.roam.vehicle} view={state.roam.view} onChange={(v, view) => handleRef.current?.setRoam(v, view)} />
+                </div>
+              ) : null}
             </div>
           )}
-          <Minimap
-            lon={state.lon}
-            lat={state.lat}
-            headingDeg={state.headingDeg}
-            route={() => handleRef.current?.route() ?? []}
-            onOpenMap={() => {
-              const s = handleRef.current?.getState() ?? state;
-              closeVisor();
-              returnToMap(s.lon, s.lat, s.headingDeg);
-            }}
-            className={cn(
-              'absolute',
-              // On a phone, at the left under the time of day, clear of the move-as bar on the right and the caption
-              // and pad at the bottom (under the replay panel when riding the drive, which spans the width); on a
-              // desktop, the bottom-right corner, clear of the time of day in the middle and the panels at the top.
-              touch ? cn('left-3 size-[112px]', replaying ? 'top-[18.5rem]' : 'top-[7.5rem]') : 'right-3 bottom-4 size-[200px] max-xl:size-[168px]',
-            )}
-          />
+          {tablet ? (
+            <Tablet handle={getHandle} hud={getRoot} lon={state.lon} lat={state.lat} headingDeg={state.headingDeg} route={() => handleRef.current?.route() ?? []} onOpenMap={openMapHere} />
+          ) : (
+            <Minimap
+              lon={state.lon}
+              lat={state.lat}
+              headingDeg={state.headingDeg}
+              route={() => handleRef.current?.route() ?? []}
+              onOpenMap={openMapHere}
+              className={cn(
+                'absolute',
+                // On a phone, at the left under the time of day, clear of the move-as bar on the right and the caption
+                // and pad at the bottom (under the replay panel when riding the drive, which spans the width); on a
+                // desktop, the bottom-right corner, clear of the time of day in the middle and the panels at the top.
+                touch ? cn('left-3 size-[112px]', replaying ? 'top-[18.5rem]' : 'top-[7.5rem]') : 'right-3 bottom-4 size-[200px] max-xl:size-[168px]',
+              )}
+            />
+          )}
+          {touch ? null : <OverlayMenu className={cn('absolute right-3', tablet ? 'bottom-4' : 'bottom-[228px] max-xl:bottom-[196px]')} />}
           {touch && !riding && !replaying ? (
             <div className="absolute bottom-[max(1.25rem,env(safe-area-inset-bottom))] left-5">
               <MovePad onMove={(right, forward, fast) => handleRef.current?.setMove(right, forward, fast)} />
@@ -244,6 +264,7 @@ export default function RoverView() {
           ) : null}
 
           <dl
+            data-hud-fade
             className={cn(
               'figure pointer-events-none absolute grid gap-1 text-[12.5px] leading-tight font-medium text-white/95',
               riding ? 'top-16 left-4 max-w-[260px] max-md:hidden' : touch ? 'right-3 bottom-[max(1.25rem,env(safe-area-inset-bottom))] left-[152px] text-[11.5px]' : 'bottom-4 left-4 max-w-[300px]',
@@ -261,13 +282,17 @@ export default function RoverView() {
                 </div>
               </>
             )}
-            <div className="font-sans text-white/75">
+            <div className="font-sans text-white/75 max-md:hidden">
               Ground from the {state.groundSource}. Rocks and fine texture are drawn in, not measured.{riding ? ' The crew and its route are simulated.' : ''}
             </div>
-            {state.near && !riding ? <div className="font-sans text-white/75">{propCaption(state.near)}</div> : null}
+            {state.near && !riding ? <div className="font-sans text-white/75 max-md:hidden">{propCaption(state.near)}</div> : null}
           </dl>
 
-          <div className={cn('pointer-events-auto absolute left-1/2 flex -translate-x-1/2 flex-col items-center gap-2', touch ? 'top-[4.25rem]' : 'bottom-4', riding && 'hidden')}>
+          <div
+            data-hud-fade
+            className={cn('pointer-events-auto absolute left-1/2 flex -translate-x-1/2 flex-col items-center gap-2 transition-[bottom] duration-300', touch ? 'top-[4.25rem]' : tablet ? 'bottom-[calc(11vh+14px)]' : 'bottom-4', riding && 'hidden')}
+          >
+            {replaying || touch ? null : <CameraPicker vehicle={state.roam.vehicle} view={state.roam.view} onChange={(v, view) => handleRef.current?.setRoam(v, view)} />}
             <div role="radiogroup" aria-label="Time of day" className="panel flex gap-0.5 p-0.5">
               {TIMES.map((t) => {
                 const checked = Math.abs(time.ltstH - t.hour) < 0.1;
