@@ -28,6 +28,7 @@ import { Alerts } from '@/ui/run/Alerts';
 import { lazy, Suspense } from 'react';
 import { NET_ENABLED } from '@/net/config';
 import { useCrew } from '@/net/state';
+import { BaseMoveDialog } from '@/ui/planner/BaseMoveDialog';
 
 // The crew panels load when first opened; they exist only with a crew server.
 const CrewPanel = lazy(() => import('@/ui/crew/CrewPanel'));
@@ -128,13 +129,14 @@ function ChromeLayout() {
         <RunPanel />
         <Alerts />
         <CrewDialogs />
+        <BaseMoveDialog />
       </>
     );
   }
 
   return (
     <div className="pointer-events-none absolute inset-0">
-      <div className="absolute top-3 bottom-3 left-3 flex w-[372px] flex-col gap-2 [&>*]:pointer-events-auto">
+      <div className="absolute top-3 bottom-3 left-3 flex w-[328px] flex-col gap-2 xl:w-[352px] 2xl:w-[372px] [&>*]:pointer-events-auto">
         <SearchBox leading={<MainMenu />} />
         <LeftPanel />
       </div>
@@ -142,6 +144,7 @@ function ChromeLayout() {
       <FlyoverBar />
       <Hints />
       <CrewDialogs />
+      <BaseMoveDialog />
 
       <div className="pointer-events-auto absolute top-3 right-3">
         <DockRail />

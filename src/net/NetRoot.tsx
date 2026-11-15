@@ -11,6 +11,7 @@ import { useCrewLog, useCurrentMission, usePlanSync } from './mission';
 import { usePresence, useWalkers } from './presence';
 import { startCrewMission, useCommanderRun, useMemberRun } from './runSync';
 import { useCrew } from './state';
+import { useSharedBase } from './base';
 
 function useRegister(): boolean {
   const [registered, setRegistered] = useState(false);
@@ -36,6 +37,7 @@ function useRegister(): boolean {
 function NetEffects() {
   const registered = useRegister();
   usePresence(registered);
+  useSharedBase(registered);
   useWalkers(auth().clientId);
   const data = useCurrentMission(registered);
   const current = useCrew((s) => s.current);

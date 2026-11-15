@@ -36,6 +36,27 @@ new folder under `src/ui`, or Tailwind misses the new classes); screenshots with
 The model that wrote most of this stopped on the trip-budget content; Opus subagents wrote `tripComputer.ts`,
 `departure.ts`, `export.ts`, `validate.ts`, `missions.ts`, `alerts.ts` and `src/sim/*` without trouble.
 
+## Seventh session (2026-11-15, night): one shared base, fleets, named stops
+
+- One base for everyone (`convex/base.ts`, table `bases`, one row `key: 'main'`; `src/net/base.ts` keeps the
+  store in step). Moving it is asked and confirmed (`moveBaseTo` → `BaseMoveDialog`), refused while a local run
+  is out or any crew mission is `underway` (server). No crew server: the browser keeps its own, as before.
+- The base is a place (`placeId: 'base'`, built in `PlaceCard`): its pin, the Home row and links open it. Moving
+  the base lives in its card's "More" menu (and "Move the base here…" on any spot's card); the planner's base row
+  only flies to it.
+- Fleets (`src/engines/fleet.ts`): `MissionPlan.fleet` and `people`; `plan.vehicle` is kept as the pace vehicle
+  (walkers if anyone lacks a seat, else the open rover, else the cabin; robots only when nobody goes), so the
+  router, trip, sim and Rover View still read one vehicle. `TripOptions.people` scales the air. Rovers without a
+  driver, or a mission with nobody and nothing, block Start. Each vehicle has an (i) card (`vehicleFacts`). Links
+  carry `fleet=openRover1.heli1&ppl=3`. A crew mission's head count follows its roster (commander's plan).
+- Stops are named as they are added: the plan opens on the new stop with its name field focused (Enter keeps
+  it; empty shows coordinates). Pencil renames. Names travel in links even for known places.
+- A failed leg's fix button moves the point that is at fault (`RouteState.point`); before, it always moved the
+  leg's end stop, so a blocked start "did nothing".
+- Place card: "Add to the route", Rover View, and a More menu (zoom, link, base). Route: Start, "Fly over", More
+  (cuff card, GPX, GeoJSON). Solo crew section is one row with "Bring a crew".
+- Side panels narrow below 1536 px (left 328/352/372, dock 316/332/344) so a 13-inch screen keeps a map.
+
 ## Sixth session (2026-11-15, later): mission panel, map that explains itself, Rover View playground
 
 - Desktop runs live in the left column (`src/ui/run/MissionPanel.tsx`): status, the alert card (`AlertCard` in

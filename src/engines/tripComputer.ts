@@ -277,7 +277,8 @@ export function computeTrip(path: PathPoint[], opts: TripOptions): TripResult {
 
   /* ---------- the vehicle ---------- */
 
-  const crew = Math.max(0, v.crew);
+  // Robots carry no one; walkers and crewed vehicles carry the people going (their usual crew if not given).
+  const crew = v.crew > 0 || v.kind === 'walk' ? Math.max(0, Math.round(opts.people ?? v.crew)) : 0;
   const hasBattery = v.kind !== 'walk' && v.batteryKWh > 0;
   const capacityKWh = hasBattery ? v.batteryKWh + v.extenderKWh : 0;
   const o2Carried = crew * v.o2KgPerPerson;

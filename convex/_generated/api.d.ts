@@ -8,6 +8,7 @@
  * @module
  */
 
+import type * as base from "../base.js";
 import type * as crew from "../crew.js";
 import type * as crons from "../crons.js";
 import type * as lib_auth from "../lib/auth.js";
@@ -27,6 +28,7 @@ import type {
 } from "convex/server";
 
 declare const fullApi: ApiFromModules<{
+  base: typeof base;
   crew: typeof crew;
   crons: typeof crons;
   "lib/auth": typeof lib_auth;

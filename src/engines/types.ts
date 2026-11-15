@@ -98,12 +98,26 @@ export interface Stop extends Waypoint {
   tasks: Task[];
 }
 
+/** Some of one kind of vehicle in a mission's fleet. */
+export interface FleetEntry {
+  vehicle: VehicleId;
+  count: number;
+}
+
 export interface MissionPlan {
   start: Waypoint | null;
   stops: Stop[];
   /** Go back to the start after the last stop. */
   roundTrip: boolean;
+  /**
+   * The vehicle the trip is costed for: the one that holds the convoy back (see engines/fleet). Kept in step
+   * with `fleet` and `people` when those are set; a plan without them takes this one vehicle and its usual crew.
+   */
   vehicle: VehicleId;
+  /** The vehicles that go, foot excepted (people without a seat walk). */
+  fleet?: FleetEntry[];
+  /** How many people go. */
+  people?: number;
   style: RouteStyle;
   campAtNight: boolean;
 }
@@ -127,6 +141,8 @@ export interface TripOptions {
   style: RouteStyle;
   stops?: TripStop[];
   campAtNight?: boolean;
+  /** People breathing on the trip; the vehicle's usual crew if absent. Robots carry none, whatever this says. */
+  people?: number;
   /** What is left at departure, when the trip starts part way through a mission (a reroute). Full if absent. */
   startO2Kg?: number;
   startBatteryKWh?: number;

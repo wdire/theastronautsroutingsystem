@@ -2,6 +2,7 @@
  * The bridge between the pure simulation and the app: it owns the tick, keeps the world in the store,
  * drives the app clock from the mission clock, and asks the router when an alert proposes a new route.
  */
+import { peopleOf } from '@/engines/fleet';
 import { toast } from 'sonner';
 import { computeTrip } from '@/engines/tripComputer';
 import { missionById } from '@/engines/missions';
@@ -208,6 +209,7 @@ export async function apply(alertId: string): Promise<void> {
     const crew = crewAt(run, now.utcMs);
     const trip = computeTrip(path, {
       vehicle: ask.vehicle,
+      people: peopleOf(run.plan),
       departUtcMs: now.utcMs,
       scenario: run.scenario,
       style: run.plan.style,

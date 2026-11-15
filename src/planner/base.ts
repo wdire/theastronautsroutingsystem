@@ -1,6 +1,7 @@
 /**
- * The crew's base: where every mission starts and where it comes back to. One per visitor, kept in this
- * browser. A crew mission starts from its commander's base.
+ * The crew's base: where every crewed mission starts and where it comes back to. There is one, shared by
+ * everyone through the crew server (convex/base.ts); this browser keeps the last one it saw, and keeps its own
+ * when there is no crew server.
  */
 import type { MissionPlan, Waypoint } from '@/engines/types';
 import { inBox, REGION } from '@/lib/constants';
@@ -10,6 +11,9 @@ export interface Base {
   lon: number;
   lat: number;
   name: string;
+  /** Who last moved it and when, ms, when the crew server says. */
+  movedBy?: string;
+  movedAt?: number;
 }
 
 /**

@@ -68,7 +68,7 @@ export function DockPanel({ tab, children }: { tab: DockTab; children: ReactNode
       id="dock-panel"
       role="tabpanel"
       aria-labelledby={`dock-tab-${tab}`}
-      className="panel flex max-h-full w-[344px] max-w-[calc(100vw-1.5rem)] flex-col overflow-hidden max-md:w-full max-md:max-w-none"
+      className="panel flex max-h-full w-[316px] max-w-[calc(100vw-1.5rem)] xl:w-[332px] 2xl:w-[344px] flex-col overflow-hidden max-md:w-full max-md:max-w-none"
       onKeyDown={(e) => {
         if (e.key === 'Escape') {
           e.stopPropagation();

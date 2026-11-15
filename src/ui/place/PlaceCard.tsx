@@ -1,9 +1,11 @@
 import { useIsPhone } from '@/ui/hooks/useMediaQuery';
 import { StationReadings } from './Stations';
 import { useEffect, useState, type ReactNode } from 'react';
-import { Binoculars, ExternalLink, House, Link2, MapPinPlus, Navigation, X, ZoomIn } from 'lucide-react';
+import { Binoculars, ClipboardList, Ellipsis, ExternalLink, House, Link2, MapPinPlus, Move, X, ZoomIn } from 'lucide-react';
 import { toast } from 'sonner';
-import { moveBaseTo } from '@/planner/moveBase';
+import { baseMoveBlocked, moveBaseTo } from '@/planner/moveBase';
+import type { Base } from '@/planner/base';
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from '@/ui/components/ui/dropdown-menu';
 import { useApp } from '@/store';
 import { getMap } from '@/map/instance';
 import { containingFeature, nearby, resolvePlace, typeWord, type Neighbour, type PlaceView } from '@/data/places';
@@ -23,10 +25,38 @@ import { NasaImages } from './NasaImages';
 
 type Loaded<T> = { state: 'loading' } | { state: 'ready'; value: T } | { state: 'missing' };
 
+/** The base as a place: opened from its pin on the map or from the plan. */
+export const BASE_PLACE = 'base';
+
+function fmtAgo(ms: number, now: number): string {
+  const min = Math.round((now - ms) / 60_000);
+  if (min < 1) return 'just now';
+  if (min < 60) return `${min} min ago`;
+  const h = Math.round(min / 60);
+  if (h < 48) return `${h} h ago`;
+  return `${Math.round(h / 24)} days ago`;
+}
+
+function baseView(base: Base): PlaceView {
+  const moved = base.movedBy && base.movedAt ? ` ${base.movedBy} moved it here ${fmtAgo(base.movedAt, Date.now())}.` : '';
+  return {
+    key: BASE_PLACE,
+    kind: 'place',
+    name: base.name,
+    subtitle: 'The crew’s base, shared by everyone',
+    lon: base.lon,
+    lat: base.lat,
+    summary: `Two habitats joined by a tunnel, a solar field, a radio mast and a landing pad, on level ground. Every crewed mission leaves from here and comes back here.${moved}`,
+    photos: [],
+    zoom: 15.5,
+  };
+}
+
 function useResolved(key: string | null): Loaded<PlaceView> {
   const [result, setResult] = useState<{ key: string; value: PlaceView | null } | null>(null);
+  const base = useApp((s) => s.base);
   useEffect(() => {
-    if (!key) return;
+    if (!key || key === BASE_PLACE) return;
     let cancelled = false;
     void resolvePlace(key).then((value) => {
       if (!cancelled) setResult({ key, value });
@@ -35,6 +65,7 @@ function useResolved(key: string | null): Loaded<PlaceView> {
       cancelled = true;
     };
   }, [key]);
+  if (key === BASE_PLACE) return { state: 'ready', value: baseView(base) };
   if (!key || result?.key !== key) return { state: 'loading' };
   return result.value ? { state: 'ready', value: result.value } : { state: 'missing' };
 }
@@ -166,6 +197,8 @@ export function PlaceCard() {
   // Nothing is added to a plan that is being flown.
   const planOpen = inRegion && useApp.getState().world?.run?.status !== 'running';
   const base = useApp.getState().base;
+  const isBase = v.key === BASE_PLACE;
+  const moveBlocked = baseMoveBlocked();
   const cov = getCoverage();
   const sourceZoom = cov ? finestZoomAt(cov, v.lon, v.lat) : 0;
   const [elevValue, elevUnit] = ground ? split(fmtElevation(ground.elev)) : ['…', ''];
@@ -173,15 +206,8 @@ export function PlaceCard() {
 
   const asWaypoint = { lon: v.lon, lat: v.lat, name: v.kind === 'point' ? undefined : v.name, ...(v.kind === 'point' ? {} : { placeId: v.key }) };
 
-  const routeHere = () => {
-    const s = useApp.getState();
-    s.addStop(asWaypoint);
-    s.openPlanner(true);
-  };
-  const addStop = () => {
-    useApp.getState().addStop(asWaypoint);
-    toast('Stop added', { description: v.kind === 'point' ? fmtLatLon(v.lat, v.lon) : v.name });
-  };
+  // The stop opens in the plan with its name field ready.
+  const routeHere = () => useApp.getState().addStop(asWaypoint);
   const share = async () => {
     try {
       await navigator.clipboard.writeText(window.location.href);
@@ -217,32 +243,58 @@ export function PlaceCard() {
           </div>
         ) : null}
         {v.detail ? <p className="px-4 pt-2 text-[13px] leading-relaxed text-muted-foreground">{v.detail}</p> : null}
-        {v.kind === 'point' ? null : <NasaImages name={v.name} />}
+        {v.kind === 'point' || isBase ? null : <NasaImages name={v.name} />}
 
         <div className="flex flex-wrap gap-1.5 px-4 pt-4">
-          <Button onClick={routeHere} disabled={!planOpen} className="h-9 px-3.5 text-[13px] font-semibold">
-            <Navigation aria-hidden />
-            Route here
-          </Button>
-          <ActionButton icon={<House aria-hidden />} onClick={() => void moveBaseTo(v.lon, v.lat)} disabled={!planOpen}>
-            Put the base here
-          </ActionButton>
-          <ActionButton icon={<MapPinPlus aria-hidden />} onClick={addStop} disabled={!planOpen}>
-            Add stop
-          </ActionButton>
+          {isBase ? (
+            <Button onClick={() => useApp.getState().openPlanner(true)} className="h-9 px-3.5 text-[13px] font-semibold">
+              <ClipboardList aria-hidden />
+              Plan a mission
+            </Button>
+          ) : (
+            <>
+              <Button onClick={routeHere} disabled={!planOpen} className="h-9 px-3.5 text-[13px] font-semibold">
+                <MapPinPlus aria-hidden />
+                Add to the route
+              </Button>
+            </>
+          )}
           <ActionButton icon={<Binoculars aria-hidden />} disabled={!inRegion} onClick={() => useApp.getState().openVisor({ lon: v.lon, lat: v.lat })}>
             Rover View
           </ActionButton>
-          <ActionButton
-            icon={<ZoomIn aria-hidden />}
-            onClick={() => getMap()?.flyTo({ center: [v.lon, v.lat], zoom: Math.min(16, Math.max(v.zoom, (getMap()?.getZoom() ?? 0) + 1.5)), duration: 1400 })}
-          >
-            Zoom in
-          </ActionButton>
-          <ActionButton icon={<Link2 aria-hidden />} onClick={() => void share()}>
-            Share
-          </ActionButton>
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <ActionButton icon={<Ellipsis aria-hidden />} aria-label="More actions">
+                <span className="sr-only">More</span>
+              </ActionButton>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end" className="w-56">
+              <DropdownMenuItem
+                onSelect={() => getMap()?.flyTo({ center: [v.lon, v.lat], zoom: Math.min(16, Math.max(v.zoom, (getMap()?.getZoom() ?? 0) + 1.5)), duration: 1400 })}
+              >
+                <ZoomIn aria-hidden />
+                Zoom in
+              </DropdownMenuItem>
+              <DropdownMenuItem onSelect={() => void share()}>
+                <Link2 aria-hidden />
+                Copy a link
+              </DropdownMenuItem>
+              {inRegion ? <DropdownMenuSeparator /> : null}
+              {isBase ? (
+                <DropdownMenuItem disabled={moveBlocked !== null} onSelect={() => useApp.getState().setPicking('base')}>
+                  <Move aria-hidden />
+                  Move the base…
+                </DropdownMenuItem>
+              ) : inRegion ? (
+                <DropdownMenuItem disabled={moveBlocked !== null} onSelect={() => void moveBaseTo(v.lon, v.lat)}>
+                  <House aria-hidden />
+                  Move the base here…
+                </DropdownMenuItem>
+              ) : null}
+            </DropdownMenuContent>
+          </DropdownMenu>
         </div>
+        {isBase && moveBlocked ? <p className="px-4 pt-2 text-xs leading-relaxed text-muted-foreground">{moveBlocked}</p> : null}
         {!inRegion ? (
           <p className="px-4 pt-2 text-xs leading-relaxed text-muted-foreground">
             Outside the mapped region, {fmtDistance(distanceM(base.lon, base.lat, v.lon, v.lat))} from {base.name}. You can look from orbit; routes, a base and Rover View need

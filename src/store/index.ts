@@ -3,7 +3,9 @@ import { subscribeWithSelector } from 'zustand/middleware';
 import type { DonkiFeed } from '@/engines/spaceWeather';
 import type { NewRoute, World } from '@/sim/types';
 import { baseWaypoint, loadBase, saveBase, startsAtBase, withBase, type Base } from '@/planner/base';
-import type { MissionPlan, RouteAlternative, RouteStyle, Scenario, Stop, Task, TaskKind, VehicleId, Waypoint } from '@/engines/types';
+import type { FleetEntry, MissionPlan, RouteAlternative, RouteStyle, Scenario, Stop, Task, TaskKind, VehicleId, Waypoint } from '@/engines/types';
+import { withFleet } from '@/engines/fleet';
+import { VEHICLES } from '@/engines/vehicles';
 
 export type Mode = 'globe' | 'map';
 export type Theme = 'dark' | 'light';
@@ -113,7 +115,15 @@ export type RouteState =
       departUtcMs: number;
       departMoved: boolean;
     }
-  | { status: 'failed'; rev: number; message: string; leg: number; nearest?: readonly [number, number] };
+  | {
+      status: 'failed';
+      rev: number;
+      message: string;
+      leg: number;
+      /** The visited point at fault (0 is the start, 1..n the stops, n+1 the start again on a round trip), if one is. */
+      point?: number;
+      nearest?: readonly [number, number];
+    };
 
 export interface AppState {
   /* view */
@@ -157,6 +167,8 @@ export interface AppState {
   missionId: string | null;
   /** The planner panel is showing. */
   plannerOpen: boolean;
+  /** The stop whose name field is open, just after it was added. */
+  namingStopId: string | null;
   /** What the next click on the map sets, if anything. */
   picking: 'base' | 'stop' | 'roverView' | null;
   route: RouteState;
@@ -204,6 +216,7 @@ export interface AppState {
   setBase(base: Base): void;
   openPlanner(open: boolean): void;
   setPicking(picking: 'base' | 'stop' | 'roverView' | null): void;
+  setNamingStop(id: string | null): void;
   openVisor(at: VisorAt): void;
   closeVisor(): void;
   setClockPaused(paused: boolean): void;
@@ -218,6 +231,8 @@ export interface AppState {
   updateTask(stopId: string, taskId: string, patch: Partial<Pick<Task, 'minutes' | 'label' | 'kind'>>): void;
   removeTask(stopId: string, taskId: string): void;
   setVehicle(vehicle: VehicleId): void;
+  /** Sets who and what goes; the vehicle the trip is costed for follows (engines/fleet). */
+  setFleet(fleet: FleetEntry[], people: number): void;
   setStyle(style: RouteStyle): void;
   setRoundTrip(roundTrip: boolean): void;
   setCampAtNight(camp: boolean): void;
@@ -262,6 +277,7 @@ export const useApp = create<AppState>()(
       missionId: null,
       plannerOpen: false,
       picking: null,
+      namingStopId: null,
       route: { status: 'idle' },
       visor: null,
       roster: null,
@@ -299,6 +315,7 @@ export const useApp = create<AppState>()(
       },
       setPlan: (plan, missionId) => set((s) => ({ plan, planRev: s.planRev + 1, missionId: missionId ?? null })),
       openPlanner: (plannerOpen) => set(plannerOpen ? { plannerOpen, placeId: null } : { plannerOpen, picking: null }),
+      setNamingStop: (namingStopId) => set({ namingStopId }),
       setPicking: (picking) => set({ picking }),
       openVisor: (visor) => set({ visor, picking: null }),
       closeVisor: () => set({ visor: null }),
@@ -314,6 +331,8 @@ export const useApp = create<AppState>()(
           stops.splice(index === undefined ? stops.length : Math.max(0, Math.min(stops.length, index)), 0, stop);
           return { ...p, stops };
         });
+        // A new stop is named first: the plan opens on it with its name field ready (Enter keeps what is there).
+        if (get().plan.stops.some((st) => st.id === id)) set({ namingStopId: id, plannerOpen: true, placeId: null });
         return id;
       },
       removeStop: (id) => editPlan((p) => ({ ...p, stops: p.stops.filter((s) => s.id !== id) })),
@@ -341,8 +360,9 @@ export const useApp = create<AppState>()(
         ),
       removeTask: (stopId, taskId) =>
         editPlan((p) => mapStops(p, stopId, (s) => ({ ...s, tasks: s.tasks.filter((t) => t.id !== taskId) }))),
+      setFleet: (fleet, people) => editPlan((p) => withFleet(p, fleet, people)),
       setVehicle: (vehicle) => {
-        if (get().plan.vehicle !== vehicle) editPlan((p) => ({ ...p, vehicle }));
+        if (get().plan.vehicle !== vehicle) editPlan((p) => ({ ...p, vehicle, fleet: vehicle === 'foot' ? [] : [{ vehicle, count: 1 }], people: VEHICLES[vehicle].crew }));
       },
       setStyle: (style) => editPlan((p) => ({ ...p, style })),
       setRoundTrip: (roundTrip) => editPlan((p) => ({ ...p, roundTrip })),

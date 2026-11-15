@@ -70,6 +70,12 @@ test('the mission editor adds, edits, reorders and removes, with undo', async ({
   if (!box) throw new Error('no canvas');
   await page.mouse.click(box.x + box.width * 0.7, box.y + box.height * 0.6);
   await expect(plan.getByText(/^3 stops,/)).toBeVisible();
+  // The new stop opens on its name, ready to type: Enter keeps it.
+  const name = plan.getByRole('textbox', { name: 'Stop name' });
+  await expect(name).toBeFocused();
+  await name.fill('Delta scarp');
+  await name.press('Enter');
+  await expect(plan.getByRole('button', { name: /Delta scarp/ })).toBeVisible();
   // The plan is in the link.
   await expect.poll(() => (page.url().match(/\|/g) ?? []).length).toBe(2);
 });
@@ -88,7 +94,7 @@ test('the camera flies the route, names the next stop, and gives the view back',
   await page.waitForFunction(() => window.__areo?.getState().route.status === 'ready', undefined, { timeout: 60_000 });
   const before = await page.evaluate(() => ({ pitch: window.__areoMap?.getPitch() ?? -1, zoom: window.__areoMap?.getZoom() ?? -1 }));
 
-  await plan.getByRole('button', { name: 'Fly along the route' }).click();
+  await plan.getByRole('button', { name: 'Fly over' }).click();
   const bar = page.getByRole('status').filter({ hasText: 'Next' });
   // Stops are named after what the visitor called them; this plan's stops have no names.
   await expect(bar).toContainText(/Next (stop 1|Base)/);

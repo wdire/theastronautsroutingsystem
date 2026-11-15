@@ -1,15 +1,15 @@
 import { lazy, Suspense } from 'react';
-import { Bot, Car, Caravan, Check, ChevronDown, Footprints, Helicopter, House, MousePointerClick, Move, Plus, TriangleAlert, X, Plane, Play } from 'lucide-react';
+import { House, MousePointerClick, Move, Plus, TriangleAlert, X, Plane, Play } from 'lucide-react';
 import { flySelectedRoute } from '@/map/flyover';
+import { getMap } from '@/map/instance';
 import { startMission } from '@/sim/controller';
 import { Budget } from './Budget';
 import { Departure } from './Departure';
 import { Exports } from './Exports';
 import { toast } from 'sonner';
-import type { RouteAlternative, VehicleId } from '@/engines/types';
+import type { RouteAlternative } from '@/engines/types';
 import { VEHICLES } from '@/engines/vehicles';
-import { useApp } from '@/store';
-import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/ui/components/ui/dropdown-menu';
+import { useApp, type RouteState } from '@/store';
 import { fmtClock, fmtDeg, fmtDistance, fmtDuration, fmtNumber, fmtPercent } from '@/lib/format';
 import { marsTime } from '@/engines/marsTime';
 import { cn } from '@/lib/cn';
@@ -19,54 +19,12 @@ import { planLocked, useCrew } from '@/net/state';
 import { NET_ENABLED } from '@/net/config';
 import { startsAtBase, withBase } from '@/planner/base';
 import { useIsPhone } from '@/ui/hooks/useMediaQuery';
+import { FleetPicker } from './FleetPicker';
+import { checkFleet, fleetOf, peopleOf } from '@/engines/fleet';
 
 // Who goes: loaded with the crew code, only when there is a crew server.
 const PlannerCrew = lazy(() => import('@/ui/crew/PlannerCrew'));
 const JoinList = lazy(() => import('@/ui/crew/JoinList'));
-
-const VEHICLE_ICON = { foot: Footprints, openRover: Car, pressRover: Caravan, robotRover: Bot, heli: Helicopter } as const;
-const VEHICLE_ORDER: readonly VehicleId[] = ['foot', 'openRover', 'pressRover', 'robotRover', 'heli'];
-
-function VehiclePicker() {
-  const vehicle = useApp((s) => s.plan.vehicle);
-  const setVehicle = useApp((s) => s.setVehicle);
-  const v = VEHICLES[vehicle];
-  const Icon = VEHICLE_ICON[vehicle];
-  return (
-    <DropdownMenu>
-      <DropdownMenuTrigger asChild>
-        <button
-          type="button"
-          aria-label={`Vehicle: ${v.name}. Change vehicle`}
-          className="flex w-full items-center gap-3 rounded-md border px-3 py-2 text-left transition-colors hover:bg-muted data-[state=open]:bg-muted"
-        >
-          <Icon className="size-5 shrink-0 text-primary" aria-hidden />
-          <span className="min-w-0 flex-1">
-            <span className="block text-[13px] font-medium">{v.name}</span>
-            <span className="block truncate text-xs text-muted-foreground">{v.blurb}</span>
-          </span>
-          <ChevronDown className="size-4 shrink-0 text-muted-foreground" aria-hidden />
-        </button>
-      </DropdownMenuTrigger>
-      <DropdownMenuContent align="start" className="w-[340px]">
-        {VEHICLE_ORDER.map((id) => {
-          const item = VEHICLES[id];
-          const ItemIcon = VEHICLE_ICON[id];
-          return (
-            <DropdownMenuItem key={id} onSelect={() => setVehicle(id)} className="items-start gap-3 py-2">
-              <ItemIcon className="mt-0.5 size-[18px]" aria-hidden />
-              <span className="min-w-0 flex-1">
-                <span className="block text-[13px] font-medium">{item.name}</span>
-                <span className="block text-xs leading-snug text-muted-foreground">{item.blurb}</span>
-              </span>
-              {id === vehicle ? <Check className="mt-0.5 size-4 text-primary" aria-hidden /> : null}
-            </DropdownMenuItem>
-          );
-        })}
-      </DropdownMenuContent>
-    </DropdownMenu>
-  );
-}
 
 export function PickButton({ target, children }: { target: 'base' | 'stop'; children: React.ReactNode }) {
   const picking = useApp((s) => s.picking);
@@ -134,17 +92,17 @@ function AlternativeCard({ alt, selected, hasBudget, onSelect }: { alt: RouteAlt
 /** The mission in one block before it starts: who goes, in what, when they leave and come back, and the margin. */
 function ReadySummary({ alt, departUtcMs }: { alt: RouteAlternative; departUtcMs: number }) {
   const plan = useApp((s) => s.plan);
-  const me = useCrew((s) => s.me);
-  const crewMission = useCrew((s) => s.current);
-  const v = VEHICLES[plan.vehicle];
+  const fleet = fleetOf(plan);
+  const people = peopleOf(plan);
   const t = alt.trip.totals;
   const lon = plan.start?.lon ?? 77.44;
   const leave = fmtClock(marsTime(departUtcMs, lon).ltstH);
   const back = fmtClock(marsTime(departUtcMs + t.durationS * 1000, lon).ltstH);
   const tasks = plan.stops.reduce((n, st) => n + st.tasks.length, 0);
-  const who = crewMission ? 'The crew in the list above' : v.crew > 0 ? `${me?.name ?? 'You'} and ${v.crew - 1 === 1 ? 'one partner' : `${v.crew - 1} others`}` : 'No one aboard';
+  const what = fleet.length === 0 ? 'on foot' : fleet.map((f) => `${f.count} ${VEHICLES[f.vehicle].name.toLowerCase()}${f.count > 1 ? 's' : ''}`).join(', ');
+  const who = people === 0 ? 'No one aboard' : people === 1 ? 'One person' : `${people} people`;
   const rows: [string, string][] = [
-    ['Who', `${who}, ${v.name.toLowerCase()}`],
+    ['Who', `${who}, ${what}`],
     ['When', `Leave ${leave}, back ${back} LTST (${fmtDuration(t.durationS)})`],
     ['Where', `${fmtDistance(t.distM)} out and back: ${plan.stops.length} ${plan.stops.length === 1 ? 'stop' : 'stops'} and ${tasks} ${tasks === 1 ? 'task' : 'tasks'}`],
   ];
@@ -162,6 +120,44 @@ function ReadySummary({ alt, departUtcMs }: { alt: RouteAlternative; departUtcMs
   );
 }
 
+/** A plan with no route: why, and the one change that fixes it when there is one. */
+function RouteFailed({ route }: { route: Extract<RouteState, { status: 'failed' }> }) {
+  const plan = useApp((s) => s.plan);
+  const { nearest, leg, point } = route;
+  // The point at fault: the start (first, and last on a round trip), or a stop.
+  const atStart = point !== undefined && (point === 0 || point === plan.stops.length + 1);
+  const stop = point !== undefined && !atStart ? plan.stops[point - 1] : undefined;
+  const air = VEHICLES[plan.vehicle].kind === 'air';
+  let fix: { label: string; apply: () => void } | null = null;
+  if (nearest && atStart && plan.start) {
+    const from = plan.start.name ?? 'the start';
+    fix = {
+      label: air ? 'Take off from the nearest landing spot' : 'Start from the nearest reachable spot',
+      apply: () => useApp.getState().setStart({ lon: nearest[0], lat: nearest[1], name: air ? `Pad by ${from}` : `Near ${from}` }),
+    };
+  } else if (nearest && stop) {
+    fix = {
+      label: `Move ${stopLabel(stop)} to the nearest ${air ? 'landing spot' : 'reachable spot'}`,
+      apply: () => useApp.getState().updateStop(stop.id, { lon: nearest[0], lat: nearest[1] }),
+    };
+  }
+  return (
+    <div role="alert" className="rounded-md border border-warning/50 bg-warning/10 p-3">
+      <p className="flex items-start gap-2 text-[13px] leading-relaxed">
+        <TriangleAlert className="mt-0.5 size-4 shrink-0 text-warning" aria-hidden />
+        <span>
+          <span className="font-medium">Leg {leg + 1} has no route.</span> {route.message}
+        </span>
+      </p>
+      {fix ? (
+        <button type="button" onClick={fix.apply} className="mt-2 ml-6 inline-flex h-8 max-w-[calc(100%-1.5rem)] items-center rounded-md border px-2.5 text-left text-[13px] font-medium hover:bg-secondary">
+          <span className="truncate">{fix.label}</span>
+        </button>
+      ) : null}
+    </div>
+  );
+}
+
 function RouteResult() {
   const route = useApp((s) => s.route);
   const selectRoute = useApp((s) => s.selectRoute);
@@ -172,6 +168,7 @@ function RouteResult() {
   // In a crew mission only the commander starts the run, and it starts for everyone.
   const locked = useCrew(planLocked);
   const crewStart = useCrew((s) => s.start);
+  const fleetProblem = useApp((s) => checkFleet(fleetOf(s.plan), peopleOf(s.plan)).problems[0] ?? null);
 
   if (route.status === 'idle') {
     return (
@@ -191,31 +188,7 @@ function RouteResult() {
     );
   }
   if (route.status === 'failed') {
-    const { nearest, leg } = route;
-    return (
-      <div role="alert" className="rounded-md border border-warning/50 bg-warning/10 p-3">
-        <p className="flex items-start gap-2 text-[13px] leading-relaxed">
-          <TriangleAlert className="mt-0.5 size-4 shrink-0 text-warning" aria-hidden />
-          <span>
-            <span className="font-medium">Leg {leg + 1} has no route.</span> {route.message}
-          </span>
-        </p>
-        {nearest ? (
-          <button
-            type="button"
-            onClick={() => {
-              const s = useApp.getState();
-              // Leg n ends at stop n; on a round trip the last leg ends back at the start.
-              const stop = s.plan.stops[leg];
-              if (stop) s.updateStop(stop.id, { lon: nearest[0], lat: nearest[1] });
-            }}
-            className="mt-2 ml-6 inline-flex h-8 items-center rounded-md border px-2.5 text-[13px] font-medium hover:bg-secondary"
-          >
-            Move the stop to the nearest reachable spot
-          </button>
-        ) : null}
-      </div>
-    );
+    return <RouteFailed route={route} />;
   }
 
   const chosen = route.alternatives.find((a) => a.id === route.selected) ?? route.alternatives[0];
@@ -265,8 +238,8 @@ function RouteResult() {
           <button
             type="button"
             // A plan that runs out of air, battery or daylight is not flown: the crew would not come back.
-            disabled={!chosen.trip.feasible}
-            title={chosen.trip.feasible ? undefined : 'This plan does not work as it stands. Change it until it does.'}
+            disabled={!chosen.trip.feasible || fleetProblem !== null}
+            title={fleetProblem ?? (chosen.trip.feasible ? undefined : 'This plan does not work as it stands. Change it until it does.')}
             onClick={() => (crewStart ? void crewStart() : startMission())}
             className="inline-flex h-9 items-center gap-2 rounded-md bg-primary px-3.5 text-[13px] font-semibold text-primary-foreground transition-opacity hover:opacity-90 disabled:pointer-events-none disabled:opacity-40 pointer-coarse:h-11"
           >
@@ -277,13 +250,14 @@ function RouteResult() {
         <button
           type="button"
           onClick={flySelectedRoute}
+          title="Fly the camera along the route"
           className="inline-flex h-9 items-center gap-2 rounded-md border px-3 text-[13px] font-medium transition-colors hover:bg-secondary pointer-coarse:h-11"
         >
           <Plane className="size-4 text-muted-foreground" aria-hidden />
-          Fly along the route
+          Fly over
         </button>
+        <Exports alt={chosen} hasBudget={route.hasBudget} />
       </div>
-      <Exports alt={chosen} hasBudget={route.hasBudget} />
       {!route.hasBudget ? (
         <p className="mt-3 text-xs leading-relaxed text-faint">
           The route follows the real terrain at {fmtNumber(route.cellM)} m detail. The trip budget did not load, so there is no time, oxygen, power or radiation for it.
@@ -331,7 +305,7 @@ export function Planner() {
         {/* A disabled fieldset disables every control inside it, so a crew member can read the plan but not change it. */}
         <fieldset disabled={locked} className="min-w-0 disabled:[&_button]:opacity-60">
         <div className="px-4 pt-3.5">
-          <VehiclePicker />
+          <FleetPicker />
         </div>
         </fieldset>
         {NET_ENABLED && !running ? (
@@ -345,12 +319,21 @@ export function Planner() {
           <div className="mb-2 flex items-baseline justify-between">
             <h3 className="text-xs font-medium text-muted-foreground">From and back to</h3>
           </div>
-          <div className="flex items-center gap-2 rounded-md border py-1.5 pr-1 pl-3">
-            <House className="size-4 shrink-0 text-muted-foreground" aria-hidden />
-            <span className="min-w-0 flex-1 truncate text-[13px] font-medium">{atMyBase || !start ? base.name : stopLabel(start)}</span>
-            {atMyBase && !running ? <PickButton target="base">Move base</PickButton> : null}
+          <div className="flex items-center gap-1 rounded-md border p-1">
+            <button
+              type="button"
+              onClick={() => {
+                const at = atMyBase || !start ? base : start;
+                getMap()?.flyTo({ center: [at.lon, at.lat], zoom: Math.max(getMap()?.getZoom() ?? 0, 14.5), duration: 1200 });
+              }}
+              title="Show it on the map"
+              className="flex h-8 min-w-0 flex-1 items-center gap-2 rounded px-2 text-left transition-colors hover:bg-secondary"
+            >
+              <House className="size-4 shrink-0 text-muted-foreground" aria-hidden />
+              <span className="min-w-0 flex-1 truncate text-[13px] font-medium">{atMyBase || !start ? base.name : stopLabel(start)}</span>
+            </button>
             {!atMyBase && !running && !onCrewMission ? (
-              <button type="button" onClick={() => useApp.getState().setPlan(withBase(useApp.getState().plan, base), useApp.getState().missionId ?? undefined)} className="inline-flex h-8 items-center rounded-md border px-2.5 text-[13px] font-medium hover:bg-secondary">
+              <button type="button" onClick={() => useApp.getState().setPlan(withBase(useApp.getState().plan, base), useApp.getState().missionId ?? undefined)} className="inline-flex h-8 shrink-0 items-center rounded-md border px-2.5 text-[13px] font-medium hover:bg-secondary">
                 Use {base.name}
               </button>
             ) : null}

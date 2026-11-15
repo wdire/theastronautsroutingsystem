@@ -13,11 +13,12 @@ export function addBaseMarker(map: MapLibreMap): () => void {
   const name = document.createElement('span');
   name.className = 'base-pin-name';
   el.append(icon, name);
-  // A click shows the base the way any place is shown: zoom in on it.
+  // A click shows the base the way any place is shown: its card, and the map closer in on it.
   el.addEventListener('click', (e) => {
     e.stopPropagation();
-    const { base } = useApp.getState();
-    map.flyTo({ center: [base.lon, base.lat], zoom: Math.max(map.getZoom(), 15.5), duration: 1200 });
+    const { base, openPlace } = useApp.getState();
+    openPlace('base');
+    map.flyTo({ center: [base.lon, base.lat], zoom: Math.max(map.getZoom(), 14.5), duration: 1200 });
   });
   const marker = new Marker({ element: el, anchor: 'left', offset: [-14, 0] });
   const sync = () => {

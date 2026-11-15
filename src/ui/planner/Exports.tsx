@@ -1,4 +1,5 @@
-import { Download, Printer } from 'lucide-react';
+import { Download, Ellipsis, Printer } from 'lucide-react';
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger } from '@/ui/components/ui/dropdown-menu';
 import { toast } from 'sonner';
 import { missionById } from '@/engines/missions';
 import { missionCardHtml, toGeoJson, toGpx, type ExportInput } from '@/engines/export';
@@ -51,24 +52,36 @@ function printCard(html: string): void {
   document.body.append(frame);
 }
 
-const BUTTON = 'inline-flex h-8 items-center gap-1.5 rounded-md border px-2.5 text-[12.5px] font-medium transition-colors hover:bg-secondary pointer-coarse:h-11';
-
-/** Take the route away: to a GPS unit or a GIS as a file, or to a sleeve as a printed card. */
+/** Take the route away, behind a "More" button: to a sleeve as a printed card, or to a GPS unit or a GIS as a file. */
 export function Exports({ alt, hasBudget }: { alt: RouteAlternative; hasBudget: boolean }) {
   return (
-    <div className="mt-3 flex flex-wrap items-center gap-1.5">
-      <button type="button" className={BUTTON} onClick={() => printCard(missionCardHtml(exportInput(alt, hasBudget)))}>
-        <Printer className="size-3.5 text-muted-foreground" aria-hidden />
-        Print cuff card
-      </button>
-      <button type="button" className={BUTTON} onClick={() => download('areo-route.gpx', 'application/gpx+xml', toGpx(exportInput(alt, hasBudget)))}>
-        <Download className="size-3.5 text-muted-foreground" aria-hidden />
-        GPX
-      </button>
-      <button type="button" className={BUTTON} onClick={() => download('areo-route.geojson', 'application/geo+json', JSON.stringify(toGeoJson(exportInput(alt, hasBudget)), null, 1))}>
-        <Download className="size-3.5 text-muted-foreground" aria-hidden />
-        GeoJSON
-      </button>
-    </div>
+    <DropdownMenu>
+      <DropdownMenuTrigger asChild>
+        <button
+          type="button"
+          aria-label="More: print or download the route"
+          className="inline-flex h-9 items-center gap-1.5 rounded-md border px-2.5 text-[13px] font-medium transition-colors hover:bg-secondary data-[state=open]:bg-secondary pointer-coarse:h-11"
+        >
+          <Ellipsis className="size-4 text-muted-foreground" aria-hidden />
+          More
+        </button>
+      </DropdownMenuTrigger>
+      <DropdownMenuContent align="end" className="w-60">
+        <DropdownMenuItem onSelect={() => printCard(missionCardHtml(exportInput(alt, hasBudget)))}>
+          <Printer aria-hidden />
+          Print a cuff card
+        </DropdownMenuItem>
+        <DropdownMenuSeparator />
+        <DropdownMenuLabel className="text-xs font-normal text-muted-foreground">Download the route</DropdownMenuLabel>
+        <DropdownMenuItem onSelect={() => download('areo-route.gpx', 'application/gpx+xml', toGpx(exportInput(alt, hasBudget)))}>
+          <Download aria-hidden />
+          GPX, for a GPS unit
+        </DropdownMenuItem>
+        <DropdownMenuItem onSelect={() => download('areo-route.geojson', 'application/geo+json', JSON.stringify(toGeoJson(exportInput(alt, hasBudget)), null, 1))}>
+          <Download aria-hidden />
+          GeoJSON, for a GIS
+        </DropdownMenuItem>
+      </DropdownMenuContent>
+    </DropdownMenu>
   );
 }

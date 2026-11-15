@@ -1,3 +1,4 @@
+import { peopleOf } from '@/engines/fleet';
 import type {
   RouteAlternative,
   HazardZone,
@@ -139,7 +140,9 @@ export async function planRoutes(input: PlanInput, deps: RoutingDeps): Promise<R
 
     for (const reply of replies) {
       if (!reply.ok) {
-        return { status: 'failed', rev, message: reply.message, leg, ...(reply.nearest ? { nearest: reply.nearest } : {}) };
+        // Which point of the plan is at fault: the leg's start or its end.
+        const point = reply.reason === 'blockedStart' ? leg : reply.reason === 'blockedEnd' ? leg + 1 : null;
+        return { status: 'failed', rev, message: reply.message, leg, ...(point !== null ? { point } : {}), ...(reply.nearest ? { nearest: reply.nearest } : {}) };
       }
       const path = paths.get(reply.style);
       const indices = stopIndices.get(reply.style);
@@ -167,7 +170,7 @@ export async function planRoutes(input: PlanInput, deps: RoutingDeps): Promise<R
         }
       }
       const trip = deps.computeTrip
-        ? deps.computeTrip(path, { vehicle: plan.vehicle, departUtcMs, scenario: input.scenario, style, stops, campAtNight: plan.campAtNight })
+        ? deps.computeTrip(path, { vehicle: plan.vehicle, people: peopleOf(plan), departUtcMs, scenario: input.scenario, style, stops, campAtNight: plan.campAtNight })
         : shapeOnlyTrip(path);
       return { style, path, stopIndices: indices, trip };
     });

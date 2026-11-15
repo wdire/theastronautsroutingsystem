@@ -1,8 +1,9 @@
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { DndContext, KeyboardSensor, MeasuringStrategy, PointerSensor, closestCenter, useSensor, useSensors, type DragEndEvent } from '@dnd-kit/core';
 import { SortableContext, sortableKeyboardCoordinates, useSortable, verticalListSortingStrategy } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
 import { Camera, ChevronDown, FlaskConical, GripVertical, Pencil, Plus, Ruler, ScanSearch, Trash2, X } from 'lucide-react';
+import { fmtLatLon } from '@/lib/format';
 import { toast } from 'sonner';
 import type { Stop, Task, TaskKind } from '@/engines/types';
 import { TASK_DEFAULT_MIN, TASK_NAME, useApp } from '@/store';
@@ -68,9 +69,62 @@ function TaskRow({ stopId, task }: { stopId: string; task: Task }) {
   );
 }
 
+/**
+ * The stop's name, being written: opened on a stop just added, or from its pencil. Enter or leaving the field
+ * keeps it; an empty name shows the coordinates instead. Escape keeps the name it had.
+ */
+function StopNameField({ stop, onDone }: { stop: Stop; onDone: () => void }) {
+  const updateStop = useApp((s) => s.updateStop);
+  const [text, setText] = useState(stop.name ?? '');
+  const ref = useRef<HTMLInputElement>(null);
+  const done = useRef(false);
+  useEffect(() => {
+    const el = ref.current;
+    if (!el) return;
+    el.focus();
+    el.select();
+    el.scrollIntoView({ block: 'nearest' });
+  }, []);
+  const finish = (keep: boolean) => {
+    if (done.current) return;
+    done.current = true;
+    if (keep) {
+      const name = text.replace(/\s+/g, ' ').trim().slice(0, 48);
+      if (name !== (stop.name ?? '')) updateStop(stop.id, { name: name || undefined });
+    }
+    onDone();
+  };
+  return (
+    <input
+      ref={ref}
+      aria-label="Stop name"
+      name="stop-name"
+      autoComplete="off"
+      value={text}
+      maxLength={48}
+      placeholder={`Name it, or leave ${fmtLatLon(stop.lat, stop.lon, 3)}`}
+      onChange={(e) => setText(e.target.value)}
+      onKeyDown={(e) => {
+        if (e.key === 'Enter') {
+          e.preventDefault();
+          finish(true);
+        } else if (e.key === 'Escape') {
+          e.preventDefault();
+          e.stopPropagation();
+          finish(false);
+        }
+      }}
+      onBlur={() => finish(true)}
+      className="h-8 min-w-0 flex-1 rounded border border-ring bg-transparent px-2 text-[13px] font-medium outline-none ring-1 ring-ring placeholder:font-normal placeholder:text-muted-foreground"
+    />
+  );
+}
+
 function StopRow({ stop, index, open, onToggle }: { stop: Stop; index: number; open: boolean; onToggle: () => void }) {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: stop.id });
   const addTask = useApp((s) => s.addTask);
+  const naming = useApp((s) => s.namingStopId === stop.id);
+  const setNaming = useApp((s) => s.setNamingStop);
   const work = stop.tasks.reduce((sum, t) => sum + t.minutes, 0);
 
   const remove = () => {
@@ -99,15 +153,30 @@ function StopRow({ stop, index, open, onToggle }: { stop: Stop; index: number; o
           <GripVertical className="size-4" aria-hidden />
         </button>
         <span className="figure grid size-6 shrink-0 place-items-center rounded-full bg-primary text-xs font-bold text-primary-foreground">{index + 1}</span>
-        <button type="button" aria-expanded={open} onClick={onToggle} className="flex min-w-0 flex-1 items-center gap-2 rounded px-1.5 py-1 text-left transition-colors hover:bg-muted">
-          <span className="min-w-0 flex-1">
-            <span className="block truncate text-[13px] font-medium">{stopLabel(stop)}</span>
-            <span className="block truncate text-xs text-muted-foreground">
-              {stop.tasks.length === 0 ? 'No tasks yet' : `${stop.tasks.length} ${stop.tasks.length === 1 ? 'task' : 'tasks'}, ${fmtDuration(work * 60)}`}
+        {naming ? (
+          <StopNameField stop={stop} onDone={() => setNaming(null)} />
+        ) : (
+          <button type="button" aria-expanded={open} onClick={onToggle} className="flex min-w-0 flex-1 items-center gap-2 rounded px-1.5 py-1 text-left transition-colors hover:bg-muted">
+            <span className="min-w-0 flex-1">
+              <span className={cn('block truncate text-[13px] font-medium', !stop.name && 'figure')}>{stopLabel(stop)}</span>
+              <span className="block truncate text-xs text-muted-foreground">
+                {stop.tasks.length === 0 ? 'No tasks yet' : `${stop.tasks.length} ${stop.tasks.length === 1 ? 'task' : 'tasks'}, ${fmtDuration(work * 60)}`}
+              </span>
             </span>
-          </span>
-          <ChevronDown className={cn('size-4 shrink-0 text-muted-foreground transition-transform duration-200', open && 'rotate-180')} aria-hidden />
-        </button>
+            <ChevronDown className={cn('size-4 shrink-0 text-muted-foreground transition-transform duration-200', open && 'rotate-180')} aria-hidden />
+          </button>
+        )}
+        {naming ? null : (
+          <button
+            type="button"
+            aria-label={`Rename stop ${index + 1}`}
+            title="Rename"
+            onClick={() => setNaming(stop.id)}
+            className="inline-flex size-8 shrink-0 items-center justify-center rounded text-muted-foreground transition-colors hover:bg-secondary hover:text-foreground"
+          >
+            <Pencil className="size-3.5" aria-hidden />
+          </button>
+        )}
         <button
           type="button"
           aria-label={`Remove stop ${index + 1}`}

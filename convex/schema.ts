@@ -78,6 +78,17 @@ export default defineSchema({
     createdAt: v.number(),
   }).index('by_missionId', ['missionId']),
 
+  // The one base every visitor shares: a single row, absent until someone first moves it from the default spot.
+  bases: defineTable({
+    key: v.literal('main'),
+    lon: v.number(),
+    lat: v.number(),
+    name: v.string(),
+    movedById: v.string(),
+    movedByName: v.string(),
+    movedAt: v.number(),
+  }).index('by_key', ['key']),
+
   notes: defineTable({
     missionId: v.id('missions'),
     authorId: v.string(),

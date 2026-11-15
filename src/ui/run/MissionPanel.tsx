@@ -13,6 +13,7 @@ import { useApp } from '@/store';
 import { useCrew, watchingRun } from '@/net/state';
 import { fmtClock, fmtDistance, fmtDuration, fmtNumber } from '@/lib/format';
 import { cn } from '@/lib/cn';
+import { fleetOf, peopleOf } from '@/engines/fleet';
 import { AlertCard } from './Alerts';
 import { Chat, Gauge, Outcome } from './RunPanel';
 import { stateWords } from './runState';
@@ -25,6 +26,9 @@ function Party({ run }: { run: MissionRun }) {
   const me = useCrew((s) => s.me);
   const base = useApp((s) => s.base);
   const v = VEHICLES[run.vehicle];
+  const headCount = peopleOf(run.plan);
+  const fleet = fleetOf(run.plan);
+  const what = fleet.length === 0 ? (headCount > 0 ? 'On foot' : v.name) : fleet.map((f) => `${f.count > 1 ? `${f.count} × ` : ''}${VEHICLES[f.vehicle].name}`).join(', ');
   const people = roster?.filter((m) => !m.android) ?? [];
   const androids = roster?.filter((m) => m.android) ?? [];
   const homeName = run.plan.start?.name ?? base.name;
@@ -34,7 +38,7 @@ function Party({ run }: { run: MissionRun }) {
         Crew and vehicle
       </h3>
       <p className="text-[13px] leading-relaxed">
-        <span className="font-medium">{v.name}</span>
+        <span className="font-medium">{what}</span>
         <span className="text-muted-foreground"> · from and back to {homeName}</span>
       </p>
       {roster ? (
@@ -47,10 +51,12 @@ function Party({ run }: { run: MissionRun }) {
             </li>
           ))}
         </ul>
-      ) : v.crew > 0 ? (
+      ) : v.crew > 0 && headCount > 0 ? (
         <p className="mt-1 flex items-center gap-1.5 text-xs text-muted-foreground">
           <Users className="size-3.5" aria-hidden />
-          {v.crew} in suits: {me?.name ?? 'you'} commanding, with {v.crew - 1 === 1 ? 'one partner' : `${v.crew - 1} others`}. A solo mission.
+          {headCount === 1
+            ? `${me?.name ?? 'You'}, alone. A solo mission.`
+            : `${headCount} going: ${me?.name ?? 'you'} commanding, with ${headCount - 1 === 1 ? 'one partner' : `${headCount - 1} others`}. A solo mission.`}
         </p>
       ) : (
         <p className="mt-1 text-xs text-muted-foreground">Uncrewed: driven from the base.</p>

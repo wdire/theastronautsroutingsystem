@@ -32,6 +32,28 @@ describe('url state', () => {
     expect(decodeUrlState(encodeUrlState(full))).toEqual(full);
   });
 
+  it('carries the fleet, the head count and a renamed known place', () => {
+    const state: UrlState = {
+      plan: {
+        start: { lon: 77.4509, lat: 18.4446, placeId: 'octavia-e-butler-landing', name: 'Home pad' },
+        stops: [],
+        roundTrip: true,
+        vehicle: 'foot',
+        fleet: [
+          { vehicle: 'openRover', count: 1 },
+          { vehicle: 'heli', count: 2 },
+        ],
+        people: 3,
+        style: 'safest',
+        campAtNight: false,
+      },
+    };
+    const back = decodeUrlState(encodeUrlState(state));
+    expect(back.plan?.fleet).toEqual(state.plan?.fleet);
+    expect(back.plan?.people).toBe(3);
+    expect(back.plan?.start).toEqual(state.plan?.start);
+  });
+
   it('writes nothing for an empty state and leaves defaults out', () => {
     expect(encodeUrlState({})).toBe('');
     const hash = encodeUrlState({

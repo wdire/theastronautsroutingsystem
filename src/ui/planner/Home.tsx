@@ -3,34 +3,34 @@
  * and the missions they could join. Missions are made and found here; the Crew tab is about the one you fly.
  */
 import { lazy, Suspense } from 'react';
-import { ArrowRight, House, Route, Users } from 'lucide-react';
+import { ArrowRight, ChevronRight, House, Route, Users } from 'lucide-react';
 import { getMap } from '@/map/instance';
 import { NET_ENABLED } from '@/net/config';
 import { useCrew } from '@/net/state';
 import { fmtLatLon } from '@/lib/format';
 import { useApp } from '@/store';
-import { PickButton } from './Planner';
 
 const JoinList = lazy(() => import('@/ui/crew/JoinList'));
 
 function BaseRow() {
   const base = useApp((s) => s.base);
+  const open = () => {
+    useApp.getState().openPlace('base');
+    getMap()?.flyTo({ center: [base.lon, base.lat], zoom: Math.max(getMap()?.getZoom() ?? 0, 14.5), duration: 1400 });
+  };
   return (
-    <div className="flex items-center gap-3 px-4 py-3">
-      <button
-        type="button"
-        aria-label={`Show ${base.name} on the map`}
-        onClick={() => getMap()?.flyTo({ center: [base.lon, base.lat], zoom: 15.5, duration: 1400 })}
-        className="grid size-9 shrink-0 place-items-center rounded-md bg-secondary text-foreground transition-colors hover:bg-secondary/70"
-      >
+    <button type="button" onClick={open} className="flex w-full items-center gap-3 px-4 py-3 text-left transition-colors hover:bg-secondary/60">
+      <span className="grid size-9 shrink-0 place-items-center rounded-md bg-secondary text-foreground">
         <House className="size-4" aria-hidden />
-      </button>
+      </span>
       <span className="min-w-0 flex-1">
         <span className="block truncate text-[13.5px] font-semibold">{base.name}</span>
-        <span className="figure block truncate text-xs text-muted-foreground">Your base · {fmtLatLon(base.lat, base.lon)}</span>
+        <span className="figure block truncate text-xs text-muted-foreground">
+          {NET_ENABLED ? 'The shared base' : 'Your base'} · {fmtLatLon(base.lat, base.lon)}
+        </span>
       </span>
-      <PickButton target="base">Move</PickButton>
-    </div>
+      <ChevronRight className="size-4 text-muted-foreground" aria-hidden />
+    </button>
   );
 }
 

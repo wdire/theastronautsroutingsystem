@@ -83,6 +83,8 @@ describe('planRoutes', () => {
       rev: 1,
       message: 'The end point is too steep.',
       leg: 1,
+      // The end of leg 2 is the plan's third point: the second stop.
+      point: 2,
       nearest: [77.491, 18.461],
     });
   });

@@ -67,3 +67,6 @@ export const LIMITS = {
 /** How often the client should heartbeat, and when the server gives up on a silent browser. */
 export const HEARTBEAT_MS = 10_000;
 export const STALE_MS = 40_000;
+
+/** The mapped region, [west, south, east, north] degrees: the base must stand inside it (mirrors src/lib/constants REGION). */
+export const BASE_REGION = [71.8, 13.1, 83.1, 23.8] as const;

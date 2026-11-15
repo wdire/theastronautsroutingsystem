@@ -16,47 +16,60 @@ import { FIELD, Heading, QUIET_BTN, Swatch } from './parts';
 import { RosterBlock } from './MissionRoom';
 import { OnlineNow } from './Online';
 
+/** Solo by default, in one row; "Bring a crew" opens the one field that turns the plan into a crew mission. */
 function CreateCrewMission() {
   const me = useCrew((s) => s.me);
   const create = useMutation(api.missions.create);
   const [title, setTitle] = useState('');
   const [busy, setBusy] = useState(false);
+  const [open, setOpen] = useState(false);
   return (
     <div className="px-4 pt-4">
       <Heading>Crew</Heading>
-      {me ? (
-        <div className="flex items-center gap-2.5 rounded-md border px-3 py-2">
-          <Swatch color={me.color} />
-          <span className="min-w-0 flex-1 truncate text-[13px] font-medium">{me.name}</span>
-          <span className="text-xs text-muted-foreground">Commander</span>
-        </div>
+      <div className="flex items-center gap-2.5 rounded-md border py-1 pr-1 pl-3">
+        {me ? <Swatch color={me.color} /> : null}
+        <span className="min-w-0 flex-1 truncate text-[13px] font-medium">
+          {me?.name ?? 'You'} <span className="font-normal text-muted-foreground">· commander, solo</span>
+        </span>
+        {open ? null : (
+          <button type="button" className={QUIET_BTN} onClick={() => setOpen(true)}>
+            <Users className="size-3.5 text-muted-foreground" aria-hidden />
+            Bring a crew
+          </button>
+        )}
+      </div>
+      {open ? (
+        <form
+          className="mt-2"
+          onSubmit={(e) => {
+            e.preventDefault();
+            const s = useApp.getState();
+            setBusy(true);
+            create({
+              auth: auth(),
+              title,
+              objective: '',
+              planJson: encodePlan({ plan: s.plan, templateId: s.missionId }),
+              vehicle: s.plan.vehicle,
+              siteName: s.base.name.slice(0, LIMITS.siteName),
+            })
+              .then(() => {
+                setTitle('');
+                setOpen(false);
+              })
+              .catch(toastError)
+              .finally(() => setBusy(false));
+          }}
+        >
+          <div className="flex gap-2">
+            <input autoFocus value={title} onChange={(e) => setTitle(e.target.value)} aria-label="Mission title" placeholder="Name the mission" maxLength={LIMITS.title} className={FIELD} />
+            <button type="submit" className={QUIET_BTN} disabled={busy || !title.trim()}>
+              Create
+            </button>
+          </div>
+          <p className="mt-1.5 text-xs leading-relaxed text-muted-foreground">Then invite people who are online, or add androids.</p>
+        </form>
       ) : null}
-      <form
-        className="mt-2 flex flex-col items-start gap-2"
-        onSubmit={(e) => {
-          e.preventDefault();
-          const s = useApp.getState();
-          setBusy(true);
-          create({
-            auth: auth(),
-            title,
-            objective: '',
-            planJson: encodePlan({ plan: s.plan, templateId: s.missionId }),
-            vehicle: s.plan.vehicle,
-            siteName: s.base.name.slice(0, LIMITS.siteName),
-          })
-            .then(() => setTitle(''))
-            .catch(toastError)
-            .finally(() => setBusy(false));
-        }}
-      >
-        <input value={title} onChange={(e) => setTitle(e.target.value)} aria-label="Mission title" placeholder="Mission name, to bring a crew" maxLength={LIMITS.title} className={FIELD} />
-        <button type="submit" className={QUIET_BTN} disabled={busy || !title.trim()}>
-          <Users className="size-3.5 text-muted-foreground" aria-hidden />
-          Make it a crew mission
-        </button>
-      </form>
-      <p className="mt-1.5 text-xs leading-relaxed text-muted-foreground">Then invite people who are online, or add androids. Alone, you fly it solo.</p>
     </div>
   );
 }

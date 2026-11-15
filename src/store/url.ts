@@ -3,7 +3,7 @@ import type { MissionPlan, RouteStyle, Stop, Task, TaskKind, VehicleId, Waypoint
 /** The part of the app state that lives in the URL hash, so a link reopens the same plan and view. */
 export interface UrlState {
   camera?: { lon: number; lat: number; zoom: number; bearing: number; pitch: number };
-  plan?: Pick<MissionPlan, 'start' | 'stops' | 'roundTrip' | 'vehicle' | 'style' | 'campAtNight'>;
+  plan?: Pick<MissionPlan, 'start' | 'stops' | 'roundTrip' | 'vehicle' | 'style' | 'campAtNight' | 'fleet' | 'people'>;
   /** A departure time chosen by hand; absent means "now". */
   departUtcMs?: number;
   /** The place whose card is open. */
@@ -37,8 +37,9 @@ function safeName(name: string): string {
 
 function encodeWaypoint(w: Waypoint): string {
   const base = `${num(w.lon, 5)},${num(w.lat, 5)}`;
-  if (w.placeId) return `${base}@${encodeURIComponent(w.placeId)}`;
-  return w.name ? `${base};${encodeURIComponent(safeName(w.name))}` : base;
+  const at = w.placeId ? `@${encodeURIComponent(w.placeId)}` : '';
+  // The name travels too, so a stop renamed in the plan keeps its name in a link.
+  return w.name ? `${base}${at};${encodeURIComponent(safeName(w.name))}` : `${base}${at}`;
 }
 
 function decodeWaypoint(text: string): Waypoint | null {
@@ -95,6 +96,9 @@ export function encodeUrlState(state: UrlState): string {
       );
     }
     if (p.vehicle !== 'foot') parts.push(`veh=${p.vehicle}`);
+    // The fleet as vehicle and count pairs (openRover2.heli1), and the head count.
+    if (p.fleet) parts.push(`fleet=${p.fleet.map((f) => `${f.vehicle}${f.count}`).join('.')}`);
+    if (p.people !== undefined) parts.push(`ppl=${p.people}`);
     if (p.style !== 'safest') parts.push(`style=${p.style}`);
     // A round trip is the default, so only a one-way plan is written.
     if (!p.roundTrip && (p.start || p.stops.length)) parts.push('rt=0');
@@ -151,6 +155,16 @@ export function decodeUrlState(hash: string): UrlState {
       roundTrip: kv.get('rt') !== '0',
       campAtNight: kv.get('camp') === '1',
     };
+    if (kv.has('fleet')) {
+      out.plan.fleet = (kv.get('fleet') ?? '')
+        .split('.')
+        .map((t) => /^([a-zA-Z]+)(\d)$/.exec(t))
+        .filter((m): m is RegExpExecArray => m !== null && VEHICLES.includes(m[1] as VehicleId) && m[1] !== 'foot')
+        .map((m) => ({ vehicle: m[1] as VehicleId, count: Math.min(4, Number(m[2])) }))
+        .filter((f) => f.count > 0);
+    }
+    const ppl = finite(kv.get('ppl'), 0, 8);
+    if (ppl !== null) out.plan.people = Math.round(ppl);
   }
 
   const t = finite(kv.get('t'), 0, 4_102_444_800);
