@@ -1,4 +1,4 @@
-export type ModelName = 'perseverance' | 'ingenuity' | 'sev' | 'habitat' | 'z2' | 'solar' | 'pad' | 'mast';
+export type ModelName = 'perseverance' | 'ingenuity' | 'sev' | 'habitat' | 'z2' | 'solar' | 'pad' | 'mast' | 'tunnel';
 
 export interface ModelSpec {
   /** The NASA model to load; null for the parts of a base drawn here (src/visor/baseProps.ts). */
@@ -33,12 +33,13 @@ export const MODELS: Record<ModelName, ModelSpec> = {
     wheels: { radius: 0.5, halfWidth: 0.3, at: [-1.73, 1.73].flatMap((x) => [-1.305, 0.573, 2.045].map((z) => [x, 0.5, z] as const)) },
   },
   // Modelled in centimetres.
-  habitat: { url: '/models/habitat.glb', scale: 0.03, yawDeg: 0, stance: null, clearM: 8 },
+  habitat: { url: '/models/habitat.glb', scale: 0.04, yawDeg: 0, stance: null, clearM: 9.5 },
   z2: { url: '/models/z2.glb', scale: 1, yawDeg: 180, stance: null, clearM: 0.8 },
   // Drawn, not loaded. Wide things lean with the ground under their corners, as a vehicle on its wheels does.
   solar: { url: null, scale: 1, yawDeg: 0, stance: { width: 12.8, length: 8.6 }, clearM: 8.5 },
   pad: { url: null, scale: 1, yawDeg: 0, stance: { width: 16, length: 16 }, clearM: 10 },
   mast: { url: null, scale: 1, yawDeg: 0, stance: null, clearM: 1.2 },
+  tunnel: { url: null, scale: 1, yawDeg: 0, stance: { width: 2.6, length: 9 }, clearM: 5 },
 };
 
 /** Something that stands on the ground at a real place: a rover, the habitat, a parked vehicle. */

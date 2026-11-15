@@ -80,3 +80,20 @@ export function radioMast(): Group {
   g.add(part(new SphereGeometry(0.09, 10, 8), beacon, 0, 7.08, 0, false));
   return g;
 }
+
+/** A pressurised tunnel, 9 m long and 2.4 m across, joining two habitat modules; its front faces north. */
+export function tunnel(): Group {
+  const g = new Group();
+  g.name = 'tunnel';
+  const tube = part(new CylinderGeometry(1.2, 1.2, 9, 24, 1, true), dish, 0, 1.75, 0);
+  tube.rotation.x = Math.PI / 2;
+  g.add(tube);
+  // Ribs every metre and a half, and two feet under it.
+  for (let z = -4; z <= 4; z += 1.6) {
+    const rib = part(new CylinderGeometry(1.26, 1.26, 0.12, 24), frame, 0, 1.75, z);
+    rib.rotation.x = Math.PI / 2;
+    g.add(rib);
+  }
+  for (const z of [-3, 3]) g.add(part(new BoxGeometry(1.6, 0.6, 0.4), frame, 0, 0.3, z));
+  return g;
+}

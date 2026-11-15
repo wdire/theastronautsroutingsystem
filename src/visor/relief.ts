@@ -208,5 +208,8 @@ export function cutoffForSourceZoom(zoom: number): number {
   return 1400;
 }
 
-/** Where HiRISE's own 1 m model is drawn: only the last few metres are left to invent. */
-export const HIRISE_CUTOFF_M = 3;
+/**
+ * Where HiRISE's own 1 m model is drawn: only the last few metres are left to invent. A stereo model posted
+ * at 1 m resolves about three posts, and smooths more on bland ground, so hummocks under 6 m are added.
+ */
+export const HIRISE_CUTOFF_M = 6;

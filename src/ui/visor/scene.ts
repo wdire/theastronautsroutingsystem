@@ -40,13 +40,18 @@ async function perseverance(): Promise<PropSpec | null> {
  */
 export function baseProps(lon: number, lat: number, outDeg: number): PropSpec[] {
   const at = (bearing: number, m: number) => destination(lon, lat, outDeg + bearing, m);
+  // Two habitat modules side by side, joined by a tunnel, beside the way out.
   const [hlon, hlat] = at(90, 26);
-  const [slon, slat] = at(150, 44);
+  const [h2lon, h2lat] = destination(hlon, hlat, outDeg + 90, 17.5);
+  const [tlon, tlat] = destination(hlon, hlat, outDeg + 90, 8.75);
+  const [slon, slat] = at(150, 50);
   const [mlon, mlat] = at(115, 14);
   const [plon, plat] = at(200, 85);
   const [vlon, vlat] = at(60, 13);
   return [
     { id: 'habitat', model: 'habitat', lon: hlon, lat: hlat, headingDeg: outDeg - 90 },
+    { id: 'habitat-2', model: 'habitat', lon: h2lon, lat: h2lat, headingDeg: outDeg + 90 },
+    { id: 'base-tunnel', model: 'tunnel', lon: tlon, lat: tlat, headingDeg: outDeg + 90 },
     { id: 'base-solar', model: 'solar', lon: slon, lat: slat, headingDeg: 0 },
     { id: 'base-mast', model: 'mast', lon: mlon, lat: mlat, headingDeg: outDeg },
     { id: 'base-pad', model: 'pad', lon: plon, lat: plat, headingDeg: 0 },

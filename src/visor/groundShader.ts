@@ -75,10 +75,27 @@ float fbm(vec2 p) {
 float show(float size, float px) {
   return 1.0 - smoothstep(size * 0.22, size * 0.6, px);
 }
-// Orbital colour graded toward what Mastcam-Z records: less saturated, browner, rock a little grey.
+// Orbital colour graded toward the rust-red of Mastcam-Z's white-balanced frames: oxidised dust is redder
+// than the orbital mosaics show it, rock is browner, nothing is beige.
 vec3 marsGrade(vec3 c) {
   float l = dot(c, vec3(0.2126, 0.7152, 0.0722));
-  return mix(vec3(l), c, 0.66) * vec3(1.0, 0.975, 0.96);
+  return mix(vec3(l), c, 0.88) * vec3(0.96, 0.76, 0.62);
+}
+// What the surface itself varies by at a few metres, which no orbiter resolves: pale, light-toned rock
+// slabs and veins (the mudstones Curiosity and Perseverance drive over), dark basaltic sand in drifts, and
+// redder dust between. Returns a multiplier for the colour.
+vec3 groundPatches(vec2 p, float px, float hiOn) {
+  float vis = show(6.0, px);
+  float slabs = smoothstep(0.49, 0.58, fbm(p * 0.075 + 4.0)) * (0.55 + 0.45 * smoothstep(0.4, 0.6, fbm(p * 0.5)));
+  float veins = smoothstep(0.86, 0.96, 1.0 - abs(fbm(p * 0.14 + 9.0) * 2.0 - 1.0)) * show(1.5, px);
+  float drift = smoothstep(0.5, 0.6, fbm(p * 0.03 + 21.0));
+  float rust = fbm(p * 0.22 + 2.0) - 0.5;
+  float k = mix(1.0, 0.7, hiOn) * vis;
+  vec3 m = vec3(1.0);
+  m = mix(m, vec3(1.55, 1.42, 1.34), clamp(slabs + veins * 0.8, 0.0, 1.0) * 0.8 * k);
+  m = mix(m, vec3(0.58, 0.55, 0.56), drift * 0.65 * k);
+  m *= 1.0 + vec3(0.1, -0.02, -0.08) * rust * 1.6 * k;
+  return m;
 }
 // Mars's loose sand is basaltic: darker and greyer than the dust-covered ground around it.
 vec3 sandTone(vec3 c) {
@@ -101,7 +118,8 @@ const DETAIL_COARSE = /* glsl */ `
   float px = max(length(dFdx(p)), length(dFdy(p)));
   float slope = degrees(acos(clamp(normalize(vWNormal).y, 0.0, 1.0)));
   float tone = (fbm(p * 0.004) - 0.5) * show(120.0, px) + (fbm(p * 0.03) - 0.5) * 0.6 * show(18.0, px);
-  diffuseColor.rgb *= 1.0 + tone * 0.22;
+  diffuseColor.rgb *= 1.0 + tone * 0.32;
+  diffuseColor.rgb *= mix(vec3(1.0), groundPatches(p, px, 0.0), 0.6);
   float rock = max(smoothstep(4.0, 12.0, slope + (fbm(p * 0.006) - 0.5) * 5.0), vSoil.y * 0.6);
   float lum = dot(diffuseColor.rgb, vec3(0.2126, 0.7152, 0.0722));
   diffuseColor.rgb = mix(diffuseColor.rgb, vec3(lum) * vec3(0.9, 0.84, 0.8), rock * 0.35);
@@ -146,7 +164,8 @@ const DETAIL_NEAR = /* glsl */ `
 
   // Tone patches the orbiters would show as one pixel: dust drifts, lag gravel, darker wind streaks.
   float tone = (fbm(p * 0.012) - 0.5) * 1.2 * show(60.0, px) + (fbm(p * 0.05) - 0.5) * show(12.0, px) + (fbm(p * 0.6) - 0.5) * 0.5 * show(1.2, px);
-  base *= 1.0 + tone * mix(0.3, 0.08, hiOn);
+  base *= 1.0 + tone * mix(0.38, 0.12, hiOn);
+  base *= groundPatches(p, px, hiOn);
 
   // The invented relief's soil: dark sand in hollows and ridge fields, rock on rims and knobs.
   float sand = vSoil.x * (1.0 - hiOn * 0.7) * smoothstep(0.15, 0.6, vSoil.x + (fbm(p * 0.09 + 3.0) - 0.5) * 0.5);
@@ -163,7 +182,7 @@ const DETAIL_NEAR = /* glsl */ `
   float lumB = dot(base, vec3(0.2126, 0.7152, 0.0722));
   base = mix(base, mix(vec3(lumB), base, 0.55) * 0.92, bed * 0.6);
 
-  float near = (1.0 - smoothstep(35.0, 110.0, dist)) * uGdQuality;
+  float near = (1.0 - smoothstep(50.0, 170.0, dist)) * uGdQuality;
   if (near > 0.001) {
     vec4 r = twoScale(uRegolith, p, 1.9);
     vec4 g = twoScale(uGravel, p, 1.6);
@@ -174,9 +193,9 @@ const DETAIL_NEAR = /* glsl */ `
     w /= max(1e-4, w.x + w.y + w.z);
     vec4 m = r * w.x + g * w.y + b * w.z;
     float lumD = (m.b - 0.5) * 2.2;
-    base *= 1.0 + lumD * near * mix(0.6, 0.45, hiOn);
+    base *= 1.0 + lumD * near * mix(0.9, 0.7, hiOn);
     vec2 nd = m.rg * 2.0 - 1.0;
-    gdBump = vec2(nd.x, -nd.y) * near * 0.85;
+    gdBump = vec2(nd.x, -nd.y) * near * 1.15;
   }
   diffuseColor.rgb = marsGrade(base);
 }
@@ -219,6 +238,6 @@ export function groundMaterial(kind: GroundKind, map: Texture, hole: { center: V
         '#include <normal_fragment_maps>\nnormal = normalize(normal + (viewMatrix * vec4(gdBump.x, 0.0, gdBump.y, 0.0)).xyz);',
       );
   };
-  material.customProgramCacheKey = () => `areo-ground3|${close ? 'near' : 'coarse'}`;
+  material.customProgramCacheKey = () => `areo-ground4|${close ? 'near' : 'coarse'}`;
   return material;
 }
