@@ -43,14 +43,18 @@ export function gradePixels(rgba: Uint8ClampedArray): void {
 /**
  * A tone curve for the map's base image, as a 256-entry lookup table. Jezero's floor is dark basalt:
  * shown as the orbiters recorded it, most of the crater is a murk in which neither landforms nor the
- * route can be read. The curve lifts shadows and midtones (a gamma below 1) and leaves black and
- * white where they were. `amount` 0 changes nothing, 1 is the full lift.
+ * route can be read. The curve lifts shadows and midtones and leaves black and white where they were.
+ * It is a shadow lift, x + k x (1 - x)^2, not a gamma: a gamma also pushed bright rim rock and dust toward
+ * white, and the rim washed out to cream. `amount` 0 changes nothing, 1 is the full lift.
  */
 export function mapToneLut(amount: number): Uint8ClampedArray {
   const a = Math.max(0, Math.min(1, Number.isFinite(amount) ? amount : 0));
-  const gamma = 1 - 0.38 * a;
+  const k = 1.1 * a;
   const lut = new Uint8ClampedArray(256);
-  for (let i = 0; i < 256; i += 1) lut[i] = Math.round(255 * (i / 255) ** gamma);
+  for (let i = 0; i < 256; i += 1) {
+    const x = i / 255;
+    lut[i] = Math.round(255 * (x + k * x * (1 - x) ** 2));
+  }
   return lut;
 }
 

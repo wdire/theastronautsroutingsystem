@@ -1,7 +1,7 @@
 import { getCoverage, loadCoverage, nearestTile, tileUrl, type Coverage, type TileRef } from '@/data/coverage';
 import { flatTile, MARS_FLAT, type TileData } from './index';
 import { blendDetail, highPassRadius, luminance, type DetailLayer } from './detail';
-import { CTX, HIRISE, VIKING, warpToTile, type EquirectSource } from './live';
+import { CTX, HIRISE, USGS_HIRISE, VIKING, warpToTile, type EquirectSource } from './live';
 import { insideHirise } from '@/data/hiriseGrid';
 import { pxToLat, pxToLon } from '@/lib/geo';
 
@@ -135,6 +135,43 @@ export async function imgTile(_rest: string[], z: number, x: number, y: number, 
   if (!ctx) return canvas.transferToImageBitmap();
   const image = ctx.getImageData(0, 0, 256, 256);
   blendDetail(image.data, 256, pad, layers);
+  ctx.putImageData(image, 0, 0);
+  return canvas.transferToImageBitmap();
+}
+
+/** A fully transparent tile: no HD imagery here, the base shows through. A new one each time: the map may close it. */
+function transparentTile(): Promise<ImageBitmap> {
+  return createImageBitmap(new OffscreenCanvas(1, 1));
+}
+
+/**
+ * The 25 cm Mars 2020 HiRISE mosaic of Jezero (USGS) over the base imagery, as a layer of its own from zoom
+ * 15: the base tile draws at once, and this one fades in over it when the slower USGS cut arrives. Its colour
+ * is the base tile's, its detail HiRISE's at full gain; transparent off the mosaic.
+ */
+export async function hdTile(rest: string[], z: number, x: number, y: number, signal: AbortSignal): Promise<TileData> {
+  if (!tileTouchesHirise(z, x, y)) return transparentTile();
+  const pad = 32;
+  const [baseData, warped] = await Promise.all([imgTile(rest, z, x, y, signal), warpToTile(USGS_HIRISE, z, x, y, pad, 45_000)]);
+  if (signal.aborted) throw new DOMException('aborted', 'AbortError');
+  if (!warped || warped.coverage < 0.02) return transparentTile();
+  const base = baseData instanceof ArrayBuffer ? await createImageBitmap(new Blob([baseData])) : baseData;
+  const canvas = new OffscreenCanvas(256, 256);
+  const ctx = canvas.getContext('2d', { willReadFrequently: true });
+  if (!ctx) return transparentTile();
+  ctx.drawImage(base, 0, 0, 256, 256);
+  const image = ctx.getImageData(0, 0, 256, 256);
+  const full = warped.size;
+  const mask = new Float32Array(full * full);
+  for (let i = 0; i < mask.length; i += 1) mask[i] = (warped.rgba[i * 4 + 3] ?? 0) / 255;
+  // Wide radius: the HiRISE image carries nearly all the light and shade; the base only its colour.
+  blendDetail(image.data, 256, pad, [{ lum: luminance(warped.rgba), radius: 24, gain: 1.4, mask }]);
+  // Off the mosaic the layer is clear, with a soft edge where the mosaic ends.
+  for (let yy = 0; yy < 256; yy += 1) {
+    for (let xx = 0; xx < 256; xx += 1) {
+      image.data[(yy * 256 + xx) * 4 + 3] = Math.round(255 * Math.min(1, (mask[(yy + pad) * full + (xx + pad)] ?? 0) * 1.4));
+    }
+  }
   ctx.putImageData(image, 0, 0);
   return canvas.transferToImageBitmap();
 }

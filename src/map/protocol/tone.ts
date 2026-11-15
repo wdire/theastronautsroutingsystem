@@ -1,5 +1,5 @@
 import { mapToneAmount, mapToneLut } from '@/engines/grading';
-import { imgTile } from './img';
+import { hdTile, imgTile } from './img';
 import { toBitmap, type TileData, type TileHandler } from './index';
 
 const luts = new Map<number, Uint8ClampedArray>();
@@ -51,6 +51,18 @@ export const mapImgTile: TileHandler = async (rest, z, x, y, signal) => {
     return await toned(data, lut);
   } catch {
     // A tile that cannot be read back is shown as it came.
+    return data;
+  }
+};
+
+/** The 25 cm HiRISE layer, toned like the base under it. A clear tile (nothing here) passes as it is. */
+export const mapHdTile: TileHandler = async (rest, z, x, y, signal) => {
+  const data = await hdTile(rest, z, x, y, signal);
+  const lut = lutFor(z);
+  if (!lut || signal.aborted || (data instanceof ImageBitmap && data.width === 1)) return data;
+  try {
+    return await toned(data, lut);
+  } catch {
     return data;
   }
 };

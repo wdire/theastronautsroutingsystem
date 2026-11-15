@@ -40,7 +40,8 @@ export function addTerrain(map: MapLibreMap): () => void {
         paint: {
           'hillshade-exaggeration': 0.6,
           'hillshade-shadow-color': '#1a0f08',
-          'hillshade-highlight-color': '#ffe9cf',
+          // A warm, faint highlight: a cream one washed the sunlit slopes out to beige.
+          'hillshade-highlight-color': 'rgba(214, 150, 100, 0.35)',
           'hillshade-accent-color': '#2a1a10',
           'hillshade-illumination-anchor': 'map',
         },
@@ -68,17 +69,24 @@ export function addTerrain(map: MapLibreMap): () => void {
     // On the globe the planet is shown fully lit: night would hide the place the visitor came to see.
     const zoomedIn = map.getZoom() >= 6;
     map.setPaintProperty('hillshade', 'hillshade-illumination-direction', light.direction);
-    map.setPaintProperty('hillshade', 'hillshade-exaggeration', zoomedIn ? light.strength : 0.35);
+    // Close in, the imagery carries its own light and shade at metres; the shading from the coarser elevation
+    // would only lay its blocky cells over it, so it fades out past zoom 14.
+    const z = map.getZoom();
+    const closeFade = z <= 14 ? 1 : z >= 16.5 ? 0.12 : 1 - ((z - 14) / 2.5) * 0.88;
+    map.setPaintProperty('hillshade', 'hillshade-exaggeration', zoomedIn ? light.strength * closeFade : 0.35);
     // Night is dimmed to 0.6, not the 0.4 of the lighting model: a first-time visitor who arrives
     // during the Martian night still has to be able to read the map.
-    map.setPaintProperty('base', 'raster-brightness-max', zoomedIn ? Math.max(0.6, light.brightness) : 1);
+    const bright = zoomedIn ? Math.max(0.6, light.brightness) : 1;
+    map.setPaintProperty('base', 'raster-brightness-max', bright);
+    if (map.getLayer('hirise-hd')) map.setPaintProperty('hirise-hd', 'raster-brightness-max', bright);
     map.setSky({
       'sky-color': light.sky,
       'horizon-color': light.horizon,
       'fog-color': light.horizon,
       'sky-horizon-blend': 0.6,
       'horizon-fog-blend': 0.7,
-      'fog-ground-blend': 0.25,
+      // Haze lies over the far ground only; close in, a tilted view would otherwise be washed out to cream.
+      'fog-ground-blend': ['interpolate', ['linear'], ['zoom'], 9, 0.25, 13, 0.6, 16, 0.9],
       'atmosphere-blend': ['interpolate', ['linear'], ['zoom'], 0, 0.75, 4, 0.55, 6.5, 0],
     });
   };
@@ -89,6 +97,7 @@ export function addTerrain(map: MapLibreMap): () => void {
     if (bucket !== lastZoomBucket) {
       lastZoomBucket = bucket;
       applyRelief();
+      applyLight();
     }
   };
   map.on('zoom', onZoom);

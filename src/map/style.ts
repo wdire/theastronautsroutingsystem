@@ -24,6 +24,15 @@ export function baseStyle(): StyleSpecification {
         maxzoom: 19,
         attribution: 'NASA / JPL-Caltech / USGS / MSSS / ASU',
       },
+      // The 25 cm Jezero mosaic, drawn over the base from zoom 15 where it covers the ground.
+      hd: {
+        type: 'raster',
+        tiles: ['mars://hd/{z}/{x}/{y}'],
+        tileSize: typeof window !== 'undefined' && window.devicePixelRatio >= 1.5 ? 128 : 256,
+        minzoom: 15,
+        maxzoom: 19,
+        bounds: [77.2, 18.3, 77.6, 18.68],
+      },
       [SOURCE_REGION]: {
         type: 'geojson',
         data: {
@@ -35,12 +44,20 @@ export function baseStyle(): StyleSpecification {
     },
     layers: [
       { id: 'ground', type: 'background', paint: { 'background-color': '#7a4a30' } },
-      // Jezero’s floor is dark basalt: the image is lifted a little so its shapes read on a screen.
+      // Jezero’s floor is dark basalt: the image is lifted a little so its shapes read on a screen. Contrast is
+      // strong from afar, where it gives the landforms body, and slight close in, where it crushed dark sand to black.
       {
         id: 'base',
         type: 'raster',
         source: SOURCE_BASE,
-        paint: { 'raster-fade-duration': 180, 'raster-resampling': 'linear', 'raster-contrast': 0.14, 'raster-saturation': 0.16, 'raster-brightness-min': 0.03 },
+        paint: { 'raster-fade-duration': 180, 'raster-resampling': 'linear', 'raster-contrast': ['interpolate', ['linear'], ['zoom'], 10, 0.22, 14, 0.12, 16, 0.02], 'raster-saturation': 0.26, 'raster-brightness-min': ['interpolate', ['linear'], ['zoom'], 12, 0.02, 16, 0.07] },
+      },
+      {
+        id: 'hirise-hd',
+        type: 'raster',
+        source: 'hd',
+        minzoom: 15,
+        paint: { 'raster-fade-duration': 450, 'raster-resampling': 'linear', 'raster-contrast': ['interpolate', ['linear'], ['zoom'], 10, 0.22, 14, 0.12, 16, 0.02], 'raster-saturation': 0.26, 'raster-brightness-min': ['interpolate', ['linear'], ['zoom'], 12, 0.02, 16, 0.07] },
       },
       {
         id: 'region-outline',

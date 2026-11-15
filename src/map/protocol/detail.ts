@@ -80,7 +80,9 @@ export function blendDetail(base: Uint8ClampedArray, size: number, pad: number, 
         const g = base[p + 1] ?? 0;
         const b = base[p + 2] ?? 0;
         const lum = 0.2126 * r + 0.7152 * g + 0.0722 * b;
-        const k = 1 + hp * m * 2.4;
+        // Bounded both ways: at full strength the high-pass could reach below zero and clip dark sand to black,
+        // or double a bright rim to white.
+        const k = Math.max(0.42, Math.min(1.6, 1 + hp * m * 2.4));
         // Strong brightening moves toward grey: sunlit rims are pale dust, not neon orange.
         const grey = Math.max(0, Math.min(0.6, (k - 1.12) * 1.6));
         base[p] = (r * (1 - grey) + lum * grey) * k;
