@@ -81,8 +81,9 @@ async function detailLayer(
   radius: number,
   gain: number,
   masked: boolean,
+  signal?: AbortSignal,
 ): Promise<DetailLayer | null> {
-  const warped = await warpToTile(src, z, x, y, pad);
+  const warped = await warpToTile(src, z, x, y, pad, 15000, signal);
   if (!warped || warped.coverage < 0.02) return null;
   const layer: DetailLayer = { lum: luminance(warped.rgba), radius, gain };
   if (masked || warped.coverage < 0.999) {
@@ -118,13 +119,13 @@ export async function imgTile(_rest: string[], z: number, x: number, y: number, 
   const wanted: Promise<DetailLayer | null>[] = [];
   const pad = 32;
   if (z >= CTX_FROM && ref.z < CTX_NATIVE) {
-    wanted.push(detailLayer(CTX, z, x, y, pad, highPassRadius(z, ref.z), 1, false));
+    wanted.push(detailLayer(CTX, z, x, y, pad, highPassRadius(z, ref.z), 1, false, signal));
   } else if (z >= VIKING_FROM && z < CTX_FROM && ref.z < VIKING_NATIVE) {
-    wanted.push(detailLayer(VIKING, z, x, y, pad, highPassRadius(z, ref.z), 0.9, false));
+    wanted.push(detailLayer(VIKING, z, x, y, pad, highPassRadius(z, ref.z), 0.9, false, signal));
   }
   if (z >= HIRISE_FROM) {
     // Esri's tiled HiRISE layer: served from a CDN, so the map never waits on the slower USGS cut.
-    wanted.push(detailLayer(HIRISE, z, x, y, pad, highPassRadius(z, Math.max(ref.z, CTX_NATIVE)), 1.25, true));
+    wanted.push(detailLayer(HIRISE, z, x, y, pad, highPassRadius(z, Math.max(ref.z, CTX_NATIVE)), 1.25, true, signal));
   }
   if (wanted.length === 0 || (typeof navigator !== 'undefined' && navigator.onLine === false)) return canvas.transferToImageBitmap();
 
@@ -152,7 +153,7 @@ function transparentTile(): Promise<ImageBitmap> {
 export async function hdTile(rest: string[], z: number, x: number, y: number, signal: AbortSignal): Promise<TileData> {
   if (!tileTouchesHirise(z, x, y)) return transparentTile();
   const pad = 32;
-  const [baseData, warped] = await Promise.all([imgTile(rest, z, x, y, signal), warpToTile(USGS_HIRISE, z, x, y, pad, 45_000)]);
+  const [baseData, warped] = await Promise.all([imgTile(rest, z, x, y, signal), warpToTile(USGS_HIRISE, z, x, y, pad, 45_000, signal)]);
   if (signal.aborted) throw new DOMException('aborted', 'AbortError');
   if (!warped || warped.coverage < 0.02) return transparentTile();
   const base = baseData instanceof ArrayBuffer ? await createImageBitmap(new Blob([baseData])) : baseData;

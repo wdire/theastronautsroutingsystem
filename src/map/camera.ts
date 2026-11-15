@@ -1,9 +1,17 @@
 import type { Map as MapLibreMap } from 'maplibre-gl';
 import { REGION, inBox } from '@/lib/constants';
 import { useApp } from '@/store';
+import { pitchForZoom } from './tilt';
+import { warmView } from './warm';
 
 /** The centre of Jezero crater, and the zoom at which the whole crater fits a laptop screen. */
 export const JEZERO_VIEW = { center: [77.58, 18.4] as [number, number], zoom: 9.4 };
+
+/**
+ * Where the flight from the planet comes down: over the delta and the crater rim Perseverance has driven,
+ * close enough to read its track, tilted so the delta's fronts and the rim stand up.
+ */
+export const LANDING_VIEW = { center: [77.37, 18.462] as [number, number], zoom: 13.3, bearing: -12 };
 
 const NO_PADDING = { left: 0, right: 0, top: 0, bottom: 0 };
 
@@ -87,8 +95,12 @@ export function startGlobeSpin(map: MapLibreMap): () => void {
 export function flyIn(map: MapLibreMap, target?: { center: [number, number]; zoom: number }): void {
   const app = useApp.getState();
   if (app.flying || app.mode === 'map') return;
-  const view = target ?? JEZERO_VIEW;
+  const view = target ?? LANDING_VIEW;
+  const bearing = target ? 0 : LANDING_VIEW.bearing;
+  const pitch = pitchForZoom(view.zoom);
   app.setFlying(true);
+  // The ground at the landing loads during the flight, so it is sharp when the camera arrives.
+  warmView(view.center, view.zoom);
   const done = () => {
     const s = useApp.getState();
     s.setMode('map');
@@ -96,12 +108,12 @@ export function flyIn(map: MapLibreMap, target?: { center: [number, number]; zoo
     s.setLanded();
   };
   if (prefersReducedMotion()) {
-    map.jumpTo({ center: view.center, zoom: view.zoom, bearing: 0, pitch: 0, padding: NO_PADDING });
+    map.jumpTo({ center: view.center, zoom: view.zoom, bearing, pitch, padding: NO_PADDING });
     done();
     return;
   }
   map.once('moveend', done);
-  map.flyTo({ center: view.center, zoom: view.zoom, bearing: 0, pitch: 0, padding: NO_PADDING, duration: 6500, curve: 1.3, essential: true });
+  map.flyTo({ center: view.center, zoom: view.zoom, bearing, pitch, padding: NO_PADDING, duration: 7200, curve: 1.42, essential: true });
 }
 
 /** The way back: out to the whole planet. */
@@ -123,4 +135,34 @@ export function flyOut(map: MapLibreMap): void {
 
 export function isInRegion(lon: number, lat: number): boolean {
   return inBox(REGION, lon, lat);
+}
+
+/**
+ * When a mission starts: come down close over the crew at the start, tilted along the way out, and load the
+ * first stretch of the route ahead so it is sharp as they walk or drive into it.
+ */
+export function focusRunStart(map: MapLibreMap, path: readonly (readonly [number, number, ...number[]])[]): void {
+  const first = path[0];
+  if (!first) return;
+  const zoom = 15.6;
+  // Face the way out: toward a point a few hundred metres along.
+  const ahead = path[Math.min(path.length - 1, 40)] ?? first;
+  const bearing = (Math.atan2((ahead[0] - first[0]) * Math.cos((first[1] * Math.PI) / 180), ahead[1] - first[1]) * 180) / Math.PI;
+  for (const i of [0, Math.floor(path.length * 0.08), Math.floor(path.length * 0.18)]) {
+    const p = path[i];
+    if (p) warmView([p[0], p[1]], zoom);
+  }
+  map.flyTo({ center: [first[0], first[1]], zoom, pitch: pitchForZoom(zoom), bearing: Number.isFinite(bearing) ? bearing : map.getBearing(), duration: prefersReducedMotion() ? 0 : 2200, essential: true });
+}
+
+/** Brings the camera to the crew whenever a mission starts here or on the commander's browser. */
+export function addRunFocus(map: MapLibreMap): () => void {
+  return useApp.subscribe(
+    (s) => s.world?.run?.id ?? null,
+    (id, prev) => {
+      const run = useApp.getState().world?.run;
+      if (!id || id === prev || !run || run.status !== 'running') return;
+      focusRunStart(map, run.path);
+    },
+  );
 }

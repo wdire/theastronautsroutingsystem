@@ -82,47 +82,90 @@ export const VIKING: EquirectSource = {
 };
 
 const tileCache = new Map<string, Promise<ImageBitmap | null>>();
-const TILE_CACHE_MAX = 80;
-const MAX_PARALLEL = 8;
-let running = 0;
-const waiting: (() => void)[] = [];
+const TILE_CACHE_MAX = 120;
 
-async function withSlot<T>(fn: () => Promise<T>): Promise<T> {
-  if (running >= MAX_PARALLEL) await new Promise<void>((resolve) => waiting.push(resolve));
-  running += 1;
-  try {
-    return await fn();
-  } finally {
-    running -= 1;
-    waiting.shift()?.();
+/**
+ * Requests wait in a pool per source, so a slow one (the USGS cut takes seconds a tile) never holds up a fast
+ * one. The newest request goes first: the map asks for the view it shows now, and what it asked for on the way
+ * there is stale. A request nobody waits for any more (the map moved on and aborted every tile that wanted it)
+ * is dropped before it starts.
+ */
+interface Job {
+  url: string;
+  start: () => void;
+  wanted: number;
+  dropped: boolean;
+  drop: () => void;
+}
+const POOL_SIZE: Record<string, number> = { 'usgs-hirise': 4 };
+const pools = new Map<string, { running: number; queue: Job[] }>();
+
+function pool(id: string) {
+  let p = pools.get(id);
+  if (!p) {
+    p = { running: 0, queue: [] };
+    pools.set(id, p);
+  }
+  return p;
+}
+
+function pump(id: string): void {
+  const p = pool(id);
+  const max = POOL_SIZE[id] ?? 8;
+  while (p.running < max) {
+    const job = p.queue.pop();
+    if (!job) return;
+    if (job.dropped) continue;
+    job.start();
   }
 }
 
-/** One source tile, or null if the service has none there or does not answer in time. Never rejects. */
-function sourceTile(src: EquirectSource, level: number, row: number, col: number, timeoutMs: number): Promise<ImageBitmap | null> {
+/** One source tile, or null if the service has none there, does not answer in time, or nobody wants it any more. Never rejects. */
+function sourceTile(src: EquirectSource, level: number, row: number, col: number, timeoutMs: number, signal?: AbortSignal): Promise<ImageBitmap | null> {
   const url = src.url(level, row, col);
   const hit = tileCache.get(url);
   if (hit) {
     tileCache.delete(url);
     tileCache.set(url, hit);
+    const job = jobs.get(url);
+    if (job) want(job, signal);
     return hit;
   }
-  const made = withSlot(async () => {
-    const abort = new AbortController();
-    const timer = setTimeout(() => abort.abort(), timeoutMs);
-    try {
-      const res = await fetch(url, { signal: abort.signal, mode: 'cors' });
-      if (!res.ok || !(res.headers.get('content-type') ?? '').startsWith('image/')) return null;
-      return await createImageBitmap(await res.blob());
-    } catch {
-      return null;
-    } finally {
-      clearTimeout(timer);
-    }
+  const p = pool(src.id);
+  let job!: Job;
+  const made = new Promise<ImageBitmap | null>((resolve) => {
+    job = {
+      url,
+      wanted: 0,
+      dropped: false,
+      drop: () => {
+        job.dropped = true;
+        resolve(null);
+      },
+      start: () => {
+        p.running += 1;
+        jobs.delete(url);
+        const abort = new AbortController();
+        const timer = setTimeout(() => abort.abort(), timeoutMs);
+        void fetch(url, { signal: abort.signal, mode: 'cors' })
+          .then(async (res) => (res.ok && (res.headers.get('content-type') ?? '').startsWith('image/') ? createImageBitmap(await res.blob()) : null))
+          .catch(() => null)
+          .then((bitmap) => {
+            clearTimeout(timer);
+            p.running -= 1;
+            resolve(bitmap);
+            pump(src.id);
+          });
+      },
+    };
   });
-  // A miss is not kept: the service may answer next time.
+  jobs.set(url, job);
+  want(job, signal);
+  p.queue.push(job);
+  pump(src.id);
+  // A miss (or a dropped request) is not kept: the service may answer next time.
   void made.then((bitmap) => {
-    if (!bitmap) tileCache.delete(url);
+    if (!bitmap && tileCache.get(url) === made) tileCache.delete(url);
   });
   tileCache.set(url, made);
   if (tileCache.size > TILE_CACHE_MAX) {
@@ -130,6 +173,30 @@ function sourceTile(src: EquirectSource, level: number, row: number, col: number
     if (oldest !== undefined) tileCache.delete(oldest);
   }
   return made;
+}
+
+/** Jobs not yet started, by URL, so a second asker can count itself in. */
+const jobs = new Map<string, Job>();
+
+function want(job: Job, signal?: AbortSignal): void {
+  // A request with no signal (prefetch, overlays) is always wanted.
+  if (!signal) {
+    job.wanted = Number.POSITIVE_INFINITY;
+    return;
+  }
+  if (signal.aborted) return;
+  job.wanted += 1;
+  signal.addEventListener(
+    'abort',
+    () => {
+      job.wanted -= 1;
+      if (job.wanted <= 0 && !job.dropped && jobs.get(job.url) === job) {
+        jobs.delete(job.url);
+        job.drop();
+      }
+    },
+    { once: true },
+  );
 }
 
 export interface Warped {
@@ -144,7 +211,7 @@ export interface Warped {
  * The part of a source that covers map tile (z, x, y) plus `pad` pixels on every side, in Web Mercator.
  * Null if the source has no level for this zoom or nothing came back.
  */
-export async function warpToTile(src: EquirectSource, z: number, x: number, y: number, pad: number, timeoutMs = 15000): Promise<Warped | null> {
+export async function warpToTile(src: EquirectSource, z: number, x: number, y: number, pad: number, timeoutMs = 15000, signal?: AbortSignal): Promise<Warped | null> {
   const level = Math.min(src.maxLevel, src.levelFor(z));
   if (level < 0) return null;
   const size = 256 + 2 * pad;
@@ -169,11 +236,11 @@ export async function warpToTile(src: EquirectSource, z: number, x: number, y: n
   const row1 = Math.min(levelRows - 1, Math.floor(((sy[size - 1] ?? 0) + 1) / ts));
   if (col1 < col0 || row1 < row0 || (col1 - col0 + 1) * (row1 - row0 + 1) > 16) return null;
 
-  const jobs: Promise<{ bitmap: ImageBitmap | null; r: number; c: number }>[] = [];
+  const work: Promise<{ bitmap: ImageBitmap | null; r: number; c: number }>[] = [];
   for (let r = row0; r <= row1; r += 1) {
-    for (let c = col0; c <= col1; c += 1) jobs.push(sourceTile(src, level, r, c, src.timeoutMs ?? timeoutMs).then((bitmap) => ({ bitmap, r, c })));
+    for (let c = col0; c <= col1; c += 1) work.push(sourceTile(src, level, r, c, src.timeoutMs ?? timeoutMs, signal).then((bitmap) => ({ bitmap, r, c })));
   }
-  const tiles = await Promise.all(jobs);
+  const tiles = await Promise.all(work);
   if (tiles.every((t) => !t.bitmap)) return null;
 
   const mw = (col1 - col0 + 1) * ts;

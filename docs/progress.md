@@ -60,6 +60,12 @@ The model that wrote most of this stopped on the trip-budget content; Opus subag
 - Map close up: a `hirise-hd` layer (`mars://hd`, `hdTile` in `protocol/img.ts`) draws the USGS 25 cm mosaic over
   the base from zoom 15 and fades in as it arrives. Hillshade highlight is faint and fades past zoom 14; contrast
   and brightness floor are zoom-dependent; the tone curve is a shadow lift, not a gamma; detail gain is bounded.
+- Landing: the flight in comes down over the delta and the rim at zoom 13.3, tilted (`LANDING_VIEW` in
+  `src/map/camera.ts`), and warms the landing's tiles during the flight (`src/map/warm.ts`). A mission start brings
+  the camera to the crew and warms the first stretch of the route (`addRunFocus`). Live source tiles wait in a pool
+  per source, newest first, and a request no tile wants any more is dropped (`sourceTile` in `protocol/live.ts`):
+  before, tiles asked for during the flight held every slot and the landing stayed blank for many seconds.
+  Base tiles get a light unsharp mask from zoom 11 (`protocol/tone.ts`); the 25 cm layer starts at zoom 14.
 - Perseverance's drive replay: Discover, "Ride the drive from sol N" / "Ride the whole drive" (`VisorAt.replaySol`,
   `src/ui/visor/replayFeed.ts`, `ReplayBar.tsx`). Any moving view prefetches the ground ahead
   (`src/visor/prefetch.ts`): coarse layers always, the 25 cm ground only below 20x.

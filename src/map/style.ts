@@ -24,12 +24,13 @@ export function baseStyle(): StyleSpecification {
         maxzoom: 19,
         attribution: 'NASA / JPL-Caltech / USGS / MSSS / ASU',
       },
-      // The 25 cm Jezero mosaic, drawn over the base from zoom 15 where it covers the ground.
+      // The 25 cm Jezero mosaic, drawn over the base from zoom 14 (13 on a high-density screen) where it covers
+      // the ground: even shrunk to 10 m a pixel it is crisper than the 20 m orbital mosaic under it.
       hd: {
         type: 'raster',
         tiles: ['mars://hd/{z}/{x}/{y}'],
         tileSize: typeof window !== 'undefined' && window.devicePixelRatio >= 1.5 ? 128 : 256,
-        minzoom: 15,
+        minzoom: 14,
         maxzoom: 19,
         bounds: [77.2, 18.3, 77.6, 18.68],
       },
@@ -56,7 +57,7 @@ export function baseStyle(): StyleSpecification {
         id: 'hirise-hd',
         type: 'raster',
         source: 'hd',
-        minzoom: 15,
+        minzoom: 13,
         paint: { 'raster-fade-duration': 450, 'raster-resampling': 'linear', 'raster-contrast': ['interpolate', ['linear'], ['zoom'], 10, 0.22, 14, 0.12, 16, 0.02], 'raster-saturation': 0.26, 'raster-brightness-min': ['interpolate', ['linear'], ['zoom'], 12, 0.02, 16, 0.07] },
       },
       {

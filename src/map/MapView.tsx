@@ -2,7 +2,7 @@ import { useEffect, useRef } from 'react';
 import 'maplibre-gl/dist/maplibre-gl.css';
 import { useApp } from '@/store';
 import { createMap, destroyMap, whenMapReady } from './instance';
-import { flyIn, isInRegion, startGlobeSpin } from './camera';
+import { addRunFocus, flyIn, isInRegion, startGlobeSpin } from './camera';
 import { setTileHandler } from './protocol';
 import { mapHdTile, mapImgTile } from './protocol/tone';
 import { demTile } from './protocol/dem';
@@ -65,7 +65,7 @@ export function MapView() {
 
     whenMapReady((m) => {
       if (!alive) return;
-      cleanups.push(addTerrain(m), addRouteLayers(m), addRangeRings(m), addBaseMarker(m), addAutoTilt(m), addOverlays(m), addLabels(m), addHoverInfo(m), addPlacePicking(m), addGlobeMarker(m), addDescend(m));
+      cleanups.push(addTerrain(m), addRouteLayers(m), addRangeRings(m), addBaseMarker(m), addAutoTilt(m), addOverlays(m), addLabels(m), addHoverInfo(m), addRunFocus(m), addPlacePicking(m), addGlobeMarker(m), addDescend(m));
       // The mission's layers bring the simulation with them; nobody needs that to see the planet, so it loads after.
       void import('./layers/mission').then(({ addMissionLayers }) => {
         if (alive) cleanups.push(addMissionLayers(m));
