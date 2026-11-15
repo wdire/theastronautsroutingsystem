@@ -94,7 +94,21 @@ export function addDescend(map: MapLibreMap): () => void {
 /** Leaving Rover View upward: the map opens at its closest view over the spot, facing the way the view did. */
 export function returnToMap(lon: number, lat: number, headingDeg: number): void {
   const map = getMap();
-  if (!map) return;
-  map.jumpTo({ center: [lon, lat], zoom: DESCEND_ZOOM - 0.05, bearing: headingDeg, pitch: Math.min(map.getPitch(), 50) });
-  map.easeTo({ zoom: DESCEND_ZOOM - 1.4, duration: 1100 });
+  if (!map || !Number.isFinite(lon) || !Number.isFinite(lat)) return;
+  const bearing = Number.isFinite(headingDeg) ? headingDeg : map.getBearing();
+  // While Rover View was open the map was folded to a single pixel, and it unfolds a frame or two after the view
+  // closes. A tilted camera placed on a one-pixel map could leave the map's matrices broken for good (nothing
+  // drew, no gesture brought it back), so the jump waits until the map has its size again.
+  const started = performance.now();
+  const go = () => {
+    const canvas = map.getContainer();
+    if ((canvas.clientWidth < 100 || canvas.clientHeight < 100) && performance.now() - started < 2000) {
+      requestAnimationFrame(go);
+      return;
+    }
+    map.resize();
+    map.jumpTo({ center: [lon, lat], zoom: DESCEND_ZOOM - 0.05, bearing, pitch: Math.min(map.getPitch(), 50) });
+    map.easeTo({ zoom: DESCEND_ZOOM - 1.4, duration: 1100 });
+  };
+  requestAnimationFrame(go);
 }

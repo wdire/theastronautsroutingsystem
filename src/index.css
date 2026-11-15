@@ -239,19 +239,62 @@
   100% { box-shadow: 0 0 0 1px rgb(0 0 0 / 0.35), 0 0 0 0 rgb(251 244 234 / 0); }
 }
 
-/* Faint stars behind the planet. The map canvas is transparent outside the globe. */
+/* Space behind the planet. The stars are drawn by the Starfield; the map canvas is transparent outside the globe. */
 .space {
-  background-color: #070605;
-  background-image:
-    radial-gradient(1px 1px at 12% 18%, rgb(255 255 255 / 0.55) 50%, transparent 51%),
-    radial-gradient(1px 1px at 71% 9%, rgb(255 255 255 / 0.4) 50%, transparent 51%),
-    radial-gradient(1.4px 1.4px at 38% 64%, rgb(255 244 230 / 0.5) 50%, transparent 51%),
-    radial-gradient(1px 1px at 86% 47%, rgb(255 255 255 / 0.35) 50%, transparent 51%),
-    radial-gradient(1px 1px at 55% 31%, rgb(255 255 255 / 0.3) 50%, transparent 51%),
-    radial-gradient(1.2px 1.2px at 24% 83%, rgb(220 232 255 / 0.45) 50%, transparent 51%),
-    radial-gradient(1px 1px at 93% 78%, rgb(255 255 255 / 0.3) 50%, transparent 51%),
-    radial-gradient(1px 1px at 5% 52%, rgb(255 255 255 / 0.28) 50%, transparent 51%);
-  background-size: 640px 520px, 720px 610px, 560px 680px, 810px 590px, 470px 430px, 690px 750px, 880px 640px, 530px 480px;
+  background-color: #060504;
+  background-image: radial-gradient(120% 90% at 70% 45%, #0d0a08 0%, #060504 60%);
+}
+
+/* A faint glow of dust around the globe, under the map canvas. The planet itself covers the middle. */
+.globe-halo {
+  /* Soft from the inside out, so a globe a little larger or smaller than estimated never shows an edge. */
+  background: radial-gradient(
+    circle closest-side,
+    rgb(226 132 84 / 0.11) 48%,
+    rgb(226 132 84 / 0.05) 62%,
+    rgb(226 132 84 / 0.018) 78%,
+    rgb(226 132 84 / 0) 100%
+  );
+  will-change: transform;
+}
+
+/* The opening screen arrives once: lines rise into place, one after another. */
+@keyframes intro-rise {
+  from {
+    opacity: 0;
+    transform: translate3d(0, 14px, 0);
+  }
+}
+@keyframes intro-line {
+  from {
+    transform: translate3d(0, 108%, 0);
+  }
+}
+.intro-rise {
+  animation: intro-rise 900ms cubic-bezier(0.16, 1, 0.3, 1) var(--d, 0ms) both;
+}
+.intro-line {
+  display: block;
+  overflow: hidden;
+  /* Room for the descenders inside the mask. */
+  padding-bottom: 0.08em;
+  margin-bottom: -0.08em;
+}
+.intro-line-inner {
+  display: block;
+  animation: intro-line 1000ms cubic-bezier(0.16, 1, 0.3, 1) var(--d, 0ms) both;
+}
+/* On a short phone the planet and the button come first; the paragraph waits for the map. */
+@media (max-width: 639px) and (max-height: 760px) {
+  .intro-optional {
+    display: none;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .intro-rise,
+  .intro-line-inner {
+    animation: none;
+  }
 }
 
 /* The pin on the place whose card is open. */

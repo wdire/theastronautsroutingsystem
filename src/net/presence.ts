@@ -90,11 +90,13 @@ function sameWalkers(a: readonly Walker[], b: readonly Walker[]): boolean {
 
 /** Everyone else in Rover View, for the 3D view to draw where they stand. */
 export function useWalkers(myClientId: string): void {
-  const online = useQuery(api.people.online, {});
+  // Positions change about once a second while anyone walks: only a visitor in Rover View, who draws them, listens.
+  const inView = useApp((s) => s.visor !== null);
+  const others = useQuery(api.people.walkers, inView ? {} : 'skip');
   useEffect(() => {
-    const next: Walker[] = (online ?? [])
-      .filter((p) => p.clientId !== myClientId && p.view === 'rover' && p.where)
-      .map((p) => ({ id: p.clientId, name: p.name, color: SUIT_COLOR_HEX[p.color], lon: p.where!.lon, lat: p.where!.lat, headingDeg: p.where!.headingDeg, moving: p.where!.moving }));
+    const next: Walker[] = (inView ? (others ?? []) : [])
+      .filter((p) => p.clientId !== myClientId)
+      .map((p) => ({ id: p.clientId, name: p.name, color: SUIT_COLOR_HEX[p.color], lon: p.where.lon, lat: p.where.lat, headingDeg: p.where.headingDeg, moving: p.where.moving }));
     if (!sameWalkers(useApp.getState().walkers, next)) useApp.setState({ walkers: next });
-  }, [online, myClientId]);
+  }, [others, inView, myClientId]);
 }

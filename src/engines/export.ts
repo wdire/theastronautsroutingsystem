@@ -31,7 +31,7 @@ export interface ExportInput {
 export const MARS_FRAME =
   'Mars. Coordinates are IAU 2000 areocentric latitude and east longitude in degrees; elevation is metres above the MOLA areoid. Not WGS 84: do not read these positions as places on Earth.';
 
-const CREATOR = 'Areo (NASA Space Apps 2026)';
+const CREATOR = 'TARS (NASA Space Apps 2026)';
 
 /* ---------- escaping ---------- */
 

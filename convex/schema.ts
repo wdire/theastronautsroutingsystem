@@ -9,15 +9,32 @@ export default defineSchema({
     secretHash: v.string(),
     name: v.string(),
     color: suitColorV,
-    online: v.boolean(),
-    lastSeen: v.number(),
-    view: viewV,
+    // Presence moved to its own tables (presence, beats, positions) on 2026-11-15: a heartbeat rewrote this row
+    // every ten seconds, and every query that checks who is asking reads it, so each beat re-ran all of a
+    // person's subscriptions. Kept optional so rows written before then still validate; no longer written.
+    online: v.optional(v.boolean()),
+    lastSeen: v.optional(v.number()),
+    view: v.optional(viewV),
     where: v.optional(whereV),
     // The planning or underway mission this person is crew of. Kept here so "one mission at a time" is one read.
     missionId: v.optional(v.id('missions')),
   })
     .index('by_clientId', ['clientId'])
     .index('by_online_and_lastSeen', ['online', 'lastSeen']),
+
+  // Who is here and where they are looking: changes only when someone arrives, leaves or switches view, so the
+  // online list is not re-read on every heartbeat. `since` is when that last happened.
+  presence: defineTable({ clientId: v.string(), online: v.boolean(), view: viewV, since: v.number() })
+    .index('by_clientId', ['clientId'])
+    .index('by_online', ['online']),
+
+  // The heartbeat itself, read only by the sweep that marks silent people offline.
+  beats: defineTable({ clientId: v.string(), lastSeen: v.number() })
+    .index('by_clientId', ['clientId'])
+    .index('by_lastSeen', ['lastSeen']),
+
+  // Where each visitor stands in Rover View, about once a second while they move: read only by those in Rover View.
+  positions: defineTable({ clientId: v.string(), where: whereV, updatedAt: v.number() }).index('by_clientId', ['clientId']),
 
   // Kept small on purpose: the plan and the debrief live in their own tables, so listing missions stays cheap.
   missions: defineTable({

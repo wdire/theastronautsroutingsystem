@@ -3,6 +3,7 @@ import { MapView } from '@/map/MapView';
 import { whenMapReady } from '@/map/instance';
 import { startUrlSync } from '@/store/sync';
 import { Intro } from '@/ui/intro/Intro';
+import { Starfield } from '@/ui/intro/Starfield';
 import { useApp } from '@/store';
 import { cn } from '@/lib/cn';
 import { NET_ENABLED } from '@/net/config';
@@ -21,14 +22,6 @@ const NetRoot = NET_ENABLED
 const Toasts = lazy(() => import('@/ui/shell/Chrome').then((m) => ({ default: m.Toasts })));
 // three.js and the 3D view load only when they are first opened.
 const RoverView = lazy(() => import('@/ui/visor/RoverView'));
-
-function Wordmark() {
-  return (
-    <div className="pointer-events-none absolute top-5 left-6 z-10 select-none sm:top-8 sm:left-12">
-      <span className="text-[1.375rem] font-bold tracking-[-0.02em] text-[#fbf4ea] [font-stretch:112%]">Areo</span>
-    </div>
-  );
-}
 
 export function App() {
   const mode = useApp((s) => s.mode);
@@ -65,10 +58,8 @@ export function App() {
 
   return (
     <div className="space absolute inset-0 overflow-hidden">
+      <Starfield />
       <MapView />
-      <div className={cn('transition-opacity duration-500', mode === 'globe' ? 'opacity-100' : 'opacity-0')}>
-        <Wordmark />
-      </div>
       <Intro />
       {/* The map chrome fades in once, after the first landing, and never waits again. */}
       <div

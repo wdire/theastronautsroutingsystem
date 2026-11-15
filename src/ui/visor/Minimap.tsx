@@ -8,6 +8,7 @@ import { useApp, type Overlay } from '@/store';
 import { mapToneLut } from '@/engines/grading';
 import { overlayTileFor, RASTER } from '@/map/layers/overlays';
 import { toBitmap } from '@/map/protocol/common';
+import { poolTile } from '@/map/protocol/pool';
 
 /** The zoom of the tiles the minimap is drawn from: about 5 m a pixel. */
 const ZOOM = 14;
@@ -95,6 +96,46 @@ function overlayAt(overlay: Exclude<Overlay, 'none' | 'geology'>, z: number, x: 
   return entry;
 }
 
+/**
+ * Sharper ground for a larger map (the tablet's): the map's own tiles at a finer zoom, with the live CTX and
+ * HiRISE detail the shipped package does not carry. Drawn over the package's ground as they arrive.
+ */
+const fineTiles = new Map<string, { done: boolean; bitmap: ImageBitmap | null; made: Promise<void> }>();
+const FINE_KEEP = 96;
+/** Counts for the checks: fine tiles asked for, arrived, and arrived with an image. */
+const fineStats = { asked: 0, done: 0, ok: 0 };
+if (typeof window !== 'undefined') (window as unknown as { __areoFine?: typeof fineStats }).__areoFine = fineStats;
+
+function fineAt(kind: 'img' | 'hd', z: number, x: number, y: number) {
+  const key = `${kind}/${z}/${x}/${y}`;
+  const hit = fineTiles.get(key);
+  if (hit) {
+    fineTiles.delete(key);
+    fineTiles.set(key, hit);
+    return hit;
+  }
+  const entry: { done: boolean; bitmap: ImageBitmap | null; made: Promise<void> } = { done: false, bitmap: null, made: Promise.resolve() };
+  fineStats.asked += 1;
+  entry.made = poolTile(kind, z, x, y, 'full', new AbortController().signal)
+    .then((served) => {
+      entry.bitmap = served.bitmap;
+      fineStats.ok += 1;
+    })
+    .catch(() => undefined)
+    .finally(() => {
+      entry.done = true;
+      fineStats.done += 1;
+    });
+  fineTiles.set(key, entry);
+  while (fineTiles.size > FINE_KEEP) {
+    const oldest = fineTiles.keys().next().value as string;
+    const old = fineTiles.get(oldest);
+    fineTiles.delete(oldest);
+    if (old?.done) old.bitmap?.close();
+  }
+  return entry;
+}
+
 /** The geologic map's polygons with their bounds and colours, read once. */
 let geology: Promise<{ feature: GeoFeature; colour: string; box: [number, number, number, number] }[]> | null = null;
 function geologyShapes() {
@@ -132,6 +173,8 @@ interface MapCanvasProps {
   /** Metres from the left edge to the right. */
   spanM: number;
   overlay?: Overlay;
+  /** A finer zoom to fetch the map's own detailed tiles at, drawn over the package's ground; none by default. */
+  fineZoom?: number;
   className?: string;
 }
 
@@ -141,7 +184,7 @@ interface MapCanvasProps {
  * the base, and a scale. Redrawn only when the view reports a new place or heading (a few times a second at
  * most), or an overlay tile arrives, so it costs nothing per frame.
  */
-export function MapCanvas({ lon, lat, headingDeg, route, spanM, overlay = 'none', className }: MapCanvasProps) {
+export function MapCanvas({ lon, lat, headingDeg, route, spanM, overlay = 'none', fineZoom, className }: MapCanvasProps) {
   const ref = useRef<HTMLCanvasElement>(null);
   const routeRef = useRef(route);
   // Bumped when an overlay tile or the geology arrives after the draw that asked for it.
@@ -197,6 +240,47 @@ export function MapCanvas({ lon, lat, headingDeg, route, spanM, overlay = 'none'
         });
       }
     }
+
+    // The map's own finer tiles, over the package's ground: those already here at once, the rest when they land.
+    const drawFine = () => {
+      if (!fineZoom) return;
+      const k = 2 ** (fineZoom - ZOOM);
+      const s = scale / k;
+      const fx = cx * k;
+      const fy = cy * k;
+      const fx0 = Math.floor((fx - halfW * k) / 256);
+      const fx1 = Math.floor((fx + halfW * k) / 256);
+      const fy0 = Math.floor((fy - halfH * k) / 256);
+      const fy1 = Math.floor((fy + halfH * k) / 256);
+      const waiting: Promise<void>[] = [];
+      // Lifted to read on a small screen held in daylight, as the map's own grade lifts it.
+      ctx.filter = 'brightness(1.4) saturate(1.1) contrast(1.04)';
+      // Nearest the middle first, so the ground under the viewer sharpens first.
+      const order: [number, number][] = [];
+      for (let ty = fy0; ty <= fy1; ty += 1) for (let tx = fx0; tx <= fx1; tx += 1) order.push([tx, ty]);
+      const mx = fx / 256;
+      const my = fy / 256;
+      order.sort((a, b) => Math.hypot(a[0] + 0.5 - mx, a[1] + 0.5 - my) - Math.hypot(b[0] + 0.5 - mx, b[1] + 0.5 - my));
+      // The base imagery, then the 25 cm HiRISE mosaic over it where it covers the ground (clear elsewhere), as the
+      // map draws them.
+      for (const kind of ['img', 'hd'] as const) {
+        for (const [tx, ty] of order) {
+          const entry = fineAt(kind, fineZoom, tx, ty);
+          if (!entry.done) {
+            waiting.push(entry.made);
+            continue;
+          }
+          if (!entry.bitmap || entry.bitmap.width < 2) continue;
+          try {
+            ctx.drawImage(entry.bitmap, (tx * 256 - fx) * s + w / 2, (ty * 256 - fy) * s + h / 2, 256 * s + 0.5, 256 * s + 0.5);
+          } catch {
+            // Evicted meanwhile.
+          }
+        }
+      }
+      ctx.filter = 'none';
+      if (waiting.length > 0) void Promise.race(waiting).then(() => !cancelled && setArrived((n) => n + 1));
+    };
 
     const drawOverlay = async () => {
       if (overlay === 'none') return;
@@ -260,6 +344,9 @@ export function MapCanvas({ lon, lat, headingDeg, route, spanM, overlay = 'none'
 
     // The overlay and the marks go on once the ground under them is in.
     void Promise.all(pending)
+      .then(() => {
+        if (!cancelled) drawFine();
+      })
       .then(drawOverlay)
       .then(() => {
         if (cancelled) return;
@@ -349,7 +436,7 @@ export function MapCanvas({ lon, lat, headingDeg, route, spanM, overlay = 'none'
       cancelled = true;
     };
     // Redrawn at a new place or heading; the view reports both a few times a second at most.
-  }, [lon, lat, headingDeg, spanM, overlay, arrived]);
+  }, [lon, lat, headingDeg, spanM, overlay, fineZoom, arrived]);
 
   return <canvas ref={ref} className={cn('block size-full', className)} aria-hidden />;
 }

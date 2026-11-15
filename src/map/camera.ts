@@ -27,12 +27,17 @@ export interface View {
  */
 export function globeView(width = window.innerWidth, height = window.innerHeight): View {
   const wide = width >= 900;
-  const diameter = wide ? Math.min(height * 0.94, width * 0.62) : Math.min(width * 0.96, height * 0.5);
+  // Below 1280 px the words need a wider column, so the planet moves right and gets a little smaller.
+  const roomy = width >= 1280;
+  const diameter = wide
+    ? Math.min(height * 0.94, width * (roomy ? 0.62 : 0.55))
+    : Math.min(width * 0.92, height * 0.46);
   // The globe is 432 px across at zoom 1.6 and doubles with every zoom level.
   const zoom = 1.6 + Math.log2(Math.max(160, diameter) / 432);
+  // On a phone the top 64 px hold the name and the clock.
   const padding = wide
-    ? { ...NO_PADDING, left: Math.round(width * 0.3) }
-    : { ...NO_PADDING, bottom: Math.round(height * 0.4) };
+    ? { ...NO_PADDING, left: Math.round(width * (roomy ? 0.3 : 0.38)) }
+    : { ...NO_PADDING, top: 64, bottom: Math.round(height * 0.4) };
   return { center: [89, 12], zoom, padding };
 }
 

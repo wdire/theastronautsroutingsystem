@@ -6,6 +6,7 @@ import { addRunFocus, flyIn, isInRegion, startGlobeSpin } from './camera';
 import { setTileHandler, type TileHandler } from './protocol';
 import { onTileReady, poolTile } from './protocol/pool';
 import type { TileKind } from './protocol/serve';
+import { addCameraGuard } from './guard';
 import { addTerrain } from './terrain';
 import { addPlacePicking } from './pick';
 import { addDescend } from './descend';
@@ -108,7 +109,7 @@ export function MapView() {
 
     whenMapReady((m) => {
       if (!alive) return;
-      cleanups.push(addTerrain(m), addRouteLayers(m), addRangeRings(m), addBaseMarker(m), addAutoTilt(m), addOverlays(m), addLabels(m), addHoverInfo(m), addRunFocus(m), addPlacePicking(m), addGlobeMarker(m), addDescend(m));
+      cleanups.push(addCameraGuard(m), addTerrain(m), addRouteLayers(m), addRangeRings(m), addBaseMarker(m), addAutoTilt(m), addOverlays(m), addLabels(m), addHoverInfo(m), addRunFocus(m), addPlacePicking(m), addGlobeMarker(m), addDescend(m));
       // The mission's layers bring the simulation with them; nobody needs that to see the planet, so it loads after.
       void import('./layers/mission').then(({ addMissionLayers }) => {
         if (alive) cleanups.push(addMissionLayers(m));
@@ -134,14 +135,15 @@ export function MapView() {
     };
   }, []);
 
-  // While Rover View covers the screen the map shrinks to a single pixel: its canvas, multisampled buffers and
+  // While Rover View covers the screen the map shrinks to a small hidden box (not one pixel: a tilted camera
+  // on a one-pixel map could break its matrices for good): its canvas, multisampled buffers and
   // the tiles it keeps for a screenful let go of their graphics memory, which Rover View needs. Coming back,
   // it fills in again from the tile workers' memory and the browser's cache.
   const covered = useApp((s) => s.visor !== null);
 
   // The library sets `position: relative` on its container, so the size comes from a wrapper.
   return (
-    <div className={covered ? 'invisible absolute top-0 left-0 size-px overflow-hidden' : 'absolute inset-0'}>
+    <div className={covered ? 'invisible absolute top-0 left-0 h-[120px] w-[160px] overflow-hidden' : 'absolute inset-0'}>
       <div ref={ref} className="size-full" aria-label="Map of Mars" role="application" />
     </div>
   );

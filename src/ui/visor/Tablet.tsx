@@ -166,7 +166,7 @@ export function Tablet({ handle, lon, lat, headingDeg, route, onOpenMap, hud }: 
         <span className="absolute top-[7px] left-1/2 size-[5px] -translate-x-1/2 rounded-full bg-[#0b0c0e] ring-1 ring-white/10" />
         <span className="absolute top-[7px] right-[44px] h-[3px] w-[18px] rounded-full bg-[#f08a4b] shadow-[0_0_6px_#f08a4b]" />
         <div className="relative size-full overflow-hidden rounded-[20px] bg-[#120c09] ring-1 ring-black/60">
-          <MapCanvas lon={lon} lat={lat} headingDeg={headingDeg} route={route} spanM={1800} overlay={overlay} />
+          <MapCanvas lon={lon} lat={lat} headingDeg={headingDeg} route={route} spanM={1500} overlay={overlay} fineZoom={16} />
           {/* A status bar along the top of the screen. */}
           <div className="figure absolute inset-x-0 top-0 flex items-center justify-between bg-gradient-to-b from-black/70 to-transparent px-4 pt-2 pb-5 text-[13px] font-semibold tracking-wide text-white/90">
             <span className="flex items-center gap-2">
@@ -233,7 +233,12 @@ function Glove({ side }: { side: 'back' | 'front' }) {
       {side === 'back' ? (
         <g>
           {/* Sleeve, from below the screen up to the wrist. */}
-          <path d="M18 520 C 22 420, 40 350, 70 300 L 168 300 C 176 360, 182 440, 178 520 Z" fill="url(#glove-sleeve)" />
+          {/* The forearm runs back and down toward the elbow, out of sight below the screen, widening as it goes. */}
+          <path d="M70 300 L 168 300 C 168 380, 150 470, 112 560 C 92 608, 72 640, 54 660 L -150 660 C -112 610, -60 540, -10 470 C 22 420, 50 360, 70 300 Z" fill="url(#glove-sleeve)" />
+          {/* Folds in the suit fabric along the forearm, and its shaded underside. */}
+          <path d="M-10 470 C 30 452, 80 452, 124 470" stroke="#a49e94" strokeWidth="3" fill="none" opacity="0.7" />
+          <path d="M-62 548 C -16 528, 44 530, 98 552" stroke="#a49e94" strokeWidth="3" fill="none" opacity="0.6" />
+          <path d="M168 300 C 168 380, 150 470, 112 560 C 92 608, 72 640, 54 660 L 20 660 C 50 600, 92 500, 140 330 Z" fill="#8f897f" opacity="0.35" />
           <path d="M60 330 C 95 322, 140 322, 172 330" stroke="#d2662f" strokeWidth="9" fill="none" opacity="0.9" />
           {/* The wrist bearing. */}
           <rect x="66" y="270" width="110" height="34" rx="10" fill="url(#glove-ring)" />

@@ -36,6 +36,18 @@ new folder under `src/ui`, or Tailwind misses the new classes); screenshots with
 The model that wrote most of this stopped on the trip-budget content; Opus subagents wrote `tripComputer.ts`,
 `departure.ts`, `export.ts`, `validate.ts`, `missions.ts`, `alerts.ts` and `src/sim/*` without trouble.
 
+## Tenth session (2026-11-15, evening): TARS, the opening screen
+
+- The product is now TARS, The Astronauts' Routing System, at theastronautsroutingsystem.com (title, meta,
+  Open Graph, README, GPX creator). The logo is a wordmark in Archivo at 125% width until the real one arrives.
+- Opening screen (`src/ui/intro/`): a canvas sky under the map (`Starfield.tsx`: faint stars drawn once per size,
+  brighter ones twinkle, a meteor every 3.5 to 9.5 s that starts in open sky and may pass behind Mars, a dust halo
+  around the globe, pointer parallax on desktop). It stops drawing once the map covers it and fades by zoom during
+  the flight. Live readouts for Jezero (local time, light time from Earth, season). Reduced motion: still sky, no
+  entrance animation.
+- `globeView` leaves room for the words below 1280 px (planet at 38%, 0.55 of the width) and for the header on
+  phones (64 px at the top); on a short phone the paragraph is hidden.
+
 ## Ninth session (2026-11-15, afternoon): map that fills in, honest relief, a tablet in hand, a real station, phones
 
 - Map tiles: a source tile that fails (timeout, dropped connection, 5xx) is told apart from one the service has
@@ -68,6 +80,24 @@ The model that wrote most of this stopped on the trip-budget content; Opus subag
   times the tiles), leans at most 52 degrees; Rover View starts on the light setting at 1.25x; its controls are a
   right-hand column of icons; the long captions are hidden. Walking-range rings are smoothed (`smoothField`,
   `smoothRing`). Not yet tried on a real phone.
+
+Later the same afternoon:
+- Camera guard (`src/map/guard.ts`, registered first): MapLibre lifts a camera out of terrain only on a flat map,
+  never on the globe; the guard lifts it in bounded steps after each move. Once the transform held a bad value,
+  MapLibre threw from every frame and listener and nothing recovered; the guard also listens for MapLibre errors
+  and resets the camera (to the last good view, else straight down at zoom 14). It acts only on a camera that
+  projects to nothing (not a number); lifting waits for the move to end, and it stands down while the map is folded
+  under Rover View (a stricter centre test once teleported flights back to old views and froze Rover View). Likely trigger: returning from
+  Rover View jumped a tilted camera on the map folded to 1 px. The return now waits until the map has its size,
+  and the folded map is 160 x 120 px. Test hooks: `window.__areoGuard` ({ lifted, restored }).
+- Tablet map draws the map's own z16 `img` and `hd` (25 cm) tiles over the package ground (`fineZoom` on
+  `MapCanvas`; `window.__areoFine` counts them). The suited forearm runs off the screen.
+- Convex I/O: presence moved off the `people` row (now name, colour, mission only; old presence fields optional,
+  no longer written) into `presence` (online, view, since: changes on arrive/leave/switch), `beats` (heartbeat
+  time, read only by the sweep) and `positions` (Rover View places, read by the new `people.walkers` query,
+  subscribed to only in Rover View). Before, every 10 s heartbeat (1 s while walking) rewrote the row every
+  auth check reads, re-running each person's `mine`, `get`, `live`, `route` (up to 800 KB), `log`, `notes`, and
+  everyone's `online` and `missions.list`. Pushed to the cloud dev deployment; prod needs `npx convex deploy`.
 
 ## Eighth session (2026-11-15, noon): crew runs that flow, one Start gate, @Base, shared tasks
 

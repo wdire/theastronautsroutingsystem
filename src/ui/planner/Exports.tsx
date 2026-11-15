@@ -9,7 +9,7 @@ import { useApp } from '@/store';
 function exportInput(alt: RouteAlternative, hasBudget: boolean): ExportInput {
   const s = useApp.getState();
   return {
-    name: (s.missionId ? missionById(s.missionId)?.title : undefined) ?? 'Areo mission',
+    name: (s.missionId ? missionById(s.missionId)?.title : undefined) ?? 'TARS mission',
     plan: s.plan,
     path: [...alt.path],
     stopIndices: [...alt.stopIndices],

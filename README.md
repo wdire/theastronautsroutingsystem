@@ -1,15 +1,18 @@
-# Areo
+# TARS: The Astronauts' Routing System
 
 A map for planning a day of field science on Mars. Built for NASA Space Apps 2026, challenge
 "Interplanetary Survival Guide: Martian Map", by team Works On My Planet.
 
-Areo covers Jezero crater, where Perseverance landed, and about 600 km of land around it. You pick places,
+Live at **https://theastronautsroutingsystem.com**.
+
+TARS covers Jezero crater, where Perseverance landed, and about 600 km of land around it. You pick places,
 give each one science tasks, and get a route over the real terrain. Then you can stand on the ground at any
 point and look around.
 
 ## What works today
 
-- The app opens on Mars from orbit and flies down to Jezero on one map.
+- The app opens on Mars from orbit, with the local time at Jezero, the light time from Earth and the season,
+  and flies down to Jezero on one map.
 - The map draws on imagery from Viking, THEMIS, CTX and HiRISE. Over Jezero it keeps sharpening as you zoom in:
   from zoom 15 its detail comes from the 25 cm HiRISE mosaic and its terrain from HiRISE's 1 m model, both
   streamed from USGS, down to zoom 19 in 3D at true scale. It is lit as at mid-morning so dark ground reads,
@@ -40,6 +43,12 @@ point and look around.
   the base answers on the radio. Ride along opens the 3D view on the crew with a helmet display.
 - Walking range rings, a flight along the route, GPX, GeoJSON and a printable cuff card, and a check of the
   planner against five stretches of Perseverance's real drive.
+- Crews. A mission can be planned and run by several people at once: invites, roles, shared tasks and notes,
+  who is online, androids as virtual crew, and a debrief at the end. Everyone shares one base, and the
+  commander's run reaches every member's map and 3D view as it happens. This needs the Convex backend
+  (below); without it the app runs solo and the crew features stay hidden.
+- Rover View has Jezero Station (a domed hub with an airlock, two laboratory modules and a greenhouse) and,
+  walking in your own eyes, a tablet in hand with the map on it.
 - On a phone there is a bottom bar, one sheet with three heights, and a thumb pad for walking in Rover View.
 
 ## What is not built
@@ -52,14 +61,21 @@ point and look around.
 
 ## Run it
 
-Node 24 or later.
+Node 22.12 or later.
 
 ```bash
 npm install
 npm run dev
 ```
 
-Then open http://localhost:5173.
+Then open http://localhost:5173. That is the whole app for one person.
+
+For crews, run the Convex backend beside it. The first run asks you to log in or to use a local deployment,
+and writes `VITE_CONVEX_URL` to `.env.local`:
+
+```bash
+npx convex dev
+```
 
 ```bash
 npm run check   # types, lint, unit tests
@@ -74,12 +90,16 @@ the two functions under `api/` and never reaches the browser; without it they us
 
 ## Deploy
 
-The app is a static site plus two small functions under `api/`, set up for Vercel (`vercel.json`).
+The app is a static site plus four small functions under `api/`, set up for Vercel (`vercel.json`), and a
+Convex backend for crews.
 
-1. In Vercel, choose Add New, Project, and import this GitHub repository. The framework (Vite), the build
+1. Crews (optional): `npx convex deploy` pushes `convex/` to a production deployment. Note its URL.
+2. In Vercel, choose Add New, Project, and import this GitHub repository. The framework (Vite), the build
    command and the output folder are read from `vercel.json`.
-2. Optional: under Settings, Environment Variables, add `NASA_API_KEY` with a key from https://api.nasa.gov.
-3. Deploy. Every push to `main` deploys again.
+3. Under Settings, Environment Variables: `VITE_CONVEX_URL` with the production URL from step 1, and
+   optionally `NASA_API_KEY` with a key from https://api.nasa.gov.
+4. Deploy. Every push to `main` deploys again. The domain, `theastronautsroutingsystem.com`, is added under
+   Settings, Domains.
 
 The tile package under `public/region` is about 100 MB in 8,400 files. Deploying from the Git repository
 has no trouble with that; the Vercel CLI's upload limit on the Hobby plan does.
@@ -116,6 +136,11 @@ are drawn in.
 
 NASA does not endorse this project.
 
+## License
+
+The code is under the MIT License (`LICENSE`). The data, imagery and 3D models it uses keep their own terms,
+listed in [docs/data-sources.md](docs/data-sources.md); most are public domain NASA and USGS products.
+
 ## How it was made
 
 All code in this repository was written during the event, starting from an empty repository on
@@ -123,6 +148,9 @@ All code in this repository was written during the event, starting from an empty
 
 The code, the data tools and this document were written with Claude (Anthropic), working from a
 specification and direction from the team. The team reviewed the result and decided what to keep.
+
+The project was called Areo while it was built; the specification and the progress notes still use that
+name, and so do a few names inside the code.
 
 A team member built a learning prototype before the hackathon. None of its code or data is in this
 repository. What it taught went into the specification (`docs/build-spec.md`).
@@ -133,8 +161,12 @@ repository. What it taught went into the specification (`docs/build-spec.md`).
 src/engines   pure, tested models: time, conditions, vehicles, terrain, routing
 src/map       the MapLibre map, the mars:// tile protocol, layers
 src/planner   route planning for a mission
+src/sim       running a mission in simulated time
+src/net       the crew layer over Convex
 src/visor     the three.js ground view
 src/ui        panels and controls
+convex        the crew backend: missions, people, the shared base, the live feed
+api           the Vercel functions: HiRISE tiles, space weather, rover weather, the traverse
 tools         Python scripts that build public/region and public/data
 docs          the specification, design, plan, progress, sources and model notes
 ```

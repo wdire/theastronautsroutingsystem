@@ -7,6 +7,7 @@ import type { Doc, Id } from './_generated/dataModel';
 import { internalMutation, mutation, query } from './_generated/server';
 import type { MutationCtx, QueryCtx } from './_generated/server';
 import { checkPerson, findPerson, isActive, requireCommander, requirePerson, requireStatus } from './lib/auth';
+import { lastHere } from './lib/presence';
 import * as check from './lib/check';
 import { crewOut, crewOutV, crewRows, findRow, isCrewOf, releasePerson, requireFree, requireRow, systemLog } from './lib/crew';
 import { authV, crewStateV, statusV } from './lib/validators';
@@ -485,8 +486,9 @@ export const sweepAbandoned = internalMutation({
     for (const mission of await ctx.db.query('missions').withIndex('by_status', (q) => q.eq('status', 'planning')).take(50)) {
       if (now - mission.createdAt < STALE_PLAN_MS) continue;
       const commander = await findPerson(ctx, mission.commanderId);
-      if (commander?.online) continue;
-      if (commander && now - commander.lastSeen < STALE_PLAN_MS) continue;
+      const seen = commander ? await lastHere(ctx, commander) : null;
+      if (seen?.online) continue;
+      if (seen && now - seen.at < STALE_PLAN_MS) continue;
       await close(mission, 'Mission cancelled: the commander has been away for half a sol.');
     }
     return null;
