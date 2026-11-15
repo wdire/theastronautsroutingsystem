@@ -152,7 +152,8 @@ function transparentTile(): Promise<ImageBitmap> {
  */
 export async function hdTile(rest: string[], z: number, x: number, y: number, signal: AbortSignal): Promise<TileData> {
   if (!tileTouchesHirise(z, x, y)) return transparentTile();
-  const pad = 32;
+  // A wide margin, for the wide blur below: tiles must agree at their edges.
+  const pad = 64;
   const [baseData, warped] = await Promise.all([imgTile(rest, z, x, y, signal), warpToTile(USGS_HIRISE, z, x, y, pad, 45_000, signal)]);
   if (signal.aborted) throw new DOMException('aborted', 'AbortError');
   if (!warped || warped.coverage < 0.02) return transparentTile();
@@ -165,8 +166,9 @@ export async function hdTile(rest: string[], z: number, x: number, y: number, si
   const full = warped.size;
   const mask = new Float32Array(full * full);
   for (let i = 0; i < mask.length; i += 1) mask[i] = (warped.rgba[i * 4 + 3] ?? 0) / 255;
-  // Wide radius: the HiRISE image carries nearly all the light and shade; the base only its colour.
-  blendDetail(image.data, 256, pad, [{ lum: luminance(warped.rgba), radius: 24, gain: 1.4, mask }]);
+  // Wide radius, wider the closer in: the HiRISE image carries nearly all the light and shade, from single rocks
+  // to whole outcrops; the base, upsampled from 20 m, only its colour.
+  blendDetail(image.data, 256, pad, [{ lum: luminance(warped.rgba), radius: z >= 17 ? 60 : z >= 16 ? 44 : 30, gain: 1.45, mask }]);
   // Off the mosaic the layer is clear, with a soft edge where the mosaic ends.
   for (let yy = 0; yy < 256; yy += 1) {
     for (let xx = 0; xx < 256; xx += 1) {

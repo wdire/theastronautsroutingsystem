@@ -10,10 +10,11 @@ describe('relief curve', () => {
     expect(reliefExaggeration(10.5)).toBeCloseTo(3);
     expect(reliefExaggeration(11.5)).toBeCloseTo(3);
     expect(reliefExaggeration(13)).toBeCloseTo(2.2);
-    expect(reliefExaggeration(15)).toBeCloseTo(1.6);
-    expect(reliefExaggeration(15.75)).toBeCloseTo(1.3);
-    // Close in, over the HiRISE model, the map is at true scale.
-    expect(reliefExaggeration(17)).toBeCloseTo(1);
+    expect(reliefExaggeration(15)).toBeCloseTo(1.8);
+    expect(reliefExaggeration(15.75)).toBeCloseTo(1.65);
+    // Close in, over the HiRISE model, a modest stretch keeps the ground standing up.
+    expect(reliefExaggeration(16.5)).toBeCloseTo(1.5);
+    expect(reliefExaggeration(19)).toBeCloseTo(1.4);
   });
 
   it('is continuous and stays between 1 and 3', () => {

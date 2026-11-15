@@ -93,6 +93,11 @@ export async function replayFeed(fromSol: number): Promise<MissionFeed> {
       const nextStop = t.waypoints.find((w) => w.distKm * 1000 > d + 5);
       return { path: pts, objective: nextStop ? [nextStop.lon, nextStop.lat] : null };
     },
-    fast: () => useReplay.getState().speed >= 20,
+    fast: () => useReplay.getState().speed >= 5,
+    tier: () => {
+      const s = useReplay.getState();
+      if (!s.playing) return 0;
+      return s.speed >= 20 ? 2 : s.speed >= 5 ? 1 : 0;
+    },
   };
 }

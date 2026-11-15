@@ -20,7 +20,7 @@ function box(lon: number, lat: number, halfM: number): [number, number, number, 
  * Asks for the ground at a few points along `path` (lon, lat; nearest first): the coarse layers always, the
  * close 25 cm ground only when the view moves slowly enough to see it.
  */
-export function prefetchAhead(path: readonly (readonly [number, number])[], fast: boolean): void {
+export function prefetchAhead(path: readonly (readonly [number, number])[], fast: boolean, coarseOnly = false): void {
   const first = path[0];
   if (!first) return;
   const marks = fast ? [600, 1400, 2400] : [250, 600, 1100];
@@ -40,7 +40,7 @@ export function prefetchAhead(path: readonly (readonly [number, number])[], fast
       void groundAt(lon, lat).catch(() => undefined);
     }
     const near = box(lon, lat, 1000);
-    if (!boxTouchesHirise(...near)) continue;
+    if (coarseOnly || !boxTouchesHirise(...near)) continue;
     if (!asked.has(`n${cell}`)) {
       asked.add(`n${cell}`);
       void loadHiriseHeights(near, 2, undefined, 9).catch(() => undefined);

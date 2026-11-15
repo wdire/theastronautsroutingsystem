@@ -75,11 +75,11 @@ float fbm(vec2 p) {
 float show(float size, float px) {
   return 1.0 - smoothstep(size * 0.22, size * 0.6, px);
 }
-// Orbital colour graded toward the rust-red of Mastcam-Z's white-balanced frames: oxidised dust is redder
-// than the orbital mosaics show it, rock is browner, nothing is beige.
+// Orbital colour graded to the brown the map shows from above (the same mosaics): a dusty red-brown with grey
+// rock in it, never the orange a raw colour stretch gives, so the ground reads the same up close as from orbit.
 vec3 marsGrade(vec3 c) {
   float l = dot(c, vec3(0.2126, 0.7152, 0.0722));
-  return mix(vec3(l), c, 0.88) * vec3(0.96, 0.76, 0.62);
+  return mix(vec3(l), c, 0.72) * vec3(0.8, 0.67, 0.6);
 }
 // What the surface itself varies by at a few metres, which no orbiter resolves: pale, light-toned rock
 // slabs and veins (the mudstones Curiosity and Perseverance drive over), dark basaltic sand in drifts, and
@@ -94,7 +94,7 @@ vec3 groundPatches(vec2 p, float px, float hiOn) {
   vec3 m = vec3(1.0);
   m = mix(m, vec3(1.55, 1.42, 1.34), clamp(slabs + veins * 0.8, 0.0, 1.0) * 0.8 * k);
   m = mix(m, vec3(0.58, 0.55, 0.56), drift * 0.65 * k);
-  m *= 1.0 + vec3(0.1, -0.02, -0.08) * rust * 1.6 * k;
+  m *= 1.0 + vec3(0.07, -0.01, -0.04) * rust * 1.4 * k;
   return m;
 }
 // Mars's loose sand is basaltic: darker and greyer than the dust-covered ground around it.

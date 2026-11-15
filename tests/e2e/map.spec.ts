@@ -47,9 +47,12 @@ test('the pointer readout shows elevation and local time', async ({ page }) => {
   if (!box) throw new Error('no canvas');
   const readout = page.getByTestId('cursor-readout');
   // The first pass may only have coarse tiles in memory; moving again reads the finer one.
+  // Two spots in turn: a label or the base badge may sit under one of them on a tilted map.
+  let turn = 0;
   await expect(async () => {
-    await page.mouse.move(box.x + box.width * 0.55, box.y + box.height * 0.5);
-    await page.mouse.move(box.x + box.width * 0.56, box.y + box.height * 0.51);
+    const [fx, fy] = turn++ % 2 === 0 ? [0.55, 0.5] : [0.72, 0.78];
+    await page.mouse.move(box.x + box.width * fx, box.y + box.height * fy);
+    await page.mouse.move(box.x + box.width * (fx + 0.01), box.y + box.height * (fy + 0.01));
     await expect(readout).toContainText(/−2,[45]\d\d\sm/, { timeout: 2000 });
   }).toPass({ timeout: 30_000 });
   await expect(readout).toContainText('LTST');

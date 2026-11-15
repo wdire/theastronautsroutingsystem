@@ -81,6 +81,11 @@ export interface MissionFeed {
   ahead(): { path: readonly (readonly [number, number])[]; objective: readonly [number, number] | null };
   /** The clock is running at 5x or faster: draw less. */
   fast(): boolean;
+  /**
+   * How much the view may draw: 0 at 1x or paused (everything, sharpening as tiles arrive), 1 at 5x (no finest
+   * layer, no post effects), 2 faster still (the coarse ground only: at that speed nothing finer can be seen).
+   */
+  tier?(): 0 | 1 | 2;
 }
 
 export interface VisorState {
@@ -288,10 +293,12 @@ export async function mountVisor(canvas: HTMLCanvasElement, options: VisorOption
     if (kind === 'close' && !coarser) return;
     // At 5x and faster the ground under the wheels streams past: rebuilding the finest layer every few
     // seconds only churns memory (a 25 cm image and a quarter of a million points each time).
-    if (kind === 'close' && mission?.fast()) return;
+    const tier = tierNow();
+    if (kind === 'close' && tier >= 1) return;
     layer.building = true;
-    // Where the ground is not yet drawn at all, the package is used first (fast); HiRISE follows.
-    const quick = !p && layer.spec.hirise !== undefined;
+    // Where the ground is not yet drawn at all, the package is used first (fast); HiRISE follows. At the top
+    // speeds the package is all: HiRISE would arrive after the ground had already streamed past.
+    const quick = (!p || tier === 2) && layer.spec.hirise !== undefined;
     const cx = kind === 'close' ? Math.round(x / 8) * 8 : x;
     const cz = kind === 'close' ? Math.round(z / 8) * 8 : z;
     const options = { maxAnisotropy: maxAniso, hirise: !quick, coarser: coarser ? (px: number, pz: number) => coarser.heightAt(px, pz) : undefined };
@@ -299,7 +306,10 @@ export async function mountVisor(canvas: HTMLCanvasElement, options: VisorOption
       .then((next) => {
         if (disposed) return next.dispose();
         swapIn(layer, next);
-        if (quick) sharpen(kind, next);
+        if (quick && tierNow() < 2) {
+          sharpenTried.add(next);
+          sharpen(kind, next);
+        }
       })
       .catch(() => undefined)
       .finally(() => {
@@ -343,6 +353,7 @@ export async function mountVisor(canvas: HTMLCanvasElement, options: VisorOption
   let rocksPatch: Patch | null = null;
   const mission = options.mission;
   const party = mission ? createParty(scene, mission.vehicle, heightAt, mission.roster) : null;
+  const tierNow = (): 0 | 1 | 2 => (mission ? (mission.tier?.() ?? (mission.fast() ? 1 : 0)) : 0);
   // Other people with Rover View open nearby, walking where they are.
   const walkers = options.walkers ? createWalkers(scene, frame, heightAt) : null;
   let lastWalkers = -1e9;
@@ -350,6 +361,9 @@ export async function mountVisor(canvas: HTMLCanvasElement, options: VisorOption
   let lastGuides = -1e9;
   let lastPrefetch = -1e9;
   let loweredForSpeed = false;
+  let lastTier: 0 | 1 | 2 = 0;
+  let lastSharpenCheck = 0;
+  const sharpenTried = new WeakSet<Patch>();
   // The chase camera swings round behind the party at its own pace, so a turn does not whip the view.
   let chaseAngle = Number.NaN;
   let orbitAngle = 0;
@@ -565,7 +579,7 @@ export async function mountVisor(canvas: HTMLCanvasElement, options: VisorOption
         // The ground the route is heading for starts loading now, so it is sharp by the time it is reached.
         if (now - lastPrefetch > 1500) {
           lastPrefetch = now;
-          prefetchAhead(ahead.path, mission.fast());
+          prefetchAhead(ahead.path, tierNow() >= 1, tierNow() === 2);
         }
         const objective = ahead.objective ? toLocal(frame, ahead.objective[0], ahead.objective[1]) : null;
         guides.update(
@@ -693,8 +707,36 @@ export async function mountVisor(canvas: HTMLCanvasElement, options: VisorOption
       state.loading = Object.values(layers).some((l) => l.sharpening) ? 'Bringing in HiRISE detail…' : null;
       eyeY = heightAt(pos.x, pos.z) + eyeAbove;
     }
+    if (state.ready && mission) {
+      const tier = tierNow();
+      // The fastest tier draws no rocks and no close layer at all; dropping back brings both, and the ground
+      // drawn from the package in the meantime is sharpened with HiRISE.
+      if (tier !== lastTier) {
+        rocks.setVisible(tier < 2);
+        // The close layer goes altogether (its hole in the near layer with it); it is built again on slowing down.
+        const close = layers.close.patch;
+        if (tier === 2 && close && !layers.close.building) {
+          scene.remove(close.mesh);
+          close.dispose();
+          layers.close.patch = null;
+          updateHoles();
+        }
+        lastTier = tier;
+      }
+      if (tier === 0 && now - lastSharpenCheck > 1000) {
+        lastSharpenCheck = now;
+        for (const kind of ['near', 'close'] as const) {
+          const l = layers[kind];
+          // Each patch drawn from the package is offered HiRISE once; off the mosaics it stays as it is.
+          if (l.patch && !l.patch.hirise && l.spec.hirise && !l.building && !l.sharpening && !sharpenTried.has(l.patch)) {
+            sharpenTried.add(l.patch);
+            sharpen(kind, l.patch);
+          }
+        }
+      }
+    }
     if (quality === 'auto' && state.ready && mission) {
-      const fast = mission.fast();
+      const fast = tierNow() >= 1;
       if (fast && effective === 'high') {
         // At 5x and faster the ground streams past: detail nobody can see is not drawn.
         effective = 'low';

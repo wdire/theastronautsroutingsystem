@@ -74,5 +74,11 @@ export function missionFeed(): MissionFeed | null {
       return { path: ahead, objective: objective ? [objective[0], objective[1]] : null };
     },
     fast: () => (useApp.getState().world?.speed ?? 1) >= 5,
+    tier: () => {
+      const w = useApp.getState().world;
+      // Paused, or the run over: there is time to draw everything.
+      if (!w?.run || w.paused || w.run.status !== 'running') return 0;
+      return w.speed >= 20 ? 2 : w.speed >= 5 ? 1 : 0;
+    },
   };
 }
