@@ -17,7 +17,9 @@ export function baseStyle(): StyleSpecification {
       [SOURCE_BASE]: {
         type: 'raster',
         tiles: ['mars://img/{z}/{x}/{y}'],
-        tileSize: 256,
+        // On a high-density screen, tiles one level finer than the zoom, so the ground is as sharp as the
+        // screen can show (at 256 each image would be stretched to twice its pixels).
+        tileSize: typeof window !== 'undefined' && window.devicePixelRatio >= 1.5 ? 128 : 256,
         minzoom: 0,
         maxzoom: 19,
         attribution: 'NASA / JPL-Caltech / USGS / MSSS / ASU',
