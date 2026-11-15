@@ -2,8 +2,6 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { Binoculars, FileText, MessageSquare, Pause, Play, Square } from 'lucide-react';
 import { marsTime } from '@/engines/marsTime';
 import { missionById } from '@/engines/missions';
-import type { CrewSnapshot } from '@/engines/types';
-import { VEHICLES } from '@/engines/vehicles';
 import { abortRun, closeMission, sayToBase, setRunSpeed, toggleRunPaused } from '@/sim/controller';
 import { SPEEDS, type MissionRun, type World } from '@/sim/types';
 import { crewAt, progress } from '@/sim/world';
@@ -12,26 +10,10 @@ import { Popover, PopoverContent, PopoverTrigger } from '@/ui/components/ui/popo
 import { fmtClock, fmtDistance, fmtDuration, fmtNumber, fmtPercent } from '@/lib/format';
 import { cn } from '@/lib/cn';
 import { useCrew, watchingRun } from '@/net/state';
-
-function stateWords(run: MissionRun, crew: CrewSnapshot, next: string): string {
-  const v = VEHICLES[run.vehicle];
-  const doing = run.tasks.find((t) => t.state === 'doing');
-  switch (crew.state) {
-    case 'work':
-      return doing ? `${doing.label} at ${doing.stopName}` : 'Working';
-    case 'wait':
-      return 'Waiting for daylight';
-    case 'camp':
-      return 'Camped for the night';
-    case 'done':
-      return 'Mission over';
-    default:
-      return `${v.kind === 'walk' ? 'Walking' : v.kind === 'air' ? 'Flying' : 'Driving'} to ${next}`;
-  }
-}
+import { stateWords } from './runState';
 
 /** A level as a number and a bar; the bar turns amber, then red, as the reserve comes near. */
-function Gauge({ label, frac, detail }: { label: string; frac: number | null; detail?: string }) {
+export function Gauge({ label, frac, detail }: { label: string; frac: number | null; detail?: string }) {
   if (frac === null) return null;
   const f = Math.max(0, Math.min(1, frac));
   const tone = f < 0.2 ? 'bg-warning' : f < 0.35 ? 'bg-caution' : 'bg-primary';
@@ -59,7 +41,7 @@ interface Line {
   atUtcMs: number;
 }
 
-function Chat({ world }: { world: World }) {
+export function Chat({ world }: { world: World }) {
   const [text, setText] = useState('');
   const [open, setOpen] = useState(false);
   const end = useRef<HTMLDivElement>(null);
@@ -156,7 +138,7 @@ function Chat({ world }: { world: World }) {
   );
 }
 
-function Outcome({ run }: { run: MissionRun }) {
+export function Outcome({ run }: { run: MissionRun }) {
   const missionId = useApp((s) => s.missionId);
   // A crew mission's end offers its debrief, once the commander's browser has filed it.
   const crewMission = useCrew((s) => s.current?.id ?? s.ended);

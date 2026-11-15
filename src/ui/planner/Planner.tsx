@@ -10,7 +10,8 @@ import type { RouteAlternative, VehicleId } from '@/engines/types';
 import { VEHICLES } from '@/engines/vehicles';
 import { useApp } from '@/store';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/ui/components/ui/dropdown-menu';
-import { fmtDeg, fmtDistance, fmtDuration, fmtNumber } from '@/lib/format';
+import { fmtClock, fmtDeg, fmtDistance, fmtDuration, fmtNumber, fmtPercent } from '@/lib/format';
+import { marsTime } from '@/engines/marsTime';
 import { cn } from '@/lib/cn';
 import { StopList } from './StopList';
 import { stopLabel } from '@/planner/labels';
@@ -130,6 +131,37 @@ function AlternativeCard({ alt, selected, hasBudget, onSelect }: { alt: RouteAlt
   );
 }
 
+/** The mission in one block before it starts: who goes, in what, when they leave and come back, and the margin. */
+function ReadySummary({ alt, departUtcMs }: { alt: RouteAlternative; departUtcMs: number }) {
+  const plan = useApp((s) => s.plan);
+  const me = useCrew((s) => s.me);
+  const crewMission = useCrew((s) => s.current);
+  const v = VEHICLES[plan.vehicle];
+  const t = alt.trip.totals;
+  const lon = plan.start?.lon ?? 77.44;
+  const leave = fmtClock(marsTime(departUtcMs, lon).ltstH);
+  const back = fmtClock(marsTime(departUtcMs + t.durationS * 1000, lon).ltstH);
+  const tasks = plan.stops.reduce((n, st) => n + st.tasks.length, 0);
+  const who = crewMission ? 'The crew in the list above' : v.crew > 0 ? `${me?.name ?? 'You'} and ${v.crew - 1 === 1 ? 'one partner' : `${v.crew - 1} others`}` : 'No one aboard';
+  const rows: [string, string][] = [
+    ['Who', `${who}, ${v.name.toLowerCase()}`],
+    ['When', `Leave ${leave}, back ${back} LTST (${fmtDuration(t.durationS)})`],
+    ['Where', `${fmtDistance(t.distM)} out and back, ${plan.stops.length} ${plan.stops.length === 1 ? 'stop' : 'stops'}, ${tasks} ${tasks === 1 ? 'task' : 'tasks'}`],
+  ];
+  if (t.minO2Frac !== null) rows.push(['Margin', `${fmtPercent(t.minO2Frac)} of the oxygen left at the end`]);
+  else if (t.minBatteryFrac !== null) rows.push(['Margin', `Battery never below ${fmtPercent(t.minBatteryFrac)}`]);
+  return (
+    <dl className={cn('mt-4 grid grid-cols-[4.25rem_1fr] gap-x-2 gap-y-1 rounded-md border px-3 py-2.5 text-[13px]', alt.trip.feasible ? 'border-border' : 'border-warning/50 bg-warning/5')}>
+      {rows.map(([k, val]) => (
+        <div key={k} className="contents">
+          <dt className="text-muted-foreground">{k}</dt>
+          <dd className="figure min-w-0">{val}</dd>
+        </div>
+      ))}
+    </dl>
+  );
+}
+
 function RouteResult() {
   const route = useApp((s) => s.route);
   const selectRoute = useApp((s) => s.selectRoute);
@@ -227,7 +259,8 @@ function RouteResult() {
         ) : null}
         </>
       )}
-      <div className="mt-4 flex flex-wrap gap-2">
+      {route.hasBudget && !missionRunning ? <ReadySummary alt={chosen} departUtcMs={route.departUtcMs} /> : null}
+      <div className="mt-3 flex flex-wrap gap-2">
         {route.hasBudget && !missionRunning && !locked ? (
           <button
             type="button"

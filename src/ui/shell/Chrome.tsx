@@ -23,10 +23,10 @@ import { PhoneChrome } from './PhoneChrome';
 import { FlyoverBar } from '@/ui/mapctl/FlyoverBar';
 import { Hints } from './Hints';
 import { RunPanel } from '@/ui/run/RunPanel';
+import { MissionPanel } from '@/ui/run/MissionPanel';
 import { Alerts } from '@/ui/run/Alerts';
 import { lazy, Suspense } from 'react';
 import { NET_ENABLED } from '@/net/config';
-import { cn } from '@/lib/cn';
 import { useCrew } from '@/net/state';
 
 // The crew panels load when first opened; they exist only with a crew server.
@@ -66,11 +66,10 @@ function DockContent() {
   );
 }
 
-/** The dock's panel. While a mission runs on a narrower screen it stops above the run panel, so the two never overlap. */
+/** The dock's panel, under the clock and beside the rail. */
 function DockColumn() {
-  const running = useApp((s) => s.world?.run != null);
   return (
-    <div className={cn('absolute top-[68px] right-[78px] bottom-10 flex flex-col [&>*]:pointer-events-auto', running && 'max-[1600px]:bottom-[10.75rem]')}>
+    <div className="absolute top-[68px] right-[78px] bottom-10 flex flex-col [&>*]:pointer-events-auto">
       <DockContent />
     </div>
   );
@@ -83,8 +82,8 @@ function LeftPanel() {
   const running = useApp((s) => s.world !== null);
   if (placeOpen) return <PlaceCard />;
   if (plannerOpen) return <Planner />;
-  // While a mission runs the plan is not being made: the run panel has the floor.
-  if (running) return null;
+  // While a mission runs, the column is the mission: alerts, crew, supplies, stops, controls.
+  if (running) return <MissionPanel />;
   return <Home />;
 }
 
@@ -142,8 +141,6 @@ function ChromeLayout() {
       <PickingHint />
       <FlyoverBar />
       <Hints />
-      <RunPanel />
-      <Alerts />
       <CrewDialogs />
 
       <div className="pointer-events-auto absolute top-3 right-3">

@@ -63,13 +63,14 @@ export default function JoinList({ limit = 3, framed = true }: { limit?: number;
   const missions = useQuery(api.missions.list, {});
   const join = useMutation(api.crew.join);
   const current = useCrew((s) => s.current);
+  const running = useApp((s) => s.world?.run?.status === 'running');
   const now = useNow(30_000);
   const [busy, setBusy] = useState<string | null>(null);
   const [all, setAll] = useState(false);
   const lon = useApp((s) => s.base.lon);
   const open = useMemo(() => (missions ?? []).filter((m) => m.status === 'planning' || m.status === 'underway'), [missions]);
   // On a mission already: there is nothing to join until it ends.
-  if (current) return null;
+  if (current || running) return null;
   const shown = all ? open : open.slice(0, limit);
   const hidden = open.length - shown.length;
 

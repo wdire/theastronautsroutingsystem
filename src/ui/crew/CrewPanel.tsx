@@ -193,6 +193,20 @@ function JustEnded({ missionId }: { missionId: Id<'missions'> }) {
   );
 }
 
+/** Flying solo: the mission is real, it just has no shared crew. Say so, and where to watch it. */
+function SoloRun() {
+  const name = useApp((s) => s.world?.run?.name ?? 'Mission');
+  const status = useApp((s) => s.world?.run?.status);
+  return (
+    <section className="border-t px-4 py-4">
+      <p className="text-[13.5px] font-semibold">{status === 'running' ? `${name}, flown solo` : `${name} is over`}</p>
+      <p className="mt-0.5 text-[13px] leading-relaxed text-muted-foreground">
+        Your crew, supplies, stops and alerts are in the mission panel on the left. To fly with other people or androids, name your next plan to make it a crew mission.
+      </p>
+    </section>
+  );
+}
+
 /** Off any mission: say so, and point to where missions are made. */
 function NoMission() {
   const plan = () => {
@@ -216,6 +230,7 @@ export default function CrewPanel() {
   const me = useCrew((s) => s.me);
   const current = useCrew((s) => s.current);
   const ended = useCrew((s) => s.ended);
+  const soloRun = useApp((s) => s.world?.run != null);
   if (!me) return <p className="px-4 py-4 text-[13px] text-muted-foreground">Connecting to the crew server…</p>;
   return (
     <div className="pb-2">
@@ -225,7 +240,7 @@ export default function CrewPanel() {
       ) : (
         <>
           {ended ? <JustEnded missionId={ended} /> : null}
-          <NoMission />
+          {soloRun ? <SoloRun /> : <NoMission />}
           <JoinList limit={5} />
           <OnlineNow missionId={null} crewIds={new Set()} canInvite={false} />
         </>
